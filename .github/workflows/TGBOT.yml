@@ -1,0 +1,964 @@
+name: Forever Bot
+
+on:
+  workflow_dispatch:
+    inputs:
+      session_minutes:
+        description: "مدت زمان اجرا (دقیقه) - پیش‌فرض ۳۵۰ دقیقه"
+        required: true
+        default: "350"
+      storage_repo:
+        description: "مخزن ذخیره‌سازی فایل‌ها و دیتابیس"
+        required: true
+        default: "RaptorKingdom/Files"
+
+concurrency:
+  group: forever-bot
+  cancel-in-progress: false
+
+permissions: write-all
+
+jobs:
+  forever-bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    env:
+      SESSION_MINUTES: ${{ github.event.inputs.session_minutes || '350' }}
+      STORAGE_REPO: ${{ github.event.inputs.storage_repo || 'RaptorKingdom/Files' }}
+      DATA_DIR: ${{ github.workspace }}/data
+      PORT: 5000
+      OWNER_EMAIL: amir@example.com
+
+    steps:
+      - name: Checkout app repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system and Python dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg curl jq zip git
+          python -m pip install --upgrade pip
+          pip install fastapi "uvicorn[standard]" python-multipart PyJWT pillow requests mutagen
+
+      - name: Create data folders
+        run: |
+          mkdir -p data/media data/thumbs
+
+      - name: Restore data from storage repository
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          set +e
+          echo "Downloading backup from $STORAGE_REPO..."
+          HTTP_CODE=$(curl -s -o data.tar.gz -w "%{http_code}" \
+            -H "Authorization: Bearer $PAT_TOKEN" \
+            -H "Accept: application/vnd.github.raw+json" \
+            "https://api.github.com/repos/$STORAGE_REPO/contents/data.tar.gz")
+          if [ "$HTTP_CODE" = "200" ] && [ -s data.tar.gz ]; then
+            tar -xzf data.tar.gz -C . || true
+            rm -f data.tar.gz
+          fi
+          if [ -f data/app.db.backup ]; then
+            cp -f data/app.db.backup data/app.db || true
+          fi
+          mkdir -p data/media data/thumbs
+
+      - name: Write FastAPI application
+        run: |
+          python3 << 'WRITER'
+          import textwrap
+          content = textwrap.dedent('''
+          import os, re, sqlite3, secrets, hashlib, time, uuid, shutil, subprocess
+          from datetime import datetime, timedelta
+          from pathlib import Path
+          from typing import Optional, List
+          from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Query
+          from fastapi.middleware.cors import CORSMiddleware
+          from fastapi.staticfiles import StaticFiles
+          from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+          from pydantic import BaseModel
+          import jwt
+
+          DATA_DIR = Path(os.environ.get("DATA_DIR", "data")).resolve()
+          MEDIA_DIR = DATA_DIR / "media"
+          THUMB_DIR = DATA_DIR / "thumbs"
+          DB_PATH = DATA_DIR / "app.db"
+          for d in (DATA_DIR, MEDIA_DIR, THUMB_DIR): d.mkdir(parents=True, exist_ok=True)
+
+          SECRET_FILE = DATA_DIR / "secret_key.txt"
+          SECRET = SECRET_FILE.read_text().strip() if SECRET_FILE.exists() else secrets.token_urlsafe(64)
+          if not SECRET_FILE.exists(): SECRET_FILE.write_text(SECRET)
+
+          START_TIME = time.time()
+          SESSION_MINUTES = int(os.environ.get("SESSION_MINUTES", "350"))
+          ALGORITHM = "HS256"
+          app = FastAPI(title="Twitter-like API")
+          app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+          app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
+          app.mount("/thumbs", StaticFiles(directory=THUMB_DIR), name="thumbs")
+          bearer = HTTPBearer(auto_error=False)
+
+          def get_conn():
+              conn = sqlite3.connect(DB_PATH, timeout=60)
+              conn.row_factory = sqlite3.Row
+              conn.execute("PRAGMA foreign_keys=ON")
+              return conn
+
+          def execute(sql, params=()):
+              conn = get_conn()
+              try:
+                  cur = conn.execute(sql, params)
+                  conn.commit()
+                  return cur.lastrowid
+              finally: conn.close()
+
+          def query(sql, params=()):
+              conn = get_conn()
+              try: return conn.execute(sql, params).fetchall()
+              finally: conn.close()
+
+          def query_one(sql, params=()):
+              rows = query(sql, params)
+              return rows[0] if rows else None
+
+          def now_iso(): return datetime.utcnow().isoformat()
+
+          def parse_dt(value):
+              if not value: return None
+              try: return datetime.fromisoformat(value)
+              except: return None
+
+          def is_online(last_seen):
+              dt = parse_dt(last_seen)
+              return dt and (datetime.utcnow() - dt < timedelta(minutes=2))
+
+          def hash_password(password: str) -> str:
+              salt = secrets.token_hex(16)
+              dk = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), 200000)
+              return f"pbkdf2$200000${salt}${dk.hex()}"
+
+          def verify_password(password: str, stored: str) -> bool:
+              try:
+                  _, iterations, salt, dk = stored.split("$")
+                  calc = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), int(iterations))
+                  return calc.hex() == dk
+              except: return False
+
+          def create_token(user_id: int) -> str:
+              return jwt.encode({"sub": str(user_id), "exp": datetime.utcnow() + timedelta(days=30)}, SECRET, algorithm=ALGORITHM)
+
+          def extract_audio_metadata(path):
+              try:
+                  from mutagen import File
+                  audio = File(path)
+                  if not audio: return None, None, None
+                  duration = getattr(audio.info, 'length', None) if hasattr(audio, 'info') else getattr(audio, 'length', None)
+                  title, artist = None, None
+                  tags = getattr(audio, 'tags', None)
+                  if tags:
+                      if hasattr(tags, 'getall'):
+                          t = tags.getall('TIT2')
+                          if t: title = str(t[0])
+                          a = tags.getall('TPE1')
+                          if a: artist = str(a[0])
+                      else:
+                          if '\\xa9nam' in tags: title = str(tags['\\xa9nam'][0])
+                          if '\\xa9ART' in tags: artist = str(tags['\\xa9ART'][0])
+                          if 'title' in tags: 
+                              val = tags['title']
+                              title = val[0] if isinstance(val, list) else val
+                          if 'artist' in tags: 
+                              val = tags['artist']
+                              artist = val[0] if isinstance(val, list) else val
+                  return title, artist, duration
+              except: return None, None, None
+
+          def init_db():
+              execute("PRAGMA journal_mode=WAL")
+              execute("""CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE NOT NULL, username TEXT UNIQUE NOT NULL COLLATE NOCASE, password_hash TEXT NOT NULL, name TEXT DEFAULT '', bio TEXT DEFAULT '', is_verified INTEGER DEFAULT 0, is_admin INTEGER DEFAULT 0, created_at TEXT, last_seen TEXT)""")
+              execute("""CREATE TABLE IF NOT EXISTS media (id TEXT PRIMARY KEY, owner_id INTEGER, original_name TEXT, filename TEXT, path TEXT, mime_type TEXT, media_type TEXT, thumbnail TEXT, title TEXT, artist TEXT, duration REAL, created_at TEXT, FOREIGN KEY(owner_id) REFERENCES users(id) ON DELETE SET NULL)""")
+              execute("""CREATE TABLE IF NOT EXISTS user_media (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, media_id TEXT NOT NULL, type TEXT NOT NULL, position INTEGER DEFAULT 0)""")
+              execute("""CREATE TABLE IF NOT EXISTS posts (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, text TEXT DEFAULT '', created_at TEXT, edited_at TEXT, parent_id INTEGER, quoted_post_id INTEGER, repost_of_id INTEGER)""")
+              execute("""CREATE TABLE IF NOT EXISTS post_media (post_id INTEGER NOT NULL, media_id TEXT NOT NULL, position INTEGER DEFAULT 0, PRIMARY KEY(post_id, media_id))""")
+              execute("""CREATE TABLE IF NOT EXISTS likes (user_id INTEGER NOT NULL, post_id INTEGER NOT NULL, created_at TEXT, PRIMARY KEY(user_id, post_id))""")
+              execute("""CREATE TABLE IF NOT EXISTS retweets (user_id INTEGER NOT NULL, post_id INTEGER NOT NULL, created_at TEXT, PRIMARY KEY(user_id, post_id))""")
+              execute("""CREATE TABLE IF NOT EXISTS bookmarks (user_id INTEGER NOT NULL, post_id INTEGER NOT NULL, created_at TEXT, PRIMARY KEY(user_id, post_id))""")
+              execute("""CREATE TABLE IF NOT EXISTS shares (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, post_id INTEGER NOT NULL, created_at TEXT)""")
+              execute("""CREATE TABLE IF NOT EXISTS follows (follower_id INTEGER NOT NULL, followee_id INTEGER NOT NULL, created_at TEXT, PRIMARY KEY(follower_id, followee_id))""")
+              execute("""CREATE TABLE IF NOT EXISTS notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, actor_id INTEGER, type TEXT NOT NULL, post_id INTEGER, message_id INTEGER, text TEXT, read INTEGER DEFAULT 0, created_at TEXT)""")
+              execute("""CREATE TABLE IF NOT EXISTS conversations (id INTEGER PRIMARY KEY AUTOINCREMENT, is_group INTEGER DEFAULT 0, name TEXT, created_by INTEGER, created_at TEXT)""")
+              execute("""CREATE TABLE IF NOT EXISTS conversation_members (conversation_id INTEGER NOT NULL, user_id INTEGER NOT NULL, role TEXT DEFAULT 'member', joined_at TEXT, last_read_message_id INTEGER DEFAULT 0, PRIMARY KEY(conversation_id, user_id))""")
+              execute("""CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id INTEGER NOT NULL, sender_id INTEGER, text TEXT DEFAULT '', created_at TEXT, edited_at TEXT, deleted INTEGER DEFAULT 0, reply_to_id INTEGER)""")
+              execute("""CREATE TABLE IF NOT EXISTS message_media (message_id INTEGER NOT NULL, media_id TEXT NOT NULL, PRIMARY KEY(message_id, media_id))""")
+              execute("""CREATE TABLE IF NOT EXISTS message_reads (message_id INTEGER NOT NULL, user_id INTEGER NOT NULL, read_at TEXT, PRIMARY KEY(message_id, user_id))""")
+              execute("""CREATE TABLE IF NOT EXISTS stories (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, media_id TEXT, text TEXT DEFAULT '', created_at TEXT, expires_at TEXT)""")
+              execute("""CREATE TABLE IF NOT EXISTS story_views (story_id INTEGER NOT NULL, user_id INTEGER NOT NULL, viewed_at TEXT, PRIMARY KEY(story_id, user_id))""")
+              migrate_db()
+
+          def migrate_db():
+              cols = [row[1] for row in query("PRAGMA table_info(media)")]
+              if "title" not in cols: execute("ALTER TABLE media ADD COLUMN title TEXT")
+              if "artist" not in cols: execute("ALTER TABLE media ADD COLUMN artist TEXT")
+              if "duration" not in cols: execute("ALTER TABLE media ADD COLUMN duration REAL")
+
+          def seed_owner():
+              row = query_one("SELECT id FROM users WHERE username=?", ("Amir",))
+              if row: return
+              email = os.environ.get("OWNER_EMAIL", "amir@example.com")
+              password = os.environ.get("OWNER_PASSWORD") or "Founder@123"
+              try:
+                  execute("INSERT INTO users(email, username, password_hash, name, bio, is_verified, is_admin, created_at, last_seen) VALUES(?,?,?,?,?,?,?,?,?)",
+                          (email, "Amir", hash_password(password), "امیر", "Founder", 1, 1, now_iso(), now_iso()))
+              except: pass
+
+          def optional_user(credentials: HTTPAuthorizationCredentials = Depends(bearer)):
+              if not credentials: return None
+              try:
+                  payload = jwt.decode(credentials.credentials, SECRET, algorithms=[ALGORITHM])
+                  user_id = int(payload.get("sub", 0))
+              except: return None
+              user = query_one("SELECT * FROM users WHERE id=?", (user_id,))
+              if not user: return None
+              execute("UPDATE users SET last_seen=? WHERE id=?", (now_iso(), user["id"]))
+              return query_one("SELECT * FROM users WHERE id=?", (user_id,))
+
+          def require_user(user=Depends(optional_user)):
+              if not user: raise HTTPException(status_code=401, detail="Unauthorized")
+              return user
+
+          def require_admin(user=Depends(require_user)):
+              if not user["is_admin"]: raise HTTPException(status_code=403, detail="Admin only")
+              return user
+
+          class SignupModel(BaseModel):
+              email: str; username: str; password: str; name: Optional[str] = ""
+          class LoginModel(BaseModel):
+              identifier: str; password: str
+          class PostCreate(BaseModel):
+              text: Optional[str] = ""; media_ids: Optional[List[str]] = None; parent_id: Optional[int] = None; quoted_post_id: Optional[int] = None
+          class PostUpdate(BaseModel):
+              text: Optional[str] = None; media_ids: Optional[List[str]] = None
+          class UserUpdate(BaseModel):
+              name: Optional[str] = None; bio: Optional[str] = None; username: Optional[str] = None; email: Optional[str] = None; password: Optional[str] = None; profile_image_ids: Optional[List[str]] = None; profile_music_ids: Optional[List[str]] = None
+          class ConversationCreate(BaseModel):
+              user_ids: List[int]; name: Optional[str] = None; is_group: bool = False
+          class MessageCreate(BaseModel):
+              text: Optional[str] = ""; media_ids: Optional[List[str]] = None; reply_to_id: Optional[int] = None
+          class MessageUpdate(BaseModel):
+              text: str
+          class AddMemberModel(BaseModel):
+              user_id: int
+          class AdminVerifyModel(BaseModel):
+              verified: bool = True
+          class StoryCreate(BaseModel):
+              media_id: Optional[str] = None; text: Optional[str] = ""
+
+          def classify_media(content_type, filename):
+              ct = (content_type or "").lower()
+              ext = Path(filename or "").suffix.lower()
+              if ct.startswith("image/") or ext in [".jpg", ".jpeg", ".png", ".webp", ".bmp"]: return "gif" if ct == "image/gif" or ext == ".gif" else "image"
+              if ct.startswith("video/") or ext in [".mp4", ".mov", ".webm", ".mkv", ".avi"]: return "video"
+              if ct.startswith("audio/") or ext in [".mp3", ".wav", ".ogg", ".m4a", ".flac"]: return "audio"
+              return "file"
+
+          def make_thumbnail(media_id, path, media_type):
+              thumb_name = f"{media_id}.jpg"
+              thumb_path = THUMB_DIR / thumb_name
+              try:
+                  if media_type in ("image", "gif"):
+                      from PIL import Image
+                      img = Image.open(path)
+                      if getattr(img, "is_animated", False): img.seek(0)
+                      if img.mode in ("RGBA", "P", "LA"): img = img.convert("RGB")
+                      img.thumbnail((480, 480))
+                      img.save(thumb_path, "JPEG", quality=82)
+                      return thumb_name
+                  if media_type == "video":
+                      cmd = ["ffmpeg", "-y", "-i", str(path), "-ss", "00:00:01", "-vframes", "1", "-vf", "scale=480:-2", str(thumb_path)]
+                      subprocess.run(cmd, capture_output=True, timeout=45)
+                      if thumb_path.exists(): return thumb_name
+              except: pass
+              return None
+
+          def media_row_to_dict(row):
+              return {"id": row["id"], "url": f"/media/{row['filename']}", "thumbnail": f"/thumbs/{row['thumbnail']}" if row["thumbnail"] else None, "mime_type": row["mime_type"], "media_type": row["media_type"], "original_name": row["original_name"], "title": row["title"] if "title" in row.keys() else None, "artist": row["artist"] if "artist" in row.keys() else None, "duration": row["duration"] if "duration" in row.keys() else None, "created_at": row["created_at"]}
+
+          def get_user_media(user_id, media_type):
+              rows = query("SELECT m.* FROM media m JOIN user_media um ON um.media_id = m.id WHERE um.user_id=? AND um.type=? ORDER BY um.position", (user_id, media_type))
+              return [media_row_to_dict(r) for r in rows]
+
+          def set_user_media(user_id, media_type, media_ids):
+              execute("DELETE FROM user_media WHERE user_id=? AND type=?", (user_id, media_type))
+              if not media_ids: return
+              for i, media_id in enumerate(media_ids): execute("INSERT OR IGNORE INTO user_media(user_id, media_id, type, position) VALUES(?,?,?,?)", (user_id, media_id, media_type, i))
+
+          def follower_count(user_id):
+              row = query_one("SELECT COUNT(*) AS c FROM follows WHERE followee_id=?", (user_id,))
+              return row["c"] if row else 0
+
+          def following_count(user_id):
+              row = query_one("SELECT COUNT(*) AS c FROM follows WHERE follower_id=?", (user_id,))
+              return row["c"] if row else 0
+
+          def has_unseen_story(user_id, current_user_id):
+              if not current_user_id or user_id == current_user_id: return False
+              active = query_one("SELECT id FROM stories WHERE user_id=? AND expires_at > ? LIMIT 1", (user_id, now_iso()))
+              if not active: return False
+              unseen = query_one("SELECT COUNT(*) as c FROM stories s WHERE s.user_id=? AND s.expires_at > ? AND s.id NOT IN (SELECT story_id FROM story_views WHERE user_id=?)", (user_id, now_iso(), current_user_id))
+              return unseen["c"] > 0 if unseen else False
+
+          def user_dict(row, current_user=None, include_email=False):
+              if not row: return None
+              d = {"id": row["id"], "username": row["username"], "name": row["name"] or row["username"], "bio": row["bio"] or "", "is_verified": bool(row["is_verified"]), "is_admin": bool(row["is_admin"]), "created_at": row["created_at"], "last_seen": row["last_seen"], "online": is_online(row["last_seen"]), "followers_count": follower_count(row["id"]), "following_count": following_count(row["id"]), "profile_images": get_user_media(row["id"], "profile_image"), "profile_music": get_user_media(row["id"], "profile_music"), "has_unseen_story": has_unseen_story(row["id"], current_user["id"] if current_user else None)}
+              if current_user and (include_email or current_user["id"] == row["id"] or current_user["is_admin"]): d["email"] = row["email"]
+              if current_user:
+                  d["following"] = bool(query_one("SELECT 1 FROM follows WHERE follower_id=? AND followee_id=?", (current_user["id"], row["id"])))
+                  if current_user["id"] != row["id"]:
+                      followed_by = query("SELECT u.username FROM follows f JOIN users u ON u.id = f.follower_id JOIN follows my_follows ON my_follows.follower_id = ? AND my_follows.followee_id = f.follower_id WHERE f.followee_id = ? AND f.follower_id != ? LIMIT 3", (current_user["id"], row["id"], current_user["id"]))
+                      d["followed_by_followings"] = [r["username"] for r in followed_by]
+              return d
+
+          def get_post_row(post_id): return query_one("SELECT * FROM posts WHERE id=?", (post_id,))
+
+          def attach_post_media(post_id, media_ids):
+              execute("DELETE FROM post_media WHERE post_id=?", (post_id,))
+              if not media_ids: return
+              for i, media_id in enumerate(media_ids): execute("INSERT OR IGNORE INTO post_media(post_id, media_id, position) VALUES(?,?,?)", (post_id, media_id, i))
+
+          def post_media(post_id):
+              rows = query("SELECT m.* FROM media m JOIN post_media pm ON pm.media_id = m.id WHERE pm.post_id=? ORDER BY pm.position", (post_id,))
+              return [media_row_to_dict(r) for r in rows]
+
+          def post_dict(row, current_user=None, depth=0):
+              if not row: return None
+              post_id = row["id"]
+              user = query_one("SELECT * FROM users WHERE id=?", (row["user_id"],))
+              likes = query_one("SELECT COUNT(*) AS c FROM likes WHERE post_id=?", (post_id,))["c"]
+              replies = query_one("SELECT COUNT(*) AS c FROM posts WHERE parent_id=?", (post_id,))["c"]
+              retweets = query_one("SELECT COUNT(*) AS c FROM retweets WHERE post_id=?", (post_id,))["c"]
+              quotes = query_one("SELECT COUNT(*) AS c FROM posts WHERE quoted_post_id=?", (post_id,))["c"]
+              bookmarks = query_one("SELECT COUNT(*) AS c FROM bookmarks WHERE post_id=?", (post_id,))["c"]
+              shares = query_one("SELECT COUNT(*) AS c FROM shares WHERE post_id=?", (post_id,))["c"]
+              d = {"id": post_id, "text": row["text"], "created_at": row["created_at"], "edited_at": row["edited_at"], "user": user_dict(user, current_user) if user else None, "media": post_media(post_id), "likes_count": likes, "replies_count": replies, "retweets_count": retweets, "quotes_count": quotes, "bookmarks_count": bookmarks, "shares_count": shares, "parent_id": row["parent_id"], "quoted_post_id": row["quoted_post_id"], "repost_of_id": row["repost_of_id"]}
+              if current_user:
+                  d["liked"] = bool(query_one("SELECT 1 FROM likes WHERE user_id=? AND post_id=?", (current_user["id"], post_id)))
+                  d["bookmarked"] = bool(query_one("SELECT 1 FROM bookmarks WHERE user_id=? AND post_id=?", (current_user["id"], post_id)))
+                  d["retweeted"] = bool(query_one("SELECT 1 FROM retweets WHERE user_id=? AND post_id=?", (current_user["id"], post_id)))
+                  liked_by = query("SELECT u.username FROM likes l JOIN users u ON u.id = l.user_id JOIN follows f ON f.follower_id = ? AND f.followee_id = l.user_id WHERE l.post_id = ? AND l.user_id != ? LIMIT 3", (current_user["id"], post_id, current_user["id"]))
+                  d["liked_by_followings"] = [r["username"] for r in liked_by]
+                  reposted_by = query("SELECT u.username FROM retweets r JOIN users u ON u.id = r.user_id JOIN follows f ON f.follower_id = ? AND f.followee_id = r.user_id WHERE r.post_id = ? AND r.user_id != ? LIMIT 3", (current_user["id"], post_id, current_user["id"]))
+                  d["reposted_by_followings"] = [r["username"] for r in reposted_by]
+              if depth < 1:
+                  if row["quoted_post_id"]:
+                      quoted = get_post_row(row["quoted_post_id"])
+                      d["quoted_post"] = post_dict(quoted, current_user, depth + 1) if quoted else None
+                  if row["repost_of_id"]:
+                      repost = get_post_row(row["repost_of_id"])
+                      d["repost_of"] = post_dict(repost, current_user, depth + 1) if repost else None
+              return d
+
+          def notify(user_id, actor_id, ntype, post_id=None, message_id=None, text=None):
+              if not user_id or user_id == actor_id: return
+              execute("INSERT INTO notifications(user_id, actor_id, type, post_id, message_id, text, read, created_at) VALUES(?,?,?,?,?,?,0,?)", (user_id, actor_id, ntype, post_id, message_id, text, now_iso()))
+
+          def notify_mentions(text, actor_id, post_id=None, message_id=None):
+              if not text: return
+              for username in set(re.findall(r"@([A-Za-z0-9_]+)", text)):
+                  user = query_one("SELECT id FROM users WHERE username=?", (username,))
+                  if user: notify(user["id"], actor_id, "mention", post_id, message_id, text)
+
+          def story_dict(row, current_user=None):
+              if not row: return None
+              media = None
+              if row["media_id"]:
+                  m = query_one("SELECT * FROM media WHERE id=?", (row["media_id"],))
+                  if m: media = media_row_to_dict(m)
+              viewed = False
+              viewers_count = 0
+              if current_user:
+                  v = query_one("SELECT 1 FROM story_views WHERE story_id=? AND user_id=?", (row["id"], current_user["id"]))
+                  viewed = bool(v)
+                  viewers_count = query_one("SELECT COUNT(*) as c FROM story_views WHERE story_id=?", (row["id"],))["c"]
+              return {"id": row["id"], "user_id": row["user_id"], "media": media, "text": row["text"], "created_at": row["created_at"], "expires_at": row["expires_at"], "viewed_by_me": viewed, "viewers_count": viewers_count}
+
+          def message_dict(row, current_user=None):
+              if not row: return None
+              sender = query_one("SELECT * FROM users WHERE id=?", (row["sender_id"],))
+              media_rows = query("SELECT m.* FROM media m JOIN message_media mm ON mm.media_id = m.id WHERE mm.message_id=?", (row["id"],))
+              reads = query("SELECT user_id, read_at FROM message_reads WHERE message_id=?", (row["id"],))
+              reply_to_msg = None
+              if row["reply_to_id"]:
+                  r_msg = query_one("SELECT * FROM messages WHERE id=?", (row["reply_to_id"],))
+                  if r_msg: reply_to_msg = {"id": r_msg["id"], "sender_id": r_msg["sender_id"], "text": "" if r_msg["deleted"] else r_msg["text"], "deleted": bool(r_msg["deleted"])}
+              return {"id": row["id"], "conversation_id": row["conversation_id"], "sender": user_dict(sender, current_user) if sender else None, "text": "" if row["deleted"] else row["text"], "created_at": row["created_at"], "edited_at": row["edited_at"], "deleted": bool(row["deleted"]), "reply_to_id": row["reply_to_id"], "reply_to": reply_to_msg, "media": [media_row_to_dict(r) for r in media_rows], "read_by": [{"user_id": r["user_id"], "read_at": r["read_at"]} for r in reads]}
+
+          def ensure_member(conversation_id, user):
+              member = query_one("SELECT * FROM conversation_members WHERE conversation_id=? AND user_id=?", (conversation_id, user["id"]))
+              if not member: raise HTTPException(status_code=403, detail="Not a member")
+              return member
+
+          def conversation_dict(conversation_id, current_user):
+              conv = query_one("SELECT * FROM conversations WHERE id=?", (conversation_id,))
+              if not conv: return None
+              members = query("SELECT u.* FROM users u JOIN conversation_members cm ON cm.user_id = u.id WHERE cm.conversation_id=?", (conversation_id,))
+              last_message = query_one("SELECT * FROM messages WHERE conversation_id=? ORDER BY id DESC LIMIT 1", (conversation_id,))
+              member = query_one("SELECT * FROM conversation_members WHERE conversation_id=? AND user_id=?", (conversation_id, current_user["id"]))
+              unread = 0
+              if member: unread = query_one("SELECT COUNT(*) AS c FROM messages WHERE conversation_id=? AND id > ? AND sender_id != ? AND deleted=0", (conversation_id, member["last_read_message_id"] or 0, current_user["id"]))["c"]
+              return {"id": conv["id"], "is_group": bool(conv["is_group"]), "name": conv["name"], "created_by": conv["created_by"], "created_at": conv["created_at"], "members": [user_dict(r, current_user) for r in members], "last_message": message_dict(last_message, current_user) if last_message else None, "unread_count": unread}
+
+          def find_direct_conversation(uid1, uid2):
+              rows = query("SELECT DISTINCT conversation_id FROM conversation_members WHERE user_id IN (?,?)", (uid1, uid2))
+              for r in rows:
+                  conv = query_one("SELECT * FROM conversations WHERE id=? AND is_group=0", (r["conversation_id"],))
+                  if not conv: continue
+                  members = query("SELECT user_id FROM conversation_members WHERE conversation_id=?", (conv["id"],))
+                  ids = {m["user_id"] for m in members}
+                  if len(ids) == 2 and ids == {uid1, uid2}: return conv
+              return None
+
+          @app.on_event("startup")
+          def startup():
+              init_db()
+              seed_owner()
+
+          @app.get("/")
+          def root(): return {"name": "Twitter-like API", "docs": "/docs", "status": "/api/status"}
+
+          @app.get("/api/status")
+          def status():
+              elapsed = int(time.time() - START_TIME)
+              remaining = max(0, SESSION_MINUTES * 60 - elapsed)
+              return {"ok": True, "uptime_seconds": elapsed, "remaining_seconds": remaining, "remaining_minutes": remaining // 60, "session_minutes": SESSION_MINUTES, "users": query_one("SELECT COUNT(*) AS c FROM users")["c"], "posts": query_one("SELECT COUNT(*) AS c FROM posts")["c"]}
+
+          @app.post("/api/auth/signup")
+          def signup(payload: SignupModel):
+              email = payload.email.lower().strip()
+              username = payload.username.strip()
+              if not re.match(r"^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", email): raise HTTPException(400, "Invalid email")
+              if not re.match(r"^[A-Za-z0-9_]{3,30}$", username): raise HTTPException(400, "Invalid username")
+              if len(payload.password) < 6: raise HTTPException(400, "Password too short")
+              if query_one("SELECT id FROM users WHERE email=?", (email,)): raise HTTPException(400, "Email exists")
+              if query_one("SELECT id FROM users WHERE username=?", (username,)): raise HTTPException(400, "Username exists")
+              user_id = execute("INSERT INTO users(email, username, password_hash, name, bio, is_verified, is_admin, created_at, last_seen) VALUES(?,?,?,?,?,?,?,?,?)", (email, username, hash_password(payload.password), payload.name or username, "", 0, 0, now_iso(), now_iso()))
+              amir = query_one("SELECT id FROM users WHERE username=?", ("Amir",))
+              if amir and user_id != amir["id"]: execute("INSERT OR IGNORE INTO follows(follower_id, followee_id, created_at) VALUES(?,?,?)", (user_id, amir["id"], now_iso()))
+              user = query_one("SELECT * FROM users WHERE id=?", (user_id,))
+              return {"token": create_token(user_id), "user": user_dict(user, user, include_email=True)}
+
+          @app.post("/api/auth/login")
+          def login(payload: LoginModel):
+              identifier = payload.identifier.lower().strip()
+              user = query_one("SELECT * FROM users WHERE email=? OR username=?", (identifier, identifier))
+              if not user or not verify_password(payload.password, user["password_hash"]): raise HTTPException(401, "Invalid credentials")
+              execute("UPDATE users SET last_seen=? WHERE id=?", (now_iso(), user["id"]))
+              user = query_one("SELECT * FROM users WHERE id=?", (user["id"],))
+              return {"token": create_token(user["id"]), "user": user_dict(user, user, include_email=True)}
+
+          @app.get("/api/auth/me")
+          def me(user=Depends(require_user)): return user_dict(user, user, include_email=True)
+
+          @app.post("/api/media/upload")
+          def upload_media(file: UploadFile = File(...), user=Depends(require_user)):
+              media_id = uuid.uuid4().hex
+              ext = Path(file.filename or "file").suffix.lower()
+              safe_ext = ext if len(ext) <= 10 else ""
+              filename = f"{media_id}{safe_ext}"
+              path = MEDIA_DIR / filename
+              content_type = file.content_type
+              with open(path, "wb") as f: shutil.copyfileobj(file.file, f)
+              media_type = classify_media(content_type, file.filename)
+              thumbnail = make_thumbnail(media_id, path, media_type)
+              title, artist, duration = None, None, None
+              if media_type == "audio": title, artist, duration = extract_audio_metadata(path)
+              execute("INSERT INTO media(id, owner_id, original_name, filename, path, mime_type, media_type, thumbnail, title, artist, duration, created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", (media_id, user["id"], file.filename, filename, str(path), content_type, media_type, thumbnail, title, artist, duration, now_iso()))
+              row = query_one("SELECT * FROM media WHERE id=?", (media_id,))
+              return media_row_to_dict(row)
+
+          @app.get("/api/feed")
+          def feed(limit: int = Query(20, le=100), offset: int = 0, user=Depends(require_user)):
+              rows = query("SELECT p.* FROM posts p WHERE p.parent_id IS NULL AND p.repost_of_id IS NULL AND (p.user_id=? OR p.user_id IN (SELECT followee_id FROM follows WHERE follower_id=?)) ORDER BY p.created_at DESC LIMIT ? OFFSET ?", (user["id"], user["id"], limit, offset))
+              return [post_dict(r, user) for r in rows]
+
+          @app.post("/api/posts")
+          def create_post(payload: PostCreate, user=Depends(require_user)):
+              if payload.parent_id and not get_post_row(payload.parent_id): raise HTTPException(404, "Parent not found")
+              if payload.quoted_post_id and not get_post_row(payload.quoted_post_id): raise HTTPException(404, "Quoted not found")
+              post_id = execute("INSERT INTO posts(user_id, text, created_at, parent_id, quoted_post_id) VALUES(?,?,?,?,?)", (user["id"], payload.text or "", now_iso(), payload.parent_id, payload.quoted_post_id))
+              attach_post_media(post_id, payload.media_ids or [])
+              parent = get_post_row(payload.parent_id) if payload.parent_id else None
+              if parent and parent["user_id"] != user["id"]: notify(parent["user_id"], user["id"], "reply", post_id)
+              quoted = get_post_row(payload.quoted_post_id) if payload.quoted_post_id else None
+              if quoted and quoted["user_id"] != user["id"]: notify(quoted["user_id"], user["id"], "quote", post_id)
+              notify_mentions(payload.text, user["id"], post_id)
+              return post_dict(get_post_row(post_id), user)
+
+          @app.get("/api/posts/{post_id}")
+          def get_post(post_id: int, user=Depends(optional_user)):
+              row = get_post_row(post_id)
+              if not row: raise HTTPException(404, "Post not found")
+              return post_dict(row, user)
+
+          @app.get("/api/posts/{post_id}/replies")
+          def get_replies(post_id: int, limit: int = Query(50, le=200), offset: int = 0, user=Depends(optional_user)):
+              if not get_post_row(post_id): raise HTTPException(404, "Post not found")
+              rows = query("SELECT * FROM posts WHERE parent_id=? ORDER BY created_at ASC LIMIT ? OFFSET ?", (post_id, limit, offset))
+              return [post_dict(r, user) for r in rows]
+
+          @app.post("/api/posts/{post_id}/like")
+          def like_post(post_id: int, user=Depends(require_user)):
+              post = get_post_row(post_id)
+              if not post: raise HTTPException(404, "Post not found")
+              existing = query_one("SELECT 1 FROM likes WHERE user_id=? AND post_id=?", (user["id"], post_id))
+              if existing:
+                  execute("DELETE FROM likes WHERE user_id=? AND post_id=?", (user["id"], post_id))
+                  liked = False
+              else:
+                  execute("INSERT INTO likes(user_id, post_id, created_at) VALUES(?,?,?)", (user["id"], post_id, now_iso()))
+                  liked = True
+                  if post["user_id"] != user["id"]: notify(post["user_id"], user["id"], "like", post_id)
+              return {"liked": liked, "likes_count": query_one("SELECT COUNT(*) AS c FROM likes WHERE post_id=?", (post_id,))["c"]}
+
+          @app.post("/api/posts/{post_id}/retweet")
+          def retweet_post(post_id: int, user=Depends(require_user)):
+              post = get_post_row(post_id)
+              if not post: raise HTTPException(404, "Post not found")
+              existing = query_one("SELECT 1 FROM retweets WHERE user_id=? AND post_id=?", (user["id"], post_id))
+              if existing:
+                  execute("DELETE FROM retweets WHERE user_id=? AND post_id=?", (user["id"], post_id))
+                  retweeted = False
+              else:
+                  execute("INSERT INTO retweets(user_id, post_id, created_at) VALUES(?,?,?)", (user["id"], post_id, now_iso()))
+                  retweeted = True
+                  if post["user_id"] != user["id"]: notify(post["user_id"], user["id"], "retweet", post_id)
+              return {"retweeted": retweeted, "retweets_count": query_one("SELECT COUNT(*) AS c FROM retweets WHERE post_id=?", (post_id,))["c"]}
+
+          @app.post("/api/posts/{post_id}/bookmark")
+          def bookmark_post(post_id: int, user=Depends(require_user)):
+              post = get_post_row(post_id)
+              if not post: raise HTTPException(404, "Post not found")
+              existing = query_one("SELECT 1 FROM bookmarks WHERE user_id=? AND post_id=?", (user["id"], post_id))
+              if existing:
+                  execute("DELETE FROM bookmarks WHERE user_id=? AND post_id=?", (user["id"], post_id))
+                  bookmarked = False
+              else:
+                  execute("INSERT INTO bookmarks(user_id, post_id, created_at) VALUES(?,?,?)", (user["id"], post_id, now_iso()))
+                  bookmarked = True
+              return {"bookmarked": bookmarked, "bookmarks_count": query_one("SELECT COUNT(*) AS c FROM bookmarks WHERE post_id=?", (post_id,))["c"]}
+
+          @app.post("/api/posts/{post_id}/share")
+          def share_post(post_id: int, user=Depends(require_user)):
+              if not get_post_row(post_id): raise HTTPException(404, "Post not found")
+              execute("INSERT INTO shares(user_id, post_id, created_at) VALUES(?,?,?)", (user["id"], post_id, now_iso()))
+              return {"shares_count": query_one("SELECT COUNT(*) AS c FROM shares WHERE post_id=?", (post_id,))["c"], "share_url": f"/post/{post_id}"}
+
+          @app.put("/api/posts/{post_id}")
+          def update_post(post_id: int, payload: PostUpdate, user=Depends(require_user)):
+              post = get_post_row(post_id)
+              if not post: raise HTTPException(404, "Post not found")
+              if post["user_id"] != user["id"] and not user["is_admin"]: raise HTTPException(403, "Forbidden")
+              if payload.text is not None:
+                  execute("UPDATE posts SET text=?, edited_at=? WHERE id=?", (payload.text, now_iso(), post_id))
+                  notify_mentions(payload.text, user["id"], post_id)
+              if payload.media_ids is not None: attach_post_media(post_id, payload.media_ids)
+              return post_dict(get_post_row(post_id), user)
+
+          @app.delete("/api/posts/{post_id}")
+          def delete_post(post_id: int, user=Depends(require_user)):
+              post = get_post_row(post_id)
+              if not post: raise HTTPException(404, "Post not found")
+              if post["user_id"] != user["id"] and not user["is_admin"]: raise HTTPException(403, "Forbidden")
+              execute("DELETE FROM posts WHERE id=?", (post_id,))
+              return {"deleted": True}
+
+          @app.get("/api/bookmarks")
+          def get_bookmarks(limit: int = Query(20, le=100), offset: int = 0, user=Depends(require_user)):
+              rows = query("SELECT p.* FROM posts p JOIN bookmarks b ON b.post_id = p.id WHERE b.user_id = ? ORDER BY b.created_at DESC LIMIT ? OFFSET ?", (user["id"], limit, offset))
+              return [post_dict(r, user) for r in rows]
+
+          @app.get("/api/shorts")
+          def shorts(limit: int = Query(20, le=100), offset: int = 0, user=Depends(optional_user)):
+              rows = query("SELECT DISTINCT p.* FROM posts p WHERE p.parent_id IS NULL AND p.repost_of_id IS NULL AND EXISTS (SELECT 1 FROM post_media pm JOIN media m ON m.id = pm.media_id WHERE pm.post_id = p.id AND m.media_type IN ('image','video','audio','gif')) ORDER BY p.created_at DESC LIMIT ? OFFSET ?", (limit, offset))
+              return [post_dict(r, user) for r in rows]
+
+          @app.get("/api/explore")
+          def explore(user=Depends(optional_user)):
+              post_rows = query("SELECT * FROM posts WHERE parent_id IS NULL AND repost_of_id IS NULL ORDER BY created_at DESC LIMIT 100")
+              scored = []
+              for r in post_rows:
+                  d = post_dict(r, user)
+                  score = d["likes_count"]*3 + d["replies_count"]*2 + d["retweets_count"]*3 + d["shares_count"]*2 + d["bookmarks_count"]
+                  scored.append((score, d))
+              scored.sort(key=lambda x: x[0], reverse=True)
+              users = query("SELECT u.*, (SELECT COUNT(*) FROM follows f WHERE f.followee_id=u.id) AS followers FROM users u ORDER BY followers DESC LIMIT 20")
+              tags = {}
+              recent = query("SELECT text FROM posts WHERE created_at >= ? LIMIT 300", ((datetime.utcnow() - timedelta(days=7)).isoformat(),))
+              for row in recent:
+                  for tag in re.findall(r"#(\\w+)", row["text"] or ""): tags[tag] = tags.get(tag, 0) + 1
+              return {"posts": [x[1] for x in scored[:20]], "users": [user_dict(r, user) for r in users], "tags": [{"tag": k, "count": v} for k, v in sorted(tags.items(), key=lambda x: x[1], reverse=True)[:20]]}
+
+          @app.get("/api/users")
+          def list_users(q: Optional[str] = None, limit: int = Query(100, le=500), offset: int = 0, user=Depends(optional_user)):
+              if q:
+                  like = f"%{q}%"
+                  rows = query("SELECT * FROM users WHERE username LIKE ? OR name LIKE ? OR bio LIKE ? ORDER BY username LIMIT ? OFFSET ?", (like, like, like, limit, offset))
+              else:
+                  rows = query("SELECT * FROM users ORDER BY username LIMIT ? OFFSET ?", (limit, offset))
+              return [user_dict(r, user) for r in rows]
+
+          @app.get("/api/users/{username}")
+          def get_user_profile(username: str, user=Depends(optional_user)):
+              row = query_one("SELECT * FROM users WHERE username=?", (username,))
+              if not row: raise HTTPException(404, "User not found")
+              d = user_dict(row, user)
+              d["posts_count"] = query_one("SELECT COUNT(*) AS c FROM posts WHERE user_id=? AND parent_id IS NULL AND repost_of_id IS NULL", (row["id"],))["c"]
+              return d
+
+          @app.get("/api/users/{username}/posts")
+          def user_posts(username: str, limit: int = Query(20, le=100), offset: int = 0, user=Depends(optional_user)):
+              row = query_one("SELECT * FROM users WHERE username=?", (username,))
+              if not row: raise HTTPException(404, "User not found")
+              rows = query("SELECT * FROM posts WHERE user_id=? AND parent_id IS NULL AND repost_of_id IS NULL ORDER BY created_at DESC LIMIT ? OFFSET ?", (row["id"], limit, offset))
+              return [post_dict(r, user) for r in rows]
+
+          @app.post("/api/users/{username}/follow")
+          def follow_user(username: str, user=Depends(require_user)):
+              target = query_one("SELECT * FROM users WHERE username=?", (username,))
+              if not target: raise HTTPException(404, "User not found")
+              if target["id"] == user["id"]: raise HTTPException(400, "Cannot follow yourself")
+              existing = query_one("SELECT 1 FROM follows WHERE follower_id=? AND followee_id=?", (user["id"], target["id"]))
+              if existing:
+                  if target["username"].lower() == "amir": raise HTTPException(400, "You cannot unfollow the founder")
+                  execute("DELETE FROM follows WHERE follower_id=? AND followee_id=?", (user["id"], target["id"]))
+                  following = False
+              else:
+                  execute("INSERT INTO follows(follower_id, followee_id, created_at) VALUES(?,?,?)", (user["id"], target["id"], now_iso()))
+                  following = True
+                  notify(target["id"], user["id"], "follow")
+              return {"following": following}
+
+          @app.put("/api/users/me")
+          def update_me(payload: UserUpdate, user=Depends(require_user)):
+              updates = []; params = []
+              if payload.name is not None: updates.append("name=?"); params.append(payload.name)
+              if payload.bio is not None: updates.append("bio=?"); params.append(payload.bio)
+              if payload.username is not None:
+                  if not re.match(r"^[A-Za-z0-9_]{3,30}$", payload.username): raise HTTPException(400, "Invalid username")
+                  if query_one("SELECT id FROM users WHERE username=? AND id != ?", (payload.username, user["id"])): raise HTTPException(400, "Username exists")
+                  updates.append("username=?"); params.append(payload.username)
+              if payload.email is not None:
+                  if not re.match(r"^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", payload.email): raise HTTPException(400, "Invalid email")
+                  if query_one("SELECT id FROM users WHERE email=? AND id != ?", (payload.email, user["id"])): raise HTTPException(400, "Email exists")
+                  updates.append("email=?"); params.append(payload.email)
+              if payload.password is not None:
+                  if len(payload.password) < 6: raise HTTPException(400, "Password too short")
+                  updates.append("password_hash=?"); params.append(hash_password(payload.password))
+              if updates:
+                  params.append(user["id"])
+                  execute(f"UPDATE users SET {', '.join(updates)} WHERE id=?", tuple(params))
+              if payload.profile_image_ids is not None: set_user_media(user["id"], "profile_image", payload.profile_image_ids)
+              if payload.profile_music_ids is not None: set_user_media(user["id"], "profile_music", payload.profile_music_ids)
+              refreshed = query_one("SELECT * FROM users WHERE id=?", (user["id"],))
+              return user_dict(refreshed, refreshed, include_email=True)
+
+          @app.get("/api/notifications")
+          def notifications(limit: int = Query(50, le=200), offset: int = 0, user=Depends(require_user)):
+              rows = query("SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?", (user["id"], limit, offset))
+              out = []
+              for r in rows:
+                  item = dict(r); item["read"] = bool(r["read"])
+                  actor = query_one("SELECT * FROM users WHERE id=?", (r["actor_id"],)) if r["actor_id"] else None
+                  item["actor"] = user_dict(actor, user) if actor else None
+                  if r["post_id"]: item["post"] = post_dict(get_post_row(r["post_id"]), user)
+                  if r["message_id"]:
+                      msg = query_one("SELECT * FROM messages WHERE id=?", (r["message_id"],))
+                      item["message"] = message_dict(msg, user) if msg else None
+                  out.append(item)
+              return out
+
+          @app.post("/api/notifications/read")
+          def mark_notifications_read(user=Depends(require_user)):
+              execute("UPDATE notifications SET read=1 WHERE user_id=?", (user["id"],))
+              return {"ok": True}
+
+          @app.post("/api/stories")
+          def create_story(payload: StoryCreate, user=Depends(require_user)):
+              expires = (datetime.utcnow() + timedelta(hours=24)).isoformat()
+              story_id = execute("INSERT INTO stories(user_id, media_id, text, created_at, expires_at) VALUES(?,?,?,?,?)", (user["id"], payload.media_id, payload.text or "", now_iso(), expires))
+              row = query_one("SELECT * FROM stories WHERE id=?", (story_id,))
+              return story_dict(row, user)
+
+          @app.get("/api/stories/feed")
+          def stories_feed(user=Depends(require_user)):
+              rows = query("SELECT s.* FROM stories s JOIN follows f ON f.followee_id = s.user_id WHERE f.follower_id = ? AND s.expires_at > ? ORDER BY s.created_at DESC", (user["id"], now_iso()))
+              return [story_dict(r, user) for r in rows]
+
+          @app.get("/api/stories/{user_id}")
+          def get_user_stories(user_id: int, user=Depends(optional_user)):
+              rows = query("SELECT * FROM stories WHERE user_id=? AND expires_at > ? ORDER BY created_at DESC", (user_id, now_iso()))
+              return [story_dict(r, user) for r in rows]
+
+          @app.post("/api/stories/{story_id}/view")
+          def view_story(story_id: int, user=Depends(require_user)):
+              story = query_one("SELECT * FROM stories WHERE id=?", (story_id,))
+              if not story: raise HTTPException(404, "Story not found")
+              execute("INSERT OR IGNORE INTO story_views(story_id, user_id, viewed_at) VALUES(?,?,?)", (story_id, user["id"], now_iso()))
+              return {"viewed": True}
+
+          @app.post("/api/dm/conversations")
+          def create_conversation(payload: ConversationCreate, user=Depends(require_user)):
+              ids = set(payload.user_ids or []); ids.add(user["id"])
+              if len(ids) < 2: raise HTTPException(400, "At least two users required")
+              for uid in ids:
+                  if not query_one("SELECT id FROM users WHERE id=?", (uid,)): raise HTTPException(404, f"User {uid} not found")
+              is_group = payload.is_group or len(ids) > 2
+              if not is_group and len(ids) == 2:
+                  uid1, uid2 = list(ids)
+                  existing = find_direct_conversation(uid1, uid2)
+                  if existing: return conversation_dict(existing["id"], user)
+              conv_id = execute("INSERT INTO conversations(is_group, name, created_by, created_at) VALUES(?,?,?,?)", (1 if is_group else 0, payload.name, user["id"], now_iso()))
+              for uid in ids: execute("INSERT OR IGNORE INTO conversation_members(conversation_id, user_id, role, joined_at, last_read_message_id) VALUES(?,?,?,?,0)", (conv_id, uid, "owner" if uid == user["id"] else "member", now_iso()))
+              return conversation_dict(conv_id, user)
+
+          @app.get("/api/dm/conversations")
+          def list_conversations(user=Depends(require_user)):
+              rows = query("SELECT c.id FROM conversations c JOIN conversation_members cm ON cm.conversation_id=c.id WHERE cm.user_id=? ORDER BY c.created_at DESC", (user["id"],))
+              return [conversation_dict(r["id"], user) for r in rows]
+
+          @app.get("/api/dm/conversations/{conversation_id}/messages")
+          def get_messages(conversation_id: int, limit: int = Query(50, le=200), before_id: Optional[int] = None, user=Depends(require_user)):
+              ensure_member(conversation_id, user)
+              sql = "SELECT * FROM messages WHERE conversation_id=?"; params = [conversation_id]
+              if before_id: sql += " AND id < ?"; params.append(before_id)
+              sql += " ORDER BY id DESC LIMIT ?"; params.append(limit)
+              rows = query(sql, tuple(params))
+              rows = list(reversed(rows))
+              if rows:
+                  max_id = rows[-1]["id"]
+                  execute("UPDATE conversation_members SET last_read_message_id=? WHERE conversation_id=? AND user_id=?", (max_id, conversation_id, user["id"]))
+                  for m in rows: execute("INSERT OR IGNORE INTO message_reads(message_id, user_id, read_at) VALUES(?,?,?)", (m["id"], user["id"], now_iso()))
+              return [message_dict(m, user) for m in rows]
+
+          @app.post("/api/dm/conversations/{conversation_id}/messages")
+          def send_message(conversation_id: int, payload: MessageCreate, user=Depends(require_user)):
+              ensure_member(conversation_id, user)
+              message_id = execute("INSERT INTO messages(conversation_id, sender_id, text, created_at, reply_to_id) VALUES(?,?,?,?,?)", (conversation_id, user["id"], payload.text or "", now_iso(), payload.reply_to_id))
+              if payload.media_ids:
+                  for media_id in payload.media_ids: execute("INSERT OR IGNORE INTO message_media(message_id, media_id) VALUES(?,?)", (message_id, media_id))
+              execute("INSERT OR IGNORE INTO message_reads(message_id, user_id, read_at) VALUES(?,?,?)", (message_id, user["id"], now_iso()))
+              notify_mentions(payload.text, user["id"], None, message_id)
+              members = query("SELECT user_id FROM conversation_members WHERE conversation_id=?", (conversation_id,))
+              for member in members:
+                  if member["user_id"] != user["id"]: notify(member["user_id"], user["id"], "direct", None, message_id, (payload.text or "New message")[:100])
+              row = query_one("SELECT * FROM messages WHERE id=?", (message_id,))
+              return message_dict(row, user)
+
+          @app.put("/api/dm/messages/{message_id}")
+          def edit_message(message_id: int, payload: MessageUpdate, user=Depends(require_user)):
+              row = query_one("SELECT * FROM messages WHERE id=?", (message_id,))
+              if not row or row["deleted"]: raise HTTPException(404, "Message not found")
+              if row["sender_id"] != user["id"] and not user["is_admin"]: raise HTTPException(403, "Forbidden")
+              execute("UPDATE messages SET text=?, edited_at=? WHERE id=?", (payload.text, now_iso(), message_id))
+              notify_mentions(payload.text, user["id"], None, message_id)
+              return message_dict(query_one("SELECT * FROM messages WHERE id=?", (message_id,)), user)
+
+          @app.delete("/api/dm/messages/{message_id}")
+          def delete_message(message_id: int, user=Depends(require_user)):
+              row = query_one("SELECT * FROM messages WHERE id=?", (message_id,))
+              if not row or row["deleted"]: raise HTTPException(404, "Message not found")
+              if row["sender_id"] != user["id"] and not user["is_admin"]: raise HTTPException(403, "Forbidden")
+              execute("UPDATE messages SET deleted=1, text='' WHERE id=?", (message_id,))
+              return {"deleted": True}
+
+          @app.post("/api/dm/conversations/{conversation_id}/members")
+          def add_member(conversation_id: int, payload: AddMemberModel, user=Depends(require_user)):
+              ensure_member(conversation_id, user)
+              conv = query_one("SELECT * FROM conversations WHERE id=?", (conversation_id,))
+              if not conv or not conv["is_group"]: raise HTTPException(400, "Only groups can add members")
+              target = query_one("SELECT * FROM users WHERE id=?", (payload.user_id,))
+              if not target: raise HTTPException(404, "User not found")
+              execute("INSERT OR IGNORE INTO conversation_members(conversation_id, user_id, role, joined_at, last_read_message_id) VALUES(?,?,?,?,0)", (conversation_id, target["id"], "member", now_iso()))
+              notify(target["id"], user["id"], "group_add", None, None, "You were added to a group")
+              return conversation_dict(conversation_id, user)
+
+          @app.post("/api/admin/users/{username}/verify")
+          def admin_verify_user(username: str, payload: AdminVerifyModel, admin=Depends(require_admin)):
+              row = query_one("SELECT * FROM users WHERE username=?", (username,))
+              if not row: raise HTTPException(404, "User not found")
+              execute("UPDATE users SET is_verified=? WHERE id=?", (1 if payload.verified else 0, row["id"]))
+              return user_dict(query_one("SELECT * FROM users WHERE id=?", (row["id"],)), admin, include_email=True)
+
+          @app.get("/api/search")
+          def search(q: str = "", media_type: Optional[str] = None, user=Depends(optional_user)):
+              if not q and not media_type: return {"users": [], "posts": []}
+              like = f"%{q}%" if q else "%"
+              users = query("SELECT * FROM users WHERE username LIKE ? OR name LIKE ? OR bio LIKE ? LIMIT 20", (like, like, like))
+              if media_type:
+                  posts = query("SELECT DISTINCT p.* FROM posts p JOIN post_media pm ON pm.post_id = p.id JOIN media m ON m.id = pm.media_id WHERE (p.text LIKE ? OR m.title LIKE ? OR m.artist LIKE ? OR m.original_name LIKE ?) AND m.media_type = ? ORDER BY p.created_at DESC LIMIT 20", (like, like, like, like, media_type))
+              else:
+                  posts = query("SELECT * FROM posts WHERE text LIKE ? ORDER BY created_at DESC LIMIT 20", (like,))
+              return {"users": [user_dict(r, user) for r in users], "posts": [post_dict(r, user) for r in posts]}
+          ''').strip() + '\n'
+          with open("app.py", "w") as f:
+              f.write(content)
+          WRITER
+
+      - name: Write backup script
+        run: |
+          python3 << 'WRITER2'
+          import textwrap
+          content = textwrap.dedent('''
+          import os, base64, requests, tarfile, pathlib, subprocess, sqlite3, shutil, sys
+          TOKEN = os.environ.get("PAT_TOKEN", "")
+          REPO = os.environ.get("STORAGE_REPO", "")
+          DATA_DIR = "data"
+          if not TOKEN or not REPO or not os.path.isdir(DATA_DIR): sys.exit(0)
+          try:
+              db_path = os.path.join(DATA_DIR, "app.db")
+              if os.path.exists(db_path):
+                  src = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=60)
+                  dst = sqlite3.connect(os.path.join(DATA_DIR, "app.db.backup"), timeout=60)
+                  with dst: src.backup(dst)
+                  src.close(); dst.close()
+          except Exception as e: print("SQLite backup failed:", e)
+          if os.path.exists("data.tar.gz"): os.remove("data.tar.gz")
+          with tarfile.open("data.tar.gz", "w:gz") as tar: tar.add(DATA_DIR)
+          headers = {"Authorization": f"Bearer {TOKEN}", "Accept": "application/vnd.github+json"}
+          def upload_contents(local_path, remote_path, message):
+              size = os.path.getsize(local_path)
+              if size > 95_000_000: raise Exception("Too large")
+              url = f"https://api.github.com/repos/{REPO}/contents/{remote_path}"
+              r = requests.get(url, headers=headers)
+              sha = r.json().get("sha") if r.status_code == 200 else None
+              with open(local_path, "rb") as f: content = base64.b64encode(f.read()).decode()
+              payload = {"message": message, "content": content}
+              if sha: payload["sha"] = sha
+              resp = requests.put(url, headers=headers, json=payload)
+              if resp.status_code not in (200, 201): raise Exception(resp.text[:1000])
+          def git_fallback():
+              if os.path.exists(".storage_repo"): shutil.rmtree(".storage_repo")
+              subprocess.run(["git", "clone", f"https://x-access-token:{TOKEN}@github.com/{REPO}.git", ".storage_repo"], check=True, capture_output=True)
+              shutil.copy("data.tar.gz", ".storage_repo/data.tar.gz")
+              backup_dir = os.path.join(".storage_repo", "backup")
+              os.makedirs(backup_dir, exist_ok=True)
+              for p in pathlib.Path(DATA_DIR).rglob("*"):
+                  if p.is_file() and p.suffix.lower() in [".db", ".sqlite", ".sqlite3"]:
+                      shutil.copy(str(p), os.path.join(backup_dir, str(p).replace(os.sep, "_")))
+              subprocess.run(["git", "config", "user.name", "github-actions[bot]"], cwd=".storage_repo", capture_output=True)
+              subprocess.run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=".storage_repo", capture_output=True)
+              subprocess.run(["git", "add", "-A"], cwd=".storage_repo", capture_output=True)
+              commit = subprocess.run(["git", "commit", "-m", "Backup data [skip ci]"], cwd=".storage_repo", capture_output=True)
+              if commit.returncode == 0: subprocess.run(["git", "push"], cwd=".storage_repo", capture_output=True)
+          try:
+              upload_contents("data.tar.gz", "data.tar.gz", "Backup data [skip ci]")
+              for p in pathlib.Path(DATA_DIR).rglob("*"):
+                  if p.is_file() and p.suffix.lower() in [".db", ".sqlite", ".sqlite3"]:
+                      try: upload_contents(str(p), "backup/" + str(p).replace(os.sep, "_"), f"Backup {p} [skip ci]")
+                      except: pass
+          except Exception as e:
+              print("API backup failed:", e)
+              try: git_fallback()
+              except: pass
+          ''').strip() + '\n'
+          with open("backup.py", "w") as f:
+              f.write(content)
+          WRITER2
+
+      - name: Start FastAPI server
+        env:
+          OWNER_PASSWORD: ${{ secrets.OWNER_PASSWORD }}
+          SESSION_MINUTES: ${{ env.SESSION_MINUTES }}
+          DATA_DIR: ${{ env.DATA_DIR }}
+        run: |
+          nohup python -m uvicorn app:app --host 0.0.0.0 --port 5000 > api.log 2>&1 &
+          sleep 6
+          curl -s http://localhost:5000/api/status || (echo "API failed"; cat api.log; exit 1)
+
+      - name: Install and start Cloudflare tunnel
+        run: |
+          curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
+          chmod +x cloudflared
+          ./cloudflared tunnel --url http://localhost:5000 --no-autoupdate > cloudflare.log 2>&1 &
+          sleep 8
+          for i in $(seq 1 30); do
+            TUNNEL_URL=$(grep -oP 'https://[a-zA-Z0-9.-]+\.trycloudflare\.com' cloudflare.log | head -n1 || true)
+            if [ -n "$TUNNEL_URL" ]; then break; fi
+            sleep 2
+          done
+          if [ -z "$TUNNEL_URL" ]; then cat cloudflare.log; exit 1; fi
+          echo "TUNNEL_URL=$TUNNEL_URL" >> $GITHUB_ENV
+          echo "$TUNNEL_URL" > link.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add link.txt
+          git commit -m "🔗 API link [skip ci]" || true
+          git pull --rebase origin "${GITHUB_REF_NAME}" || true
+          git push origin HEAD:"${GITHUB_REF_NAME}" || true
+
+      - name: Watchdog, periodic backup and keep session alive
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+          TUNNEL_URL: ${{ env.TUNNEL_URL }}
+        run: |
+          set +e
+          DURATION="${SESSION_MINUTES}"
+          END_TIME=$(date -d "$DURATION minutes" +%s)
+          LAST_BACKUP=$(date +%s)
+          BACKUP_INTERVAL=1800
+          sleep 10
+          while [ "$(date +%s)" -lt "$END_TIME" ]; do
+            REMAINING=$((END_TIME - $(date +%s)))
+            echo "[$(date +%H:%M:%S)] Remaining: $((REMAINING / 60)) minutes"
+            curl -s -o /dev/null http://localhost:5000/api/status
+            if [ $? -ne 0 ]; then
+              pkill -f uvicorn || true; sleep 2
+              nohup python -m uvicorn app:app --host 0.0.0.0 --port 5000 > api.log 2>&1 &
+              sleep 5
+            fi
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "$TUNNEL_URL/api/status" || echo "000")
+            if [ "$HTTP_CODE" != "200" ]; then
+              pkill cloudflared || true; sleep 2
+              ./cloudflared tunnel --url http://localhost:5000 --no-autoupdate > cloudflare.log 2>&1 &
+              sleep 10
+              NEW_URL=$(grep -oP 'https://[a-zA-Z0-9.-]+\.trycloudflare\.com' cloudflare.log | head -n1 || true)
+              if [ -n "$NEW_URL" ]; then
+                TUNNEL_URL="$NEW_URL"; echo "$NEW_URL" > link.txt
+                git config user.name "github-actions[bot]"; git config user.email "github-actions[bot]@users.noreply.github.com"
+                git add link.txt; git commit -m "🔄 Update tunnel link [skip ci]" || true
+                git pull --rebase origin "${GITHUB_REF_NAME}" || true; git push origin HEAD:"${GITHUB_REF_NAME}" || true
+              fi
+            else
+              curl -s -o /dev/null "$TUNNEL_URL/api/status" || true
+            fi
+            NOW=$(date +%s)
+            if [ $((NOW - LAST_BACKUP)) -ge "$BACKUP_INTERVAL" ]; then
+              python backup.py || true; LAST_BACKUP=$NOW
+            fi
+            sleep 30
+          done
+
+      - name: Final backup and upload to storage repository
+        if: always()
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          python backup.py || true
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs
+          path: |
+            api.log
+            cloudflare.log
+          if-no-files-found: ignore

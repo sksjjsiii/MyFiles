@@ -1,0 +1,58 @@
+name: flutter_app
+description: مدیریت دارایی طلا و سکه با دریافت قیمت آنلاین
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  liquid_glass_widgets: ^0.29.1
+  flutter:
+    sdk: flutter
+  http:
+  intl:
+  fl_chart:
+  provider:
+  shared_preferences:
+  hive:
+  hive_flutter:
+  path_provider:
+  html:
+  shamsi_date:
+  crystal_navigation_bar: ^1.1.0
+  auto_size_text:
+  persian_datetimepickers: ^1.1.0
+  persian_number_utility: ^1.1.6
+  share_plus: ^7.2.1
+  file_picker: ^8.0.0
+  flutter_colorpicker: ^1.0.3
+  printing: ^5.11.1
+  pdf: ^3.10.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  hive_generator:
+  build_runner:
+  flutter_launcher_icons: ^0.13.1
+  change_app_package_name: ^1.5.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/fonts/
+    - assets/icon/icon.png
+  fonts:
+    - family: Vazir
+      fonts:
+        - asset: assets/fonts/Vazir.ttf
+          weight: 400
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/icon.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#FFD700"
+  adaptive_icon_foreground: "assets/icon/icon.png"
