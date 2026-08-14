@@ -1,7 +1,8 @@
+# pubspec.yaml
 name: pulse_social
 description: "NokhodX — a modern Twitter-like + Reels social app."
 publish_to: "none"
-version: 4.0.0+1
+version: 5.0.0+1
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -9,6 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+
   cupertino_icons: ^1.0.8
   http: ^1.2.1
   shared_preferences: ^2.2.3

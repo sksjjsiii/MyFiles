@@ -1,6 +1,13 @@
-// ═══════════════════════════════════════════════════════════════
-//  NOKHODX v4.1.1 — Syntax fix for setState in FullScreenVideo
-// ═══════════════════════════════════════════════════════════════
+// main.dart
+// NokhodX v5.0.0
+// - Status bar: light => black, dark => white, globally
+// - Multi-account management
+// - Advanced one-time caching + progress for downloads
+// - Text-only post fixed
+// - Latest avatar is default avatar
+// - Telegram-like avatars + story ring from has_unseen_story
+// - Direct messages support all file types
+// - Added share, quote, add group member, media-type search, etc.
 
 import 'dart:async';
 import 'dart:convert';
@@ -8,14 +15,12 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import 'package:mime/mime.dart';
 import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -25,13 +30,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:video_player/video_player.dart';
 
-// ═══════════════════════════════ MAIN ═══════════════════════════
-
+// ═══════════════════════════════════════════════════════════════
+// MAIN
+// ═══════════════════════════════════════════════════════════════
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await AccountManager.instance.load();
   await ApiClient.instance.init();
   await ThemeStore.instance.load();
   await FileCache.instance.init();
+
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   runApp(const NokhodXApp());
 }
 
@@ -44,6 +54,7 @@ class NokhodXApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AppState()),
         ChangeNotifierProvider.value(value: ThemeStore.instance),
+        ChangeNotifierProvider.value(value: AccountManager.instance),
         ChangeNotifierProvider.value(value: AudioController.instance),
         ChangeNotifierProvider.value(value: FileCache.instance),
       ],
@@ -51,9 +62,27 @@ class NokhodXApp extends StatelessWidget {
         builder: (context, theme, _) {
           final isDark = theme.isDark;
           final p = Pal(isDark: isDark);
+
+          final overlay = SystemUiOverlayStyle(
+            statusBarColor: isDark ? Colors.white : Colors.black,
+            statusBarIconBrightness:
+                isDark ? Brightness.dark : Brightness.light,
+            statusBarBrightness:
+                isDark ? Brightness.light : Brightness.dark,
+            systemNavigationBarColor: isDark ? Colors.black : Colors.white,
+            systemNavigationBarIconBrightness:
+                isDark ? Brightness.light : Brightness.dark,
+          );
+
           return MaterialApp(
             title: 'NokhodX',
             debugShowCheckedModeBanner: false,
+            builder: (context, child) {
+              return AnnotatedRegion<SystemUiOverlayStyle>(
+                value: overlay,
+                child: child ?? const SizedBox.shrink(),
+              );
+            },
             theme: ThemeData(
               useMaterial3: true,
               brightness: isDark ? Brightness.dark : Brightness.light,
@@ -70,7 +99,8 @@ class NokhodXApp extends StatelessWidget {
                 onError: Colors.white,
               ),
               textTheme: GoogleFonts.interTextTheme(
-                  (isDark ? ThemeData.dark() : ThemeData.light()).textTheme),
+                (isDark ? ThemeData.dark() : ThemeData.light()).textTheme,
+              ),
               appBarTheme: AppBarTheme(
                 backgroundColor: Colors.transparent,
                 elevation: 0,
@@ -89,6 +119,7 @@ class NokhodXApp extends StatelessWidget {
 
 class BootWrapper extends StatefulWidget {
   const BootWrapper({super.key});
+
   @override
   State<BootWrapper> createState() => _BootWrapperState();
 }
@@ -107,7 +138,8 @@ class _BootWrapperState extends State<BootWrapper> {
       statusBarIconBrightness: isDark ? Brightness.dark : Brightness.light,
       statusBarBrightness: isDark ? Brightness.light : Brightness.dark,
       systemNavigationBarColor: isDark ? Colors.black : Colors.white,
-      systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+      systemNavigationBarIconBrightness:
+          isDark ? Brightness.light : Brightness.dark,
     ));
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   }
@@ -131,32 +163,28 @@ void _applyBars(BuildContext context) {
     statusBarIconBrightness: isDark ? Brightness.dark : Brightness.light,
     statusBarBrightness: isDark ? Brightness.light : Brightness.dark,
     systemNavigationBarColor: isDark ? Colors.black : Colors.white,
-    systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+    systemNavigationBarIconBrightness:
+        isDark ? Brightness.light : Brightness.dark,
   ));
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 }
 
-void _applyBlackBars() {
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.black,
-    statusBarIconBrightness: Brightness.light,
-    statusBarBrightness: Brightness.dark,
-    systemNavigationBarColor: Colors.black,
-    systemNavigationBarIconBrightness: Brightness.light,
-  ));
-}
-
-// ═══════════════════════════════ STORES ═══════════════════════════
-
+// ═══════════════════════════════════════════════════════════════
+// THEME
+// ═══════════════════════════════════════════════════════════════
 class ThemeStore extends ChangeNotifier {
   ThemeStore._();
   static final ThemeStore instance = ThemeStore._();
+
   bool _isDark = true;
   bool get isDark => _isDark;
+
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     _isDark = prefs.getBool('nokh_theme_dark') ?? true;
     notifyListeners();
   }
+
   Future<void> toggle() async {
     _isDark = !_isDark;
     notifyListeners();
@@ -165,17 +193,21 @@ class ThemeStore extends ChangeNotifier {
   }
 }
 
-// ═══════════════════════════════ PALETTE ═══════════════════════════
-
+// ═══════════════════════════════════════════════════════════════
+// PALETTE
+// ═══════════════════════════════════════════════════════════════
 class Pal {
   final bool isDark;
   Pal({required this.isDark});
 
   Color get bg => isDark ? const Color(0xFF070B10) : const Color(0xFFF6F8FB);
-  Color get surface => isDark ? const Color(0xFF0E141B) : const Color(0xFFFFFFFF);
+  Color get surface =>
+      isDark ? const Color(0xFF0E141B) : const Color(0xFFFFFFFF);
   Color get card => isDark ? const Color(0xFF131B24) : const Color(0xFFF1F4F8);
-  Color get card2 => isDark ? const Color(0xFF1A2532) : const Color(0xFFE6ECF2);
-  Color get border => isDark ? const Color(0xFF1F2B38) : const Color(0xFFD9E1EA);
+  Color get card2 =>
+      isDark ? const Color(0xFF1A2532) : const Color(0xFFE6ECF2);
+  Color get border =>
+      isDark ? const Color(0xFF1F2B38) : const Color(0xFFD9E1EA);
   Color get text => isDark ? const Color(0xFFEAF0F6) : const Color(0xFF0A1420);
   Color get sub => isDark ? const Color(0xFF8CA0B3) : const Color(0xFF5B6B7E);
   Color get accent => const Color(0xFF1D9BF0);
@@ -187,13 +219,16 @@ class Pal {
   Color get red => const Color(0xFFE0245E);
 
   LinearGradient get brand => LinearGradient(
-      colors: [accent, purple],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight);
+        colors: [accent, purple],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
+
   LinearGradient get reel => LinearGradient(
-      colors: [pink, orange],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight);
+        colors: [pink, orange],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
 }
 
 Pal _p(BuildContext context) {
@@ -204,14 +239,205 @@ Pal _p(BuildContext context) {
   }
 }
 
-// ═══════════════════════════════ AUDIO CONTROLLER ══════════════════
+// ═══════════════════════════════════════════════════════════════
+// MULTI ACCOUNT
+// ═══════════════════════════════════════════════════════════════
+class Account {
+  final String id;
+  String username;
+  String email;
+  String token;
+  String? name;
+  String? avatarUrl;
 
+  Account({
+    required this.id,
+    required this.username,
+    required this.email,
+    required this.token,
+    this.name,
+    this.avatarUrl,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'username': username,
+        'email': email,
+        'token': token,
+        'name': name,
+        'avatar_url': avatarUrl,
+      };
+
+  factory Account.fromJson(Map<String, dynamic> j) => Account(
+        id: jstr(j['id']),
+        username: jstr(j['username']),
+        email: jstr(j['email']),
+        token: jstr(j['token']),
+        name: j['name']?.toString(),
+        avatarUrl: j['avatar_url']?.toString(),
+      );
+}
+
+class AccountManager extends ChangeNotifier {
+  AccountManager._();
+  static final AccountManager instance = AccountManager._();
+
+  final List<Account> _accounts = [];
+  String? _activeId;
+
+  List<Account> get accounts => List.unmodifiable(_accounts);
+  String? get activeId => _activeId;
+
+  Account? get active {
+    if (_activeId == null) return null;
+    for (final a in _accounts) {
+      if (a.id == _activeId) return a;
+    }
+    return null;
+  }
+
+  Future<void> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    _accounts.clear();
+
+    final raw = prefs.getString('nx_accounts');
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final list = jsonDecode(raw);
+        if (list is List) {
+          for (final item in list) {
+            if (item is Map) {
+              _accounts.add(Account.fromJson(Map<String, dynamic>.from(item)));
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    _activeId = prefs.getString('nx_active_account');
+    if (_activeId != null &&
+        !_accounts.any((e) => e.id == _activeId)) {
+      _activeId = _accounts.isEmpty ? null : _accounts.first.id;
+    }
+
+    notifyListeners();
+  }
+
+  Future<void> _save() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'nx_accounts',
+      jsonEncode(_accounts.map((e) => e.toJson()).toList()),
+    );
+    if (_activeId == null) {
+      await prefs.remove('nx_active_account');
+    } else {
+      await prefs.setString('nx_active_account', _activeId!);
+    }
+  }
+
+  int _findIndex(String id) {
+    for (var i = 0; i < _accounts.length; i++) {
+      if (_accounts[i].id == id) return i;
+    }
+    return -1;
+  }
+
+  Future<Account> upsert({
+    required String token,
+    required String username,
+    String email = '',
+    String? name,
+    String? avatarUrl,
+  }) async {
+    final id = username.toLowerCase();
+    final idx = _findIndex(id);
+
+    if (idx >= 0) {
+      final acc = _accounts[idx];
+      acc.username = username;
+      acc.email = email;
+      acc.token = token;
+      acc.name = name ?? acc.name;
+      acc.avatarUrl = avatarUrl ?? acc.avatarUrl;
+      _activeId = id;
+      await _save();
+      notifyListeners();
+      return acc;
+    }
+
+    final acc = Account(
+      id: id,
+      username: username,
+      email: email,
+      token: token,
+      name: name,
+      avatarUrl: avatarUrl,
+    );
+    _accounts.add(acc);
+    _activeId = id;
+    await _save();
+    notifyListeners();
+    return acc;
+  }
+
+  Future<void> updateActive({
+    String? username,
+    String? email,
+    String? name,
+    String? avatarUrl,
+  }) async {
+    final acc = active;
+    if (acc == null) return;
+
+    if (username != null && username.isNotEmpty) acc.username = username;
+    if (email != null) acc.email = email;
+    if (name != null) acc.name = name;
+    if (avatarUrl != null) acc.avatarUrl = avatarUrl;
+
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> switchTo(String id) async {
+    final idx = _findIndex(id);
+    if (idx < 0) return;
+
+    _activeId = id;
+    await ApiClient.instance.setToken(_accounts[idx].token);
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> remove(String id) async {
+    _accounts.removeWhere((e) => e.id == id);
+
+    if (_activeId == id) {
+      if (_accounts.isNotEmpty) {
+        _activeId = _accounts.first.id;
+        await ApiClient.instance.setToken(_accounts.first.token);
+      } else {
+        _activeId = null;
+        await ApiClient.instance.setToken(null);
+      }
+    }
+
+    await _save();
+    notifyListeners();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AUDIO
+// ═══════════════════════════════════════════════════════════════
 class AudioController extends ChangeNotifier {
   AudioController._();
   static final AudioController instance = AudioController._();
 
   final AudioPlayer _player = AudioPlayer();
-  String? _currentUrl;
+
+  String? _currentSource;
+  String? _currentKey;
   String? _currentTitle;
   String? _currentArtist;
   double? _currentDuration;
@@ -220,30 +446,56 @@ class AudioController extends ChangeNotifier {
   bool _muted = false;
   Timer? _posTimer;
 
-  String? get currentUrl => _currentUrl;
+  String? get currentSource => _currentSource;
+  String? get currentKey => _currentKey;
   String? get currentTitle => _currentTitle;
   String? get currentArtist => _currentArtist;
   double? get currentDuration => _currentDuration;
   double get position => _position;
   bool get playing => _playing && !_muted;
-  bool get hasTrack => _currentUrl != null;
+  bool get hasTrack => _currentKey != null;
   bool get muted => _muted;
 
-  Future<void> play(String url, {String? title, String? artist, double? duration}) async {
-    if (_currentUrl == url && _playing) {
+  Source _makeSource(String path) {
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return UrlSource(path);
+    }
+    return DeviceFileSource(path);
+  }
+
+  Future<void> play(
+    String source, {
+    String? key,
+    String? title,
+    String? artist,
+    double? duration,
+  }) async {
+    final k = key ?? source;
+
+    if (_currentKey == k && _playing) {
       await pause();
       return;
     }
-    _currentUrl = url;
+
+    if (_currentKey == k && !_playing) {
+      await resume();
+      return;
+    }
+
+    _currentSource = source;
+    _currentKey = k;
     _currentTitle = title;
     _currentArtist = artist;
     _currentDuration = duration;
     _position = 0;
+
     await _player.stop();
     _posTimer?.cancel();
-    await _player.play(UrlSource(url));
+
+    await _player.play(_makeSource(source));
     _playing = true;
     _muted = false;
+
     _posTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
       if (_playing && !_muted) {
         _position += 0.5;
@@ -255,6 +507,7 @@ class AudioController extends ChangeNotifier {
         notifyListeners();
       }
     });
+
     notifyListeners();
   }
 
@@ -265,7 +518,7 @@ class AudioController extends ChangeNotifier {
   }
 
   Future<void> resume() async {
-    if (_currentUrl == null) return;
+    if (_currentKey == null) return;
     await _player.resume();
     _playing = true;
     notifyListeners();
@@ -281,7 +534,8 @@ class AudioController extends ChangeNotifier {
     await _player.stop();
     _playing = false;
     _posTimer?.cancel();
-    _currentUrl = null;
+    _currentSource = null;
+    _currentKey = null;
     _currentTitle = null;
     _currentArtist = null;
     _currentDuration = null;
@@ -313,8 +567,9 @@ class AudioController extends ChangeNotifier {
   }
 }
 
-// ═══════════════════════════════ FILE CACHE ═══════════════════════
-
+// ═══════════════════════════════════════════════════════════════
+// FILE CACHE
+// ═══════════════════════════════════════════════════════════════
 class FileCache extends ChangeNotifier {
   FileCache._();
   static final FileCache instance = FileCache._();
@@ -338,9 +593,8 @@ class FileCache extends ChangeNotifier {
     for (final b in bytes) {
       hash = (hash * 31 + b) & 0x7fffffff;
     }
-    final ext = url.split('?').first.split('/').last.contains('.')
-        ? '.${url.split('?').first.split('/').last.split('.').last}'
-        : '';
+    final clean = url.split('?').first;
+    final ext = clean.contains('.') ? '.${clean.split('.').last}' : '';
     return '${hash.toRadixString(16)}$ext';
   }
 
@@ -366,15 +620,19 @@ class FileCache extends ChangeNotifier {
       try {
         final headReq = http.Request('HEAD', Uri.parse(url));
         if (headers != null) headReq.headers.addAll(headers);
-        final headRes = await _client.send(headReq).timeout(const Duration(seconds: 10));
-        final remoteSize = int.tryParse(headRes.headers['content-length'] ?? '') ?? 0;
+        final headRes =
+            await _client.send(headReq).timeout(const Duration(seconds: 10));
+        final remoteSize =
+            int.tryParse(headRes.headers['content-length'] ?? '') ?? 0;
         final localSize = await file.length();
+
         if (remoteSize > 0 && localSize == remoteSize) {
           _downloadProgress[url] = 1.0;
           notifyListeners();
           onProgress?.call(1.0);
           return localPath;
         }
+
         if (remoteSize == 0 && localSize > 0) {
           _downloadProgress[url] = 1.0;
           notifyListeners();
@@ -414,7 +672,8 @@ class FileCache extends ChangeNotifier {
         req.headers['Range'] = 'bytes=$existingBytes-';
       }
 
-      final streamed = await _client.send(req).timeout(const Duration(minutes: 10));
+      final streamed =
+          await _client.send(req).timeout(const Duration(minutes: 15));
 
       if (streamed.statusCode == 416) {
         _activeDownloads[url] = false;
@@ -436,7 +695,6 @@ class FileCache extends ChangeNotifier {
       }
 
       int received = existingBytes;
-
       final sink = existingBytes > 0
           ? file.openWrite(mode: FileMode.append)
           : file.openWrite();
@@ -444,7 +702,8 @@ class FileCache extends ChangeNotifier {
       await for (final chunk in streamed.stream) {
         sink.add(chunk);
         received += chunk.length;
-        final progress = totalSize > 0 ? (received / totalSize).clamp(0.0, 1.0) : 0.0;
+        final progress =
+            totalSize > 0 ? (received / totalSize).clamp(0.0, 1.0) : 0.0;
         _downloadProgress[url] = progress;
         onProgress?.call(progress);
         notifyListeners();
@@ -464,25 +723,46 @@ class FileCache extends ChangeNotifier {
   }
 }
 
-// ═══════════════════════════════ UTILS ═══════════════════════════
-
-void showSnack(BuildContext context, String msg, {bool error = false, int seconds = 3}) {
+// ═══════════════════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════════════════
+void showSnack(
+  BuildContext context,
+  String msg, {
+  bool error = false,
+  int seconds = 3,
+}) {
   if (!context.mounted) return;
   final p = _p(context);
+
   ScaffoldMessenger.of(context)
     ..clearSnackBars()
     ..showSnackBar(SnackBar(
       content: Row(children: [
-        Icon(error ? Icons.error_outline_rounded : Icons.check_circle_rounded,
-            color: error ? Colors.white : (p.isDark ? Colors.black : Colors.white), size: 20),
+        Icon(
+          error
+              ? Icons.error_outline_rounded
+              : Icons.check_circle_rounded,
+          color: error ? Colors.white : (p.isDark ? Colors.black : Colors.white),
+          size: 20,
+        ),
         const SizedBox(width: 10),
-        Expanded(child: Text(msg,
-            style: TextStyle(fontSize: 13.5,
-                color: error ? Colors.white : (p.isDark ? Colors.black : Colors.white),
-                fontWeight: FontWeight.w600))),
+        Expanded(
+          child: Text(
+            msg,
+            style: TextStyle(
+              fontSize: 13.5,
+              color:
+                  error ? Colors.white : (p.isDark ? Colors.black : Colors.white),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
       ]),
       behavior: SnackBarBehavior.floating,
-      backgroundColor: error ? p.red : (p.isDark ? const Color(0xFFEAF0F6) : const Color(0xFF1A2532)),
+      backgroundColor: error
+          ? p.red
+          : (p.isDark ? const Color(0xFFEAF0F6) : const Color(0xFF1A2532)),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       margin: const EdgeInsets.all(16),
       duration: Duration(seconds: seconds),
@@ -511,20 +791,29 @@ DateTime? _parseServerTime(dynamic v) {
   if (v == null) return null;
   if (v is DateTime) return v.isUtc ? v : v.toUtc();
   if (v is num) {
-    if (v < 1e12) return DateTime.fromMillisecondsSinceEpoch(v.toInt() * 1000, isUtc: true);
-    if (v < 1e14) return DateTime.fromMillisecondsSinceEpoch(v.toInt(), isUtc: true);
+    if (v < 1e12) {
+      return DateTime.fromMillisecondsSinceEpoch(v.toInt() * 1000, isUtc: true);
+    }
+    if (v < 1e14) {
+      return DateTime.fromMillisecondsSinceEpoch(v.toInt(), isUtc: true);
+    }
     return DateTime.fromMicrosecondsSinceEpoch(v.toInt(), isUtc: true);
   }
   if (v is String && v.isNotEmpty) {
     final s = v.trim();
     final n = num.tryParse(s);
     if (n != null) return _parseServerTime(n);
+
     String iso = s;
-    if (!iso.endsWith('Z') && !iso.contains('+') && !RegExp(r'\d{2}:\d{2}$').hasMatch(iso)) {
+    if (!iso.endsWith('Z') &&
+        !iso.contains('+') &&
+        !RegExp(r'\d{2}:\d{2}$').hasMatch(iso)) {
       iso = '${iso}Z';
     }
+
     final dt = DateTime.tryParse(iso);
     if (dt != null) return dt.isUtc ? dt : dt.toUtc();
+
     final dt2 = DateTime.tryParse(s);
     if (dt2 != null) return dt2.isUtc ? dt2 : dt2.toUtc();
   }
@@ -534,14 +823,20 @@ DateTime? _parseServerTime(dynamic v) {
 String timeAgo(BuildContext context, dynamic v) {
   final t = _parseServerTime(v);
   if (t == null) return '';
+
   final diff = DateTime.now().toUtc().difference(t).abs();
+
   if (diff.inSeconds < 5) return 'now';
   if (diff.inSeconds < 60) return '${diff.inSeconds}s';
   if (diff.inMinutes < 60) return '${diff.inMinutes}m';
   if (diff.inHours < 24) return '${diff.inHours}h';
   if (diff.inDays < 7) return '${diff.inDays}d';
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
+
   if (diff.inDays < 365) return '${months[t.month - 1]} ${t.day}';
   return '${months[t.month - 1]} ${t.day}, ${t.year}';
 }
@@ -589,13 +884,33 @@ bool jbool(dynamic v, [bool d = false]) {
   return d;
 }
 
-List<Map<String, dynamic>> extractItems(dynamic res,
-    [List<String> keys = const [
-      'items', 'posts', 'results', 'data', 'users', 'notifications',
-      'conversations', 'messages', 'replies', 'shorts', 'media', 'list',
-      'avatars', 'musics', 'profile_images', 'profile_musics', 'stories', 'tags'
-    ]]) {
-  if (res is List) return res.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+List<Map<String, dynamic>> extractItems(
+  dynamic res, [
+  List<String> keys = const [
+    'items',
+    'posts',
+    'results',
+    'data',
+    'users',
+    'notifications',
+    'conversations',
+    'messages',
+    'replies',
+    'shorts',
+    'media',
+    'list',
+    'avatars',
+    'musics',
+    'profile_images',
+    'profile_musics',
+    'stories',
+    'tags'
+  ],
+]) {
+  if (res is List) {
+    return res.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
   if (res is Map) {
     for (final k in keys) {
       final v = res[k];
@@ -603,12 +918,14 @@ List<Map<String, dynamic>> extractItems(dynamic res,
         return v.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
       }
     }
+
     for (final v in res.values) {
       if (v is List) {
         return v.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
       }
     }
   }
+
   return [];
 }
 
@@ -617,6 +934,7 @@ String? extractToken(dynamic json) {
     for (final k in ['token', 'access_token', 'accessToken', 'jwt', 'auth_token']) {
       if (json[k] is String && (json[k] as String).isNotEmpty) return json[k];
     }
+
     for (final k in ['data', 'user', 'auth', 'session']) {
       if (json[k] is Map) {
         final t = extractToken(json[k]);
@@ -629,6 +947,7 @@ String? extractToken(dynamic json) {
 
 String? resolveMedia(dynamic value) {
   if (value == null) return null;
+
   if (value is Map) {
     for (final k in ['url', 'file_url', 'media_url', 'src', 'link', 'path']) {
       final v = value[k];
@@ -640,11 +959,14 @@ String? resolveMedia(dynamic value) {
     }
     return null;
   }
+
   final s = value.toString().trim();
   if (s.isEmpty) return null;
   if (s.startsWith('http://') || s.startsWith('https://')) return s;
+
   final base = ApiClient.instance.baseUrl ?? '';
   if (base.isEmpty) return null;
+
   if (s.startsWith('/')) return '$base$s';
   return '$base/uploads/$s';
 }
@@ -654,13 +976,26 @@ String _fullUrl(String url) {
   return '${ApiClient.instance.baseUrl ?? ''}$url';
 }
 
+Map<String, String>? authHeaders() {
+  final t = ApiClient.instance.token;
+  if (t == null || t.isEmpty) return null;
+  return {'Authorization': 'Bearer $t'};
+}
+
 Color hashColor(String s) {
   const cs = [
-    Color(0xFF1D9BF0), Color(0xFFF91880), Color(0xFF00BA7C),
-    Color(0xFF7856FF), Color(0xFFFF7A00), Color(0xFFFFD400),
+    Color(0xFF1D9BF0),
+    Color(0xFFF91880),
+    Color(0xFF00BA7C),
+    Color(0xFF7856FF),
+    Color(0xFFFF7A00),
+    Color(0xFFFFD400),
   ];
+
   int h = 0;
-  for (final c in s.codeUnits) h = (h * 31 + c) % 997;
+  for (final c in s.codeUnits) {
+    h = (h * 31 + c) % 997;
+  }
   return cs[h % cs.length];
 }
 
@@ -693,12 +1028,15 @@ class SlideUpRoute extends PageRouteBuilder {
         );
 }
 
-// ═══════════════════════════════ API CLIENT ══════════════════════
-
+// ═══════════════════════════════════════════════════════════════
+// API CLIENT
+// ═══════════════════════════════════════════════════════════════
 class ApiException implements Exception {
   final String message;
   final int? statusCode;
+
   ApiException(this.message, {this.statusCode});
+
   @override
   String toString() => message;
 }
@@ -713,6 +1051,7 @@ class ApiClient {
 
   String? _baseUrl;
   String? _token;
+
   final ValueNotifier<int> unauthorized = ValueNotifier(0);
 
   String? get baseUrl => _baseUrl;
@@ -721,11 +1060,12 @@ class ApiClient {
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString('pulse_token');
     _baseUrl = prefs.getString('pulse_base_url');
+    _token = AccountManager.instance.active?.token ??
+        prefs.getString('pulse_token');
   }
 
-  Future<void> saveToken(String? t) async {
+  Future<void> setToken(String? t) async {
     _token = t;
     final prefs = await SharedPreferences.getInstance();
     if (t == null) {
@@ -735,15 +1075,21 @@ class ApiClient {
     }
   }
 
+  Future<void> saveToken(String? t) => setToken(t);
+
   Future<String> fetchBaseUrl({bool force = false}) async {
     if (_baseUrl != null && _baseUrl!.isNotEmpty && !force) return _baseUrl!;
+
     try {
-      final res = await http.get(Uri.parse(linkSource)).timeout(const Duration(seconds: 12));
+      final res =
+          await http.get(Uri.parse(linkSource)).timeout(const Duration(seconds: 12));
+
       if (res.statusCode == 200) {
         var url = res.body.trim();
         if (url.isNotEmpty && url.startsWith('http')) {
           url = url.replaceAll(RegExp(r'/+$'), '');
           _baseUrl = url;
+
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('pulse_base_url', url);
           return url;
@@ -752,6 +1098,7 @@ class ApiClient {
     } catch (e) {
       debugPrint('fetchBaseUrl error: $e');
     }
+
     if (_baseUrl != null && _baseUrl!.isNotEmpty) return _baseUrl!;
     throw ApiException('Could not reach the server.', statusCode: 0);
   }
@@ -769,6 +1116,7 @@ class ApiClient {
         }
       }
     } catch (_) {}
+
     return 'Request failed (${res.statusCode})';
   }
 
@@ -780,15 +1128,19 @@ class ApiClient {
     bool auth = true,
   }) async {
     Object? lastError;
+
     for (var attempt = 0; attempt < 2; attempt++) {
       final base = await fetchBaseUrl(force: attempt > 0);
+
       try {
         Uri uri = Uri.parse('$base$path');
         if (query != null && query.isNotEmpty) {
           uri = uri.replace(queryParameters: {...uri.queryParameters, ...query});
         }
+
         final headers = <String, String>{'Accept': 'application/json'};
         if (auth && _token != null) headers['Authorization'] = 'Bearer $_token';
+
         String? encoded;
         if (body != null) {
           final clean = <String, dynamic>{};
@@ -798,13 +1150,19 @@ class ApiClient {
           encoded = jsonEncode(clean);
           headers['Content-Type'] = 'application/json';
         }
+
         http.Response res;
+
         switch (method) {
           case 'POST':
-            res = await http.post(uri, headers: headers, body: encoded).timeout(_timeout);
+            res = await http
+                .post(uri, headers: headers, body: encoded)
+                .timeout(_timeout);
             break;
           case 'PUT':
-            res = await http.put(uri, headers: headers, body: encoded).timeout(_timeout);
+            res = await http
+                .put(uri, headers: headers, body: encoded)
+                .timeout(_timeout);
             break;
           case 'DELETE':
             res = await http.delete(uri, headers: headers).timeout(_timeout);
@@ -812,6 +1170,7 @@ class ApiClient {
           default:
             res = await http.get(uri, headers: headers).timeout(_timeout);
         }
+
         if (res.statusCode >= 200 && res.statusCode < 300) {
           if (res.body.trim().isEmpty) return <String, dynamic>{};
           try {
@@ -820,12 +1179,14 @@ class ApiClient {
             return <String, dynamic>{'raw': res.body};
           }
         }
+
         if (res.statusCode == 401 &&
             !path.startsWith('/api/auth/login') &&
             !path.startsWith('/api/auth/signup')) {
           unauthorized.value++;
           throw ApiException('Session expired. Sign in again.', statusCode: 401);
         }
+
         throw ApiException(_extractError(res), statusCode: res.statusCode);
       } on ApiException {
         rethrow;
@@ -840,50 +1201,86 @@ class ApiClient {
         continue;
       }
     }
+
     throw ApiException('Network error: $lastError', statusCode: 0);
   }
 
-  Future<dynamic> get(String path, {Map<String, String>? query, bool auth = true}) =>
+  Future<dynamic> get(
+    String path, {
+    Map<String, String>? query,
+    bool auth = true,
+  }) =>
       request('GET', path, query: query, auth: auth);
-  Future<dynamic> post(String path, {Map<String, dynamic>? body, bool auth = true}) =>
+
+  Future<dynamic> post(
+    String path, {
+    Map<String, dynamic>? body,
+    bool auth = true,
+  }) =>
       request('POST', path, body: body, auth: auth);
-  Future<dynamic> put(String path, {Map<String, dynamic>? body, bool auth = true}) =>
+
+  Future<dynamic> put(
+    String path, {
+    Map<String, dynamic>? body,
+    bool auth = true,
+  }) =>
       request('PUT', path, body: body, auth: auth);
+
   Future<dynamic> delete(String path, {bool auth = true}) =>
       request('DELETE', path, auth: auth);
 
-  Future<dynamic> uploadMedia(String filePath,
-      {String fieldName = 'file', void Function(double progress)? onProgress}) async {
+  Future<dynamic> uploadMedia(
+    String filePath, {
+    String fieldName = 'file',
+    void Function(double progress)? onProgress,
+  }) async {
     final file = File(filePath);
     final fileLength = await file.length();
+
     for (var attempt = 0; attempt < 2; attempt++) {
       final base = await fetchBaseUrl(force: attempt > 0);
-      try {
-        final mimeType = lookupMimeType(filePath) ?? 'application/octet-stream';
-        final req = http.MultipartRequest('POST', Uri.parse('$base/api/media/upload'));
-        if (_token != null) req.headers['Authorization'] = 'Bearer $_token';
-        final stream = http.ByteStream(file.openRead());
-        req.files.add(http.MultipartFile(fieldName, stream, fileLength,
-            filename: filePath.split('/').last, contentType: _parseMediaType(mimeType)));
 
-        int sent = 0;
+      try {
+        final req = http.MultipartRequest(
+          'POST',
+          Uri.parse('$base/api/media/upload'),
+        );
+
+        if (_token != null) req.headers['Authorization'] = 'Bearer $_token';
+
+        final stream = http.ByteStream(file.openRead());
+        req.files.add(http.MultipartFile(
+          fieldName,
+          stream,
+          fileLength,
+          filename: filePath.split('/').last,
+        ));
+
         final trackedRequest = _TrackedMultipartRequest(req, (sentBytes) {
-          sent = sentBytes;
           if (onProgress != null) {
-            onProgress(fileLength > 0 ? (sent / fileLength).clamp(0.0, 0.99) : 0.0);
+            onProgress(
+              fileLength > 0 ? (sentBytes / fileLength).clamp(0.0, 0.99) : 0.0,
+            );
           }
         });
 
-        final streamed = await trackedRequest.send().timeout(const Duration(minutes: 5));
+        final streamed =
+            await trackedRequest.send().timeout(const Duration(minutes: 10));
+
         final bytes = BytesBuilder();
         await for (final chunk in streamed.stream) {
           bytes.add(chunk);
         }
+
         if (onProgress != null) onProgress(1.0);
 
         final bodyBytes = bytes.toBytes();
-        final res = http.Response.bytes(bodyBytes, streamed.statusCode,
-            headers: streamed.headers, request: streamed.request);
+        final res = http.Response.bytes(
+          bodyBytes,
+          streamed.statusCode,
+          headers: streamed.headers,
+          request: streamed.request,
+        );
 
         if (res.statusCode >= 200 && res.statusCode < 300) {
           if (res.body.trim().isEmpty) return <String, dynamic>{};
@@ -893,6 +1290,7 @@ class ApiClient {
             return <String, dynamic>{'raw': res.body};
           }
         }
+
         throw ApiException(_extractError(res), statusCode: res.statusCode);
       } on ApiException {
         rethrow;
@@ -902,13 +1300,8 @@ class ApiClient {
         continue;
       }
     }
-    throw ApiException('Upload failed — network error.');
-  }
 
-  http.MediaType? _parseMediaType(String mime) {
-    final parts = mime.split('/');
-    if (parts.length != 2) return null;
-    return http.MediaType(parts[0], parts[1]);
+    throw ApiException('Upload failed — network error.');
   }
 }
 
@@ -933,6 +1326,7 @@ class _TrackedMultipartRequest extends http.MultipartRequest {
     final byteStream = _inner.finalize();
     int sent = 0;
     final controller = StreamController<List<int>>();
+
     byteStream.listen(
       (data) {
         sent += data.length;
@@ -943,12 +1337,14 @@ class _TrackedMultipartRequest extends http.MultipartRequest {
       onDone: controller.close,
       cancelOnError: true,
     );
+
     return http.ByteStream(controller.stream);
   }
 }
 
-// ═══════════════════════════════ MODELS ══════════════════════════
-
+// ═══════════════════════════════════════════════════════════════
+// MODELS
+// ═══════════════════════════════════════════════════════════════
 class User {
   final int? id;
   final String username;
@@ -988,11 +1384,14 @@ class User {
     this.followedByFollowings = const [],
   });
 
-  String? get avatarUrl => avatarItems.isNotEmpty ? avatarItems.first.url : null;
+  String? get avatarUrl =>
+      avatarItems.isNotEmpty ? avatarItems.last.url : null;
+
   String get displayName => (name.isNotEmpty ? name : username);
 
   factory User.fromJson(Map<String, dynamic> raw) {
     Map<String, dynamic> j = raw;
+
     for (final k in ['user', 'profile', 'account', 'data', 'author', 'member']) {
       if (j[k] is Map) {
         j = Map<String, dynamic>.from(j[k]);
@@ -1001,12 +1400,23 @@ class User {
     }
 
     List<MediaItem> avatars = [];
-    final avList = jpick(j, ['profile_images', 'profile_image_ids', 'avatar_ids', 'avatars']);
+    final avList = jpick(
+      j,
+      ['profile_images', 'profile_image_ids', 'avatar_ids', 'avatars'],
+    );
+
     if (avList is List) {
-      avatars = avList.map(MediaItem.fromDynamic).where((m) => m.url.isNotEmpty).toList();
+      avatars = avList
+          .map(MediaItem.fromDynamic)
+          .where((m) => m.url.isNotEmpty)
+          .toList();
     }
+
     if (avatars.isEmpty) {
-      final single = jpick(j, ['avatar', 'avatar_url', 'profile_image', 'profile_picture']);
+      final single = jpick(
+        j,
+        ['avatar', 'avatar_url', 'profile_image', 'profile_picture'],
+      );
       final u = resolveMedia(single);
       if (u != null && u.isNotEmpty) {
         avatars = [MediaItem(url: u, type: 'image')];
@@ -1014,10 +1424,18 @@ class User {
     }
 
     List<MediaItem> musics = [];
-    final muList = jpick(j, ['profile_music', 'profile_music_ids', 'music_ids', 'musics']);
+    final muList = jpick(
+      j,
+      ['profile_music', 'profile_music_ids', 'music_ids', 'musics'],
+    );
+
     if (muList is List) {
-      musics = muList.map(MediaItem.fromDynamic).where((m) => m.url.isNotEmpty).toList();
+      musics = muList
+          .map(MediaItem.fromDynamic)
+          .where((m) => m.url.isNotEmpty)
+          .toList();
     }
+
     if (musics.isEmpty) {
       final single = jpick(j, ['music', 'music_url']);
       final u = resolveMedia(single);
@@ -1031,10 +1449,10 @@ class User {
         ? followedByRaw.map((e) => e.toString()).toList()
         : <String>[];
 
+    final idRaw = jpick(j, ['id', 'user_id', '_id']);
+
     return User(
-      id: jpick(j, ['id', 'user_id', '_id']) is int
-          ? jpick(j, ['id', 'user_id', '_id'])
-          : int.tryParse(jstr(jpick(j, ['id', 'user_id', '_id']))),
+      id: idRaw is int ? idRaw : int.tryParse(jstr(idRaw)),
       username: jstr(jpick(j, ['username', 'handle'])),
       name: jstr(jpick(j, ['name', 'display_name'])),
       bio: jstr(jpick(j, ['bio', 'about'])),
@@ -1082,6 +1500,7 @@ class MediaItem {
     String? id, url, thumb, originalName, mimeType, title, artist;
     double? duration;
     String type = 'image';
+
     if (v is Map) {
       id = jstr(jpick(v, ['id', 'media_id']));
       url = resolveMedia(jpick(v, ['url', 'file_url', 'media_url', 'path']));
@@ -1091,7 +1510,9 @@ class MediaItem {
       title = jstr(jpick(v, ['title']));
       artist = jstr(jpick(v, ['artist']));
       duration = jdouble(jpick(v, ['duration']));
+
       final t = jstr(jpick(v, ['media_type', 'type'])).toLowerCase();
+
       if (t == 'video' || t.contains('video')) {
         type = 'video';
       } else if (t == 'gif' || t.contains('gif')) {
@@ -1108,12 +1529,14 @@ class MediaItem {
       url = resolveMedia(s);
       id = s;
     }
+
     if (url != null && type == 'image') {
       final lower = url.split('?').first.toLowerCase();
       if (['.mp4', '.mov', '.webm'].any(lower.endsWith)) type = 'video';
       if (['.mp3', '.wav', '.ogg', '.m4a'].any(lower.endsWith)) type = 'audio';
       if (lower.endsWith('.gif')) type = 'gif';
     }
+
     return MediaItem(
       id: id,
       url: url ?? '',
@@ -1133,15 +1556,28 @@ class Post {
   String text;
   List<MediaItem> media;
   User? author;
-  int replyCount, retweetCount, likeCount, shareCount, bookmarkCount, quoteCount;
-  bool liked, retweeted, bookmarked;
+
+  int replyCount;
+  int retweetCount;
+  int likeCount;
+  int shareCount;
+  int bookmarkCount;
+  int quoteCount;
+
+  bool liked;
+  bool retweeted;
+  bool bookmarked;
+
   dynamic createdAt;
   dynamic editedAt;
+
   int? parentId;
   int? quotedPostId;
   int? repostOfId;
+
   Post? quoted;
   Post? repostOf;
+
   List<String> likedByFollowings;
   List<String> repostedByFollowings;
 
@@ -1172,17 +1608,23 @@ class Post {
 
   factory Post.fromJson(Map<String, dynamic> raw) {
     Map<String, dynamic> j = raw;
+
     for (final k in ['post', 'data', 'item', 'tweet']) {
       if (j[k] is Map) {
         j = Map<String, dynamic>.from(j[k]);
         break;
       }
     }
+
     List<MediaItem> media = [];
     final mraw = jpick(j, ['media', 'media_items', 'attachments', 'files']);
     if (mraw is List) {
-      media = mraw.map(MediaItem.fromDynamic).where((m) => m.url.isNotEmpty).toList();
+      media = mraw
+          .map(MediaItem.fromDynamic)
+          .where((m) => m.url.isNotEmpty)
+          .toList();
     }
+
     User? author;
     final araw = jpick(j, ['user', 'author', 'owner', 'profile']);
     if (araw is Map) author = User.fromJson(Map<String, dynamic>.from(araw));
@@ -1196,11 +1638,17 @@ class Post {
     if (rraw is Map) repostOf = Post.fromJson(Map<String, dynamic>.from(rraw));
 
     final likedByRaw = jpick(j, ['liked_by_followings']);
-    final likedBy = likedByRaw is List ? likedByRaw.map((e) => e.toString()).toList() : <String>[];
+    final likedBy = likedByRaw is List
+        ? likedByRaw.map((e) => e.toString()).toList()
+        : <String>[];
+
     final repostedByRaw = jpick(j, ['reposted_by_followings']);
-    final repostedBy = repostedByRaw is List ? repostedByRaw.map((e) => e.toString()).toList() : <String>[];
+    final repostedBy = repostedByRaw is List
+        ? repostedByRaw.map((e) => e.toString()).toList()
+        : <String>[];
 
     final idRaw = jpick(j, ['id', 'post_id']);
+
     return Post(
       id: idRaw is int ? idRaw : int.tryParse(jstr(idRaw)),
       text: jstr(jpick(j, ['text', 'content', 'body', 'caption'])),
@@ -1247,24 +1695,34 @@ class Conversation {
 
   factory Conversation.fromJson(Map<String, dynamic> raw) {
     Map<String, dynamic> j = raw;
+
     for (final k in ['conversation', 'data']) {
       if (j[k] is Map) {
         j = Map<String, dynamic>.from(j[k]);
         break;
       }
     }
+
     List<User> members = [];
     final mraw = jpick(j, ['members', 'participants', 'users']);
     if (mraw is List) {
-      members = mraw.whereType<Map>().map((e) => User.fromJson(Map<String, dynamic>.from(e))).toList();
+      members = mraw
+          .whereType<Map>()
+          .map((e) => User.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
     }
+
     DM? lastMessage;
     final lm = jpick(j, ['last_message', 'latest_message']);
     if (lm is Map) lastMessage = DM.fromJson(Map<String, dynamic>.from(lm));
+
     final idRaw = jpick(j, ['id', 'conversation_id']);
+
     return Conversation(
       id: idRaw is int ? idRaw : int.tryParse(jstr(idRaw)),
-      name: jstr(jpick(j, ['name', 'title'])).isEmpty ? null : jstr(jpick(j, ['name', 'title'])),
+      name: jstr(jpick(j, ['name', 'title'])).isEmpty
+          ? null
+          : jstr(jpick(j, ['name', 'title'])),
       isGroup: jbool(jpick(j, ['is_group', 'group'])),
       members: members,
       lastMessage: lastMessage,
@@ -1300,24 +1758,33 @@ class DM {
 
   factory DM.fromJson(Map<String, dynamic> raw) {
     Map<String, dynamic> j = raw;
+
     for (final k in ['message', 'data']) {
       if (j[k] is Map) {
         j = Map<String, dynamic>.from(j[k]);
         break;
       }
     }
+
     User? sender;
     final sraw = jpick(j, ['sender', 'user', 'author']);
     if (sraw is Map) sender = User.fromJson(Map<String, dynamic>.from(sraw));
+
     List<MediaItem> media = [];
     final mraw = jpick(j, ['media', 'attachments', 'media_ids']);
     if (mraw is List) {
-      media = mraw.map(MediaItem.fromDynamic).where((m) => m.url.isNotEmpty).toList();
+      media = mraw
+          .map(MediaItem.fromDynamic)
+          .where((m) => m.url.isNotEmpty)
+          .toList();
     }
+
     DM? replyParent;
     final rp = jpick(j, ['reply_to', 'reply_parent', 'reply_to_message']);
     if (rp is Map) replyParent = DM.fromJson(Map<String, dynamic>.from(rp));
+
     final idRaw = jpick(j, ['id', 'message_id']);
+
     return DM(
       id: idRaw is int ? idRaw : int.tryParse(jstr(idRaw)),
       text: jstr(jpick(j, ['text', 'content', 'body'])),
@@ -1356,16 +1823,20 @@ class Noti {
 
   factory Noti.fromJson(Map<String, dynamic> raw) {
     Map<String, dynamic> j = raw;
+
     for (final k in ['notification', 'data']) {
       if (j[k] is Map) {
         j = Map<String, dynamic>.from(j[k]);
         break;
       }
     }
+
     User? actor;
     final araw = jpick(j, ['actor', 'user', 'from_user']);
     if (araw is Map) actor = User.fromJson(Map<String, dynamic>.from(araw));
+
     final idRaw = jpick(j, ['id', 'notification_id']);
+
     return Noti(
       id: idRaw is int ? idRaw : int.tryParse(jstr(idRaw)),
       type: jstr(jpick(j, ['type', 'kind', 'action'])).toLowerCase(),
@@ -1406,18 +1877,22 @@ class Story {
 
   factory Story.fromJson(Map<String, dynamic> raw) {
     Map<String, dynamic> j = raw;
+
     for (final k in ['story', 'data']) {
       if (j[k] is Map) {
         j = Map<String, dynamic>.from(j[k]);
         break;
       }
     }
+
     MediaItem? media;
     final mraw = jpick(j, ['media']);
     if (mraw is Map) media = MediaItem.fromDynamic(mraw);
+
     User? user;
     final uraw = jpick(j, ['user']);
     if (uraw is Map) user = User.fromJson(Map<String, dynamic>.from(uraw));
+
     return Story(
       id: jint(jpick(j, ['id', 'story_id'])),
       userId: jint(jpick(j, ['user_id'])),
@@ -1432,10 +1907,12 @@ class Story {
   }
 }
 
-// ═══════════════════════════════ APP STATE ═══════════════════════
-
+// ═══════════════════════════════════════════════════════════════
+// APP STATE
+// ═══════════════════════════════════════════════════════════════
 class AppState extends ChangeNotifier {
   User? me;
+
   final ValueNotifier<int> feedTick = ValueNotifier(0);
   final ValueNotifier<int> currentTab = ValueNotifier(0);
 
@@ -1444,6 +1921,16 @@ class AppState extends ChangeNotifier {
       final res = await ApiClient.instance.get('/api/auth/me');
       if (res is Map) {
         me = User.fromJson(Map<String, dynamic>.from(res));
+
+        if (me != null) {
+          await AccountManager.instance.updateActive(
+            username: me!.username,
+            email: me!.email,
+            name: me!.name,
+            avatarUrl: me!.avatarUrl,
+          );
+        }
+
         notifyListeners();
       }
     } catch (e) {
@@ -1452,40 +1939,305 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    await ApiClient.instance.saveToken(null);
+    final activeId = AccountManager.instance.activeId;
+
+    if (activeId != null) {
+      await AccountManager.instance.remove(activeId);
+    } else {
+      await ApiClient.instance.saveToken(null);
+    }
+
     await AudioController.instance.stop();
     me = null;
     notifyListeners();
   }
 
   void pokeFeed() => feedTick.value++;
+
   void setTab(int t) {
     currentTab.value = t;
     notifyListeners();
   }
 }
 
-// ═══════════════════════════════ SPLASH ══════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// CACHED FILE IMAGE
+// ═══════════════════════════════════════════════════════════════
+class CachedFileImage extends StatefulWidget {
+  final String url;
+  final double? width;
+  final double? height;
+  final BoxFit fit;
+  final bool showProgress;
+  final bool circle;
+  final Widget? errorWidget;
 
+  const CachedFileImage({
+    super.key,
+    required this.url,
+    this.width,
+    this.height,
+    this.fit = BoxFit.cover,
+    this.showProgress = true,
+    this.circle = false,
+    this.errorWidget,
+  });
+
+  @override
+  State<CachedFileImage> createState() => _CachedFileImageState();
+}
+
+class _CachedFileImageState extends State<CachedFileImage> {
+  String? _path;
+  double _progress = 0;
+  bool _error = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant CachedFileImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url) {
+      _path = null;
+      _error = false;
+      _progress = 0;
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    final full = _fullUrl(widget.url);
+
+    if (full.isEmpty) {
+      if (mounted) setState(() => _error = true);
+      return;
+    }
+
+    try {
+      if (await FileCache.instance.hasFile(full)) {
+        if (!mounted) return;
+        setState(() {
+          _path = FileCache.instance.getLocalPath(full);
+        });
+        return;
+      }
+
+      final path = await FileCache.instance.downloadWithResume(
+        full,
+        headers: authHeaders(),
+        onProgress: (v) {
+          if (mounted) setState(() => _progress = v);
+        },
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _path = path;
+        _progress = 1.0;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _error = true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = _p(context);
+
+    if (_path != null) {
+      final img = Image.file(
+        File(_path!),
+        width: widget.width,
+        height: widget.height,
+        fit: widget.fit,
+        gaplessPlayback: true,
+      );
+
+      return widget.circle ? ClipOval(child: img) : img;
+    }
+
+    if (_error) {
+      return widget.errorWidget ??
+          Container(
+            width: widget.width,
+            height: widget.height,
+            color: p.card,
+            child: Icon(
+              Icons.broken_image_rounded,
+              color: p.sub,
+              size: 24,
+            ),
+          );
+    }
+
+    return Container(
+      width: widget.width,
+      height: widget.height,
+      color: p.card,
+      child: widget.showProgress
+          ? Center(
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  value: _progress > 0 ? _progress : null,
+                  color: p.accent,
+                ),
+              ),
+            )
+          : null,
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AVATAR
+// ═══════════════════════════════════════════════════════════════
+class Avatar extends StatelessWidget {
+  final String? url;
+  final double size;
+  final bool ring;
+  final bool online;
+  final String? fallback;
+
+  const Avatar({
+    super.key,
+    this.url,
+    required this.size,
+    this.ring = false,
+    this.online = false,
+    this.fallback,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = _p(context);
+
+    final inner = ClipOval(
+      child: (url != null && url!.isNotEmpty)
+          ? CachedFileImage(
+              url: url!,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              showProgress: size >= 36,
+              errorWidget: _placeholder(p),
+            )
+          : _placeholder(p),
+    );
+
+    Widget child;
+
+    if (ring) {
+      child = Container(
+        width: size + 6,
+        height: size + 6,
+        padding: const EdgeInsets.all(2.5),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: p.reel,
+        ),
+        child: inner,
+      );
+    } else {
+      child = SizedBox(width: size, height: size, child: inner);
+    }
+
+    if (!online) return child;
+
+    return SizedBox(
+      width: ring ? size + 6 : size,
+      height: ring ? size + 6 : size,
+      child: Stack(
+        children: [
+          child,
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Container(
+              width: size * 0.28,
+              height: size * 0.28,
+              decoration: BoxDecoration(
+                color: p.green,
+                shape: BoxShape.circle,
+                border: Border.all(color: p.bg, width: 2),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _placeholder(Pal p) {
+    final letter =
+        (fallback != null && fallback!.isNotEmpty) ? fallback![0] : '?';
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            hashColor(letter),
+            hashColor(letter).withOpacity(.65),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        letter.toUpperCase(),
+        style: TextStyle(
+          fontWeight: FontWeight.w900,
+          fontSize: size * .42,
+          color: Colors.white,
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SPLASH
+// ═══════════════════════════════════════════════════════════════
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
+
   @override
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with TickerProviderStateMixin {
   late final AnimationController _pulse;
   late final AnimationController _spin;
+
   String _status = 'Starting…';
   bool _failed = false;
 
   @override
   void initState() {
     super.initState();
-    _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100));
-    _spin = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400));
+
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    );
+    _spin = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+
     _pulse.repeat(reverse: true);
     _spin.repeat();
+
     _boot();
   }
 
@@ -1494,19 +2246,26 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       _failed = false;
       _status = 'Connecting to server…';
     });
+
     try {
       await ApiClient.instance.fetchBaseUrl(force: true);
       if (!mounted) return;
+
       if (ApiClient.instance.hasToken) {
         setState(() => _status = 'Signing you in…');
         await context.read<AppState>().fetchMe();
       }
+
       if (!mounted) return;
+
       await Future.delayed(const Duration(milliseconds: 500));
       if (!mounted) return;
+
       final me = context.read<AppState>().me;
+
       Navigator.of(context).pushReplacement(
-          FadeRoute(me != null ? const MainShell() : const AuthScreen()));
+        FadeRoute(me != null ? const MainShell() : const AuthScreen()),
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -1526,16 +2285,26 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     final p = _p(context);
+
     return Scaffold(
       backgroundColor: p.bg,
       body: Stack(fit: StackFit.expand, children: [
-        Positioned(top: -120, left: -100, child: _blob(p.accent, 320)),
-        Positioned(bottom: -140, right: -100, child: _blob(p.purple, 340)),
+        Positioned(
+          top: -120,
+          left: -100,
+          child: _blob(p.accent, 320),
+        ),
+        Positioned(
+          bottom: -140,
+          right: -100,
+          child: _blob(p.purple, 340),
+        ),
         Center(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             ScaleTransition(
-              scale: Tween(begin: .92, end: 1.06)
-                  .animate(CurvedAnimation(parent: _pulse, curve: Curves.easeInOut)),
+              scale: Tween(begin: .92, end: 1.06).animate(
+                CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
+              ),
               child: Container(
                 width: 96,
                 height: 96,
@@ -1543,7 +2312,11 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                   gradient: p.brand,
                   borderRadius: BorderRadius.circular(30),
                   boxShadow: [
-                    BoxShadow(color: p.accent.withOpacity(.45), blurRadius: 46, spreadRadius: 4),
+                    BoxShadow(
+                      color: p.accent.withOpacity(.45),
+                      blurRadius: 46,
+                      spreadRadius: 4,
+                    ),
                   ],
                 ),
                 child: const Icon(Icons.bolt_rounded, size: 56, color: Colors.white),
@@ -1552,12 +2325,15 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
             const SizedBox(height: 26),
             ShaderMask(
               shaderCallback: (b) => p.brand.createShader(Offset.zero & b.size),
-              child: const Text('NokhodX',
-                  style: TextStyle(
-                      fontSize: 42,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.2,
-                      color: Colors.white)),
+              child: const Text(
+                'NokhodX',
+                style: TextStyle(
+                  fontSize: 42,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.2,
+                  color: Colors.white,
+                ),
+              ),
             ),
             const SizedBox(height: 6),
             Text('Feel every moment', style: TextStyle(color: p.sub, fontSize: 14)),
@@ -1567,10 +2343,11 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                 Text(_status, style: TextStyle(color: p.red, fontSize: 13)),
                 const SizedBox(height: 16),
                 GradientButton(
-                    text: 'Retry',
-                    icon: Icons.refresh_rounded,
-                    width: 180,
-                    onPressed: _boot),
+                  text: 'Retry',
+                  icon: Icons.refresh_rounded,
+                  width: 180,
+                  onPressed: _boot,
+                ),
               ])
             else
               Column(children: [
@@ -1582,7 +2359,10 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                     builder: (_, __) => Transform.rotate(
                       angle: _spin.value * 6.283,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2.6, value: .8, color: p.text.withOpacity(.9)),
+                        strokeWidth: 2.6,
+                        value: .8,
+                        color: p.text.withOpacity(.9),
+                      ),
                     ),
                   ),
                 ),
@@ -1605,10 +2385,14 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       );
 }
 
-// ═══════════════════════════════ AUTH ════════════════════════════
-
+// ═══════════════════════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════════════════════
 class AuthScreen extends StatefulWidget {
-  const AuthScreen({super.key});
+  final bool addAccount;
+
+  const AuthScreen({super.key, this.addAccount = false});
+
   @override
   State<AuthScreen> createState() => _AuthScreenState();
 }
@@ -1617,11 +2401,13 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   bool _signup = false;
   bool _busy = false;
   bool _obscure = true;
+
   final _identifier = TextEditingController();
   final _email = TextEditingController();
   final _username = TextEditingController();
   final _password = TextEditingController();
   final _name = TextEditingController();
+
   final _api = ApiClient.instance;
 
   @override
@@ -1636,8 +2422,10 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
 
   Future<void> _submit() async {
     if (_busy) return;
+
     FocusScope.of(context).unfocus();
     setState(() => _busy = true);
+
     try {
       if (_signup) {
         if (_email.text.trim().isEmpty ||
@@ -1645,38 +2433,59 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
             _password.text.isEmpty) {
           throw ApiException('Fill in email, username and password.');
         }
-        await _api.post('/api/auth/signup', auth: false, body: {
-          'email': _email.text.trim(),
-          'username': _username.text.trim(),
-          'password': _password.text,
-          'name': _name.text.trim(),
-        });
-        try {
-          final res = await _api.post('/api/auth/login', auth: false, body: {
-            'identifier': _username.text.trim(),
+
+        final signupRes = await _api.post(
+          '/api/auth/signup',
+          auth: false,
+          body: {
+            'email': _email.text.trim(),
+            'username': _username.text.trim(),
             'password': _password.text,
-          });
-          final t = extractToken(res);
-          if (t != null) await _api.saveToken(t);
-        } catch (_) {}
+            'name': _name.text.trim(),
+          },
+        );
+
+        final t = extractToken(signupRes);
+        if (t != null) await _api.saveToken(t);
       }
+
       if (!_api.hasToken) {
-        final res = await _api.post('/api/auth/login', auth: false, body: {
-          'identifier': _signup ? _username.text.trim() : _identifier.text.trim(),
-          'password': _password.text,
-        });
+        final res = await _api.post(
+          '/api/auth/login',
+          auth: false,
+          body: {
+            'identifier': _signup
+                ? _username.text.trim()
+                : _identifier.text.trim(),
+            'password': _password.text,
+          },
+        );
+
         final t = extractToken(res);
         if (t == null) throw ApiException('Login failed — no token received.');
         await _api.saveToken(t);
       }
+
       final appState = context.read<AppState>();
       await appState.fetchMe();
-      appState.me ??= User(
-        username: _signup ? _username.text.trim() : _identifier.text.trim(),
-        name: _name.text.trim(),
+
+      final user = appState.me;
+
+      await AccountManager.instance.upsert(
+        token: _api.token ?? '',
+        username: user?.username ??
+            (_signup ? _username.text.trim() : _identifier.text.trim()),
+        email: user?.email ?? (_signup ? _email.text.trim() : ''),
+        name: user?.name ?? _name.text.trim(),
+        avatarUrl: user?.avatarUrl,
       );
+
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(FadeRoute(const MainShell()), (_) => false);
+
+      Navigator.of(context).pushAndRemoveUntil(
+        FadeRoute(const MainShell()),
+        (_) => false,
+      );
     } on ApiException catch (e) {
       if (mounted) showSnack(context, e.message, error: true);
     } catch (e) {
@@ -1695,6 +2504,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
     Widget? suffix,
   }) {
     final p = _p(context);
+
     return TextField(
       controller: c,
       obscureText: obscure,
@@ -1709,12 +2519,17 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
         fillColor: p.card,
         contentPadding: const EdgeInsets.symmetric(vertical: 15),
         border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: p.border)),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: p.border),
+        ),
         enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: p.border)),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: p.border),
+        ),
         focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: p.accent, width: 1.4)),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: p.accent, width: 1.4),
+        ),
       ),
     );
   }
@@ -1723,130 +2538,384 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     _applyBars(context);
     final p = _p(context);
+    final accounts = context.watch<AccountManager>().accounts;
+
     return Scaffold(
       backgroundColor: p.bg,
       body: Stack(fit: StackFit.expand, children: [
         Positioned(
-            top: -100,
-            right: -80,
-            child: Container(
-                width: 280,
-                height: 280,
-                decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(colors: [p.purple.withOpacity(.28), Colors.transparent])))),
+          top: -100,
+          right: -80,
+          child: Container(
+            width: 280,
+            height: 280,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [p.purple.withOpacity(.28), Colors.transparent],
+              ),
+            ),
+          ),
+        ),
         Positioned(
-            bottom: -120,
-            left: -90,
-            child: Container(
-                width: 300,
-                height: 300,
-                decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(colors: [p.accent.withOpacity(.22), Colors.transparent])))),
+          bottom: -120,
+          left: -90,
+          child: Container(
+            width: 300,
+            height: 300,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [p.accent.withOpacity(.22), Colors.transparent],
+              ),
+            ),
+          ),
+        ),
         SafeArea(
-            child: Center(
-                child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 24),
-                    child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 430),
-                        child: Column(children: [
-                          Container(
-                              width: 74,
-                              height: 74,
-                              decoration: BoxDecoration(
-                                  gradient: p.brand,
-                                  borderRadius: BorderRadius.circular(24),
-                                  boxShadow: [BoxShadow(color: p.accent.withOpacity(.4), blurRadius: 34)]),
-                              child: const Icon(Icons.bolt_rounded, size: 42, color: Colors.white)),
-                          const SizedBox(height: 18),
-                          ShaderMask(
-                              shaderCallback: (b) => p.brand.createShader(Offset.zero & b.size),
-                              child: const Text('NokhodX',
-                                  style: TextStyle(
-                                      fontSize: 34, fontWeight: FontWeight.w900, color: Colors.white))),
-                          const SizedBox(height: 4),
-                          Text(_signup ? 'Create your account' : 'Welcome back 👋',
-                              style: TextStyle(color: p.sub, fontSize: 14)),
-                          const SizedBox(height: 28),
-                          AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 340),
-                              transitionBuilder: (child, anim) => FadeTransition(
-                                    opacity: anim,
-                                    child: SlideTransition(
-                                        position: Tween(begin: const Offset(0, .06), end: Offset.zero).animate(anim),
-                                        child: child),
-                                  ),
-                              child: Container(
-                                  key: ValueKey(_signup),
-                                  padding: const EdgeInsets.all(20),
-                                  decoration: BoxDecoration(
-                                      color: p.surface,
-                                      borderRadius: BorderRadius.circular(26),
-                                      border: Border.all(color: p.border),
-                                      boxShadow: [
-                                        BoxShadow(
-                                            color: Colors.black.withOpacity(.2),
-                                            blurRadius: 30,
-                                            offset: const Offset(0, 14))
-                                      ]),
-                                  child: Column(children: [
-                                    if (_signup) ...[
-                                      _field(c: _name, hint: 'Display name', icon: Icons.badge_outlined),
-                                      const SizedBox(height: 12),
-                                      _field(
-                                          c: _email,
-                                          hint: 'Email',
-                                          icon: Icons.email_outlined,
-                                          type: TextInputType.emailAddress),
-                                      const SizedBox(height: 12),
-                                      _field(c: _username, hint: 'Username', icon: Icons.alternate_email_rounded),
-                                      const SizedBox(height: 12),
-                                    ] else ...[
-                                      _field(c: _identifier, hint: 'Username or email', icon: Icons.person_outline_rounded),
-                                      const SizedBox(height: 12),
-                                    ],
-                                    _field(
-                                        c: _password,
-                                        hint: 'Password',
-                                        icon: Icons.lock_outline_rounded,
-                                        obscure: _obscure,
-                                        suffix: IconButton(
-                                            icon: Icon(
-                                                _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                                                color: p.sub,
-                                                size: 20),
-                                            onPressed: () => setState(() => _obscure = !_obscure))),
-                                    const SizedBox(height: 20),
-                                    GradientButton(
-                                        text: _signup ? 'Create account' : 'Sign in',
-                                        loading: _busy,
-                                        onPressed: _busy ? null : _submit),
-                                  ]))),
-                          const SizedBox(height: 20),
-                          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                            Text(_signup ? 'Already have an account?' : "Don't have an account?",
-                                style: TextStyle(color: p.sub, fontSize: 13.5)),
-                            TextButton(
-                                onPressed: () => setState(() {
-                                      _signup = !_signup;
-                                      _obscure = true;
-                                    }),
-                                child: Text(_signup ? 'Sign in' : 'Sign up',
-                                    style: TextStyle(
-                                        color: p.accent, fontWeight: FontWeight.w700, fontSize: 13.5))),
-                          ]),
-                        ]))))),
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 430),
+                child: Column(children: [
+                  Container(
+                    width: 74,
+                    height: 74,
+                    decoration: BoxDecoration(
+                      gradient: p.brand,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(color: p.accent.withOpacity(.4), blurRadius: 34)
+                      ],
+                    ),
+                    child: const Icon(Icons.bolt_rounded, size: 42, color: Colors.white),
+                  ),
+                  const SizedBox(height: 18),
+                  ShaderMask(
+                    shaderCallback: (b) => p.brand.createShader(Offset.zero & b.size),
+                    child: const Text(
+                      'NokhodX',
+                      style: TextStyle(
+                        fontSize: 34,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.addAccount
+                        ? 'Add another account'
+                        : (_signup ? 'Create your account' : 'Welcome back 👋'),
+                    style: TextStyle(color: p.sub, fontSize: 14),
+                  ),
+                  const SizedBox(height: 28),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 340),
+                    transitionBuilder: (child, anim) => FadeTransition(
+                      opacity: anim,
+                      child: SlideTransition(
+                        position: Tween(
+                          begin: const Offset(0, .06),
+                          end: Offset.zero,
+                        ).animate(anim),
+                        child: child,
+                      ),
+                    ),
+                    child: Container(
+                      key: ValueKey(_signup),
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: p.surface,
+                        borderRadius: BorderRadius.circular(26),
+                        border: Border.all(color: p.border),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(.2),
+                            blurRadius: 30,
+                            offset: const Offset(0, 14),
+                          )
+                        ],
+                      ),
+                      child: Column(children: [
+                        if (_signup) ...[
+                          _field(c: _name, hint: 'Display name', icon: Icons.badge_outlined),
+                          const SizedBox(height: 12),
+                          _field(
+                            c: _email,
+                            hint: 'Email',
+                            icon: Icons.email_outlined,
+                            type: TextInputType.emailAddress,
+                          ),
+                          const SizedBox(height: 12),
+                          _field(
+                            c: _username,
+                            hint: 'Username',
+                            icon: Icons.alternate_email_rounded,
+                          ),
+                          const SizedBox(height: 12),
+                        ] else ...[
+                          _field(
+                            c: _identifier,
+                            hint: 'Username or email',
+                            icon: Icons.person_outline_rounded,
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        _field(
+                          c: _password,
+                          hint: 'Password',
+                          icon: Icons.lock_outline_rounded,
+                          obscure: _obscure,
+                          suffix: IconButton(
+                            icon: Icon(
+                              _obscure
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                              color: p.sub,
+                              size: 20,
+                            ),
+                            onPressed: () => setState(() => _obscure = !_obscure),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        GradientButton(
+                          text: _signup ? 'Create account' : 'Sign in',
+                          loading: _busy,
+                          onPressed: _busy ? null : _submit,
+                        ),
+                      ]),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Text(
+                      _signup
+                          ? 'Already have an account?'
+                          : "Don't have an account?",
+                      style: TextStyle(color: p.sub, fontSize: 13.5),
+                    ),
+                    TextButton(
+                      onPressed: () => setState(() {
+                        _signup = !_signup;
+                        _obscure = true;
+                      }),
+                      child: Text(
+                        _signup ? 'Sign in' : 'Sign up',
+                        style: TextStyle(
+                          color: p.accent,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13.5,
+                        ),
+                      ),
+                    ),
+                  ]),
+                  if (accounts.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    TextButton.icon(
+                      onPressed: () => Navigator.push(
+                        context,
+                        FadeRoute(const AccountsScreen()),
+                      ),
+                      icon: Icon(Icons.switch_account_rounded, color: p.purple),
+                      label: Text(
+                        'Manage accounts',
+                        style: TextStyle(
+                          color: p.purple,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ]),
+              ),
+            ),
+          ),
+        ),
       ]),
     );
   }
 }
 
-// ═══════════════════════════════ MAIN SHELL ══════════════════════
+// ═══════════════════════════════════════════════════════════════
+// ACCOUNTS SCREEN
+// ═══════════════════════════════════════════════════════════════
+class AccountsScreen extends StatelessWidget {
+  const AccountsScreen({super.key});
 
+  Future<void> _switch(BuildContext context, Account acc) async {
+    final accounts = context.read<AccountManager>();
+    final appState = context.read<AppState>();
+
+    await accounts.switchTo(acc.id);
+    await appState.fetchMe();
+
+    if (!context.mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      FadeRoute(const MainShell()),
+      (_) => false,
+    );
+  }
+
+  Future<void> _remove(BuildContext context, Account acc) async {
+    final p = _p(context);
+    final accounts = context.read<AccountManager>();
+    final appState = context.read<AppState>();
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: p.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Text(
+          'Remove account?',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+        ),
+        content: Text(
+          '@${acc.username} will be removed from this device.',
+          style: const TextStyle(fontSize: 13.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: TextStyle(color: p.sub)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              'Remove',
+              style: TextStyle(color: p.red, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    await accounts.remove(acc.id);
+
+    if (!context.mounted) return;
+
+    if (accounts.accounts.isEmpty) {
+      appState.me = null;
+      appState.notifyListeners();
+
+      Navigator.of(context).pushAndRemoveUntil(
+        FadeRoute(const AuthScreen()),
+        (_) => false,
+      );
+      return;
+    }
+
+    if (accounts.active != null) {
+      await appState.fetchMe();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _applyBars(context);
+
+    final p = _p(context);
+    final accounts = context.watch<AccountManager>().accounts;
+    final active = context.watch<AccountManager>().active;
+
+    return Scaffold(
+      backgroundColor: p.bg,
+      appBar: AppBar(
+        title: const Text(
+          'Accounts',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () => Navigator.pop(context),
+        ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: GradientButton(
+              text: 'Add',
+              icon: Icons.add_rounded,
+              width: 92,
+              height: 40,
+              onPressed: () => Navigator.push(
+                context,
+                FadeRoute(const AuthScreen(addAccount: true)),
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: accounts.isEmpty
+          ? const EmptyState(
+              icon: Icons.people_outline_rounded,
+              title: 'No accounts',
+              subtitle: 'Add an account to continue.',
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: accounts.length,
+              itemBuilder: (context, i) {
+                final acc = accounts[i];
+                final isActive = active?.id == acc.id;
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: p.card,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: isActive ? p.accent : p.border,
+                      width: isActive ? 1.5 : 1,
+                    ),
+                  ),
+                  child: ListTile(
+                    onTap: () => _switch(context, acc),
+                    leading: Avatar(
+                      url: acc.avatarUrl,
+                      size: 46,
+                      fallback: acc.username,
+                    ),
+                    title: Text(
+                      acc.name ?? acc.username,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    subtitle: Text(
+                      '@${acc.username}${acc.email.isNotEmpty ? ' · ${acc.email}' : ''}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: p.sub, fontSize: 12.5),
+                    ),
+                    trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                      if (isActive)
+                        Icon(Icons.check_circle_rounded, color: p.green, size: 22),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: () => _remove(context, acc),
+                        child: Icon(Icons.delete_outline_rounded, color: p.red),
+                      ),
+                    ]),
+                  ),
+                );
+              },
+            ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MAIN SHELL
+// ═══════════════════════════════════════════════════════════════
 class MainShell extends StatefulWidget {
   final int initialTab;
+
   const MainShell({super.key, this.initialTab = 0});
+
   @override
   State<MainShell> createState() => _MainShellState();
 }
@@ -1865,9 +2934,14 @@ class _MainShellState extends State<MainShell> {
   void _onUnauth() {
     if (_handlingUnauth || !mounted) return;
     _handlingUnauth = true;
+
     context.read<AppState>().logout();
     showSnack(context, 'Session expired — sign in again.', error: true);
-    Navigator.of(context).pushAndRemoveUntil(FadeRoute(const AuthScreen()), (_) => false);
+
+    Navigator.of(context).pushAndRemoveUntil(
+      FadeRoute(const AuthScreen()),
+      (_) => false,
+    );
   }
 
   @override
@@ -1879,11 +2953,7 @@ class _MainShellState extends State<MainShell> {
   void _go(int i) {
     setState(() => _tab = i);
     context.read<AppState>().setTab(i);
-    if (i == 2) {
-      _applyBlackBars();
-    } else {
-      _applyBars(context);
-    }
+    _applyBars(context);
   }
 
   @override
@@ -1912,18 +2982,39 @@ class _MainShellState extends State<MainShell> {
         ]),
       ),
       bottomNavigationBar: Container(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 6, top: 8),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).padding.bottom + 6,
+          top: 8,
+        ),
         decoration: BoxDecoration(
           color: isShorts ? Colors.black : p.surface,
-          border: Border(top: BorderSide(color: isShorts ? Colors.black12 : p.border)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(.15), blurRadius: 24, offset: const Offset(0, -6))],
+          border: Border(
+            top: BorderSide(color: isShorts ? Colors.black12 : p.border),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(.15),
+              blurRadius: 24,
+              offset: const Offset(0, -6),
+            )
+          ],
         ),
         child: Row(children: [
           _navItem(0, Icons.home_rounded, Icons.home_outlined, 'Home'),
           _navItem(1, Icons.explore_rounded, Icons.explore_outlined, 'Explore'),
           _shortsItem(),
-          _navItem(3, Icons.notifications_rounded, Icons.notifications_none_rounded, 'Notifs'),
-          _navItem(4, Icons.chat_bubble_rounded, Icons.chat_bubble_outline_rounded, 'Messages'),
+          _navItem(
+            3,
+            Icons.notifications_rounded,
+            Icons.notifications_none_rounded,
+            'Notifs',
+          ),
+          _navItem(
+            4,
+            Icons.chat_bubble_rounded,
+            Icons.chat_bubble_outline_rounded,
+            'Messages',
+          ),
         ]),
       ),
     );
@@ -1933,59 +3024,81 @@ class _MainShellState extends State<MainShell> {
     final p = _p(context);
     final selected = _tab == i;
     final isShorts = _tab == 2;
-    final iconColor = isShorts
-        ? (selected ? p.accent : Colors.white54)
-        : (selected ? p.accent : p.sub);
-    final textColor = isShorts
-        ? (selected ? p.accent : Colors.white54)
-        : (selected ? p.accent : p.sub);
+
+    final iconColor =
+        isShorts ? (selected ? p.accent : Colors.white54) : (selected ? p.accent : p.sub);
+    final textColor =
+        isShorts ? (selected ? p.accent : Colors.white54) : (selected ? p.accent : p.sub);
+
     return Expanded(
-        child: InkWell(
-      onTap: () => _go(i),
-      borderRadius: BorderRadius.circular(16),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        AnimatedScale(
+      child: InkWell(
+        onTap: () => _go(i),
+        borderRadius: BorderRadius.circular(16),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          AnimatedScale(
             scale: selected ? 1.12 : 1,
             duration: const Duration(milliseconds: 240),
             curve: Curves.easeOutBack,
-            child: Icon(selected ? filled : outlined, color: iconColor, size: 26)),
-        const SizedBox(height: 3),
-        Text(label,
+            child: Icon(selected ? filled : outlined, color: iconColor, size: 26),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            label,
             style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: textColor)),
-      ]),
-    ));
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: textColor,
+            ),
+          ),
+        ]),
+      ),
+    );
   }
 
   Widget _shortsItem() {
     final p = _p(context);
     final selected = _tab == 2;
+
     return Expanded(
-        child: GestureDetector(
-      onTap: () => _go(2),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        AnimatedScale(
+      child: GestureDetector(
+        onTap: () => _go(2),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          AnimatedScale(
             scale: selected ? 1.12 : 1,
             duration: const Duration(milliseconds: 260),
             curve: Curves.easeOutBack,
             child: Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                    gradient: p.reel,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(color: p.pink.withOpacity(selected ? .55 : .3), blurRadius: selected ? 22 : 12)
-                    ]),
-                child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 30))),
-        const SizedBox(height: 3),
-        Text('Shorts',
-            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
-                color: selected ? p.accent : (_tab == 2 ? Colors.white54 : p.sub))),
-      ]),
-    ));
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                gradient: p.reel,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: p.pink.withOpacity(selected ? .55 : .3),
+                    blurRadius: selected ? 22 : 12,
+                  )
+                ],
+              ),
+              child: const Icon(
+                Icons.play_arrow_rounded,
+                color: Colors.white,
+                size: 30,
+              ),
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            'Shorts',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: selected ? p.accent : (_tab == 2 ? Colors.white54 : p.sub),
+            ),
+          ),
+        ]),
+      ),
+    );
   }
 }
 
@@ -1996,16 +3109,25 @@ class _MiniPlayer extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = _p(context);
     final audio = context.watch<AudioController>();
+
     if (!audio.hasTrack) return const SizedBox.shrink();
+
     final progress = audio.currentDuration != null && audio.currentDuration! > 0
         ? (audio.position / audio.currentDuration!).clamp(0.0, 1.0)
         : 0.0;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: p.card,
         border: Border(bottom: BorderSide(color: p.border)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(.1), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          )
+        ],
       ),
       child: Column(children: [
         LinearProgressIndicator(
@@ -2030,20 +3152,27 @@ class _MiniPlayer extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(audio.currentTitle ?? 'Now playing',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
-                Text(audio.currentArtist ?? '',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 10, color: p.sub)),
+                Text(
+                  audio.currentTitle ?? 'Now playing',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                ),
+                Text(
+                  audio.currentArtist ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 10, color: p.sub),
+                ),
               ],
             ),
           ),
           IconButton(
-            icon: Icon(audio.playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                color: p.text, size: 24),
+            icon: Icon(
+              audio.playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+              color: p.text,
+              size: 24,
+            ),
             onPressed: () {
               if (audio.playing) {
                 audio.pause();
@@ -2066,10 +3195,12 @@ class _MiniPlayer extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════ HOME ════════════════════════════
-
+// ═══════════════════════════════════════════════════════════════
+// HOME
+// ═══════════════════════════════════════════════════════════════
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -2077,8 +3208,10 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final _api = ApiClient.instance;
   final _scroll = ScrollController();
+
   List<Post> _posts = [];
   List<User> _storyUsers = [];
+
   bool _loading = true;
   bool _loadingMore = false;
   bool _hasMore = true;
@@ -2110,13 +3243,16 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final res = await _api.get('/api/stories/feed');
       if (!mounted) return;
+
       final stories = extractItems(res).map(Story.fromJson).toList();
       final seenUsers = <int, User>{};
+
       for (final s in stories) {
         if (s.user != null && !seenUsers.containsKey(s.userId)) {
           seenUsers[s.userId] = s.user!;
         }
       }
+
       setState(() {
         _storyUsers = seenUsers.values.toList();
       });
@@ -2130,10 +3266,16 @@ class _HomeScreenState extends State<HomeScreen> {
         _error = null;
       });
     }
+
     try {
-      final res = await _api.get('/api/feed', query: {'limit': '20', 'offset': '0'});
+      final res = await _api.get(
+        '/api/feed',
+        query: {'limit': '20', 'offset': '0'},
+      );
+
       final items = extractItems(res).map(Post.fromJson).toList();
       if (!mounted) return;
+
       setState(() {
         _posts = items;
         _loading = false;
@@ -2143,12 +3285,14 @@ class _HomeScreenState extends State<HomeScreen> {
     } on ApiException catch (e) {
       if (e.statusCode == 401) return;
       if (!mounted) return;
+
       setState(() {
         _loading = false;
         _error = e.message;
       });
     } catch (_) {
       if (!mounted) return;
+
       setState(() {
         _loading = false;
         _error = 'Could not load feed.';
@@ -2158,10 +3302,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadMore() async {
     setState(() => _loadingMore = true);
+
     try {
-      final res = await _api.get('/api/feed', query: {'limit': '20', 'offset': '${_posts.length}'});
+      final res = await _api.get(
+        '/api/feed',
+        query: {'limit': '20', 'offset': '${_posts.length}'},
+      );
+
       final items = extractItems(res).map(Post.fromJson).toList();
       if (!mounted) return;
+
       setState(() {
         _posts.addAll(items);
         _hasMore = items.length >= 20;
@@ -2181,41 +3331,79 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     _applyBars(context);
+
     final p = _p(context);
     final me = context.watch<AppState>().me;
+
     return Stack(children: [
       Column(children: [
         Container(
           padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
-          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.border.withOpacity(.5)))),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: p.border.withOpacity(.5))),
+          ),
           child: Row(children: [
             GestureDetector(
-                onTap: me == null
-                    ? null
-                    : () => Navigator.push(context, FadeRoute(ProfileScreen(username: me.username))),
-                child: Avatar(url: me?.avatarUrl, size: 36, ring: me?.hasUnseenStory ?? false)),
+              onTap: me == null
+                  ? null
+                  : () => Navigator.push(
+                        context,
+                        FadeRoute(ProfileScreen(username: me.username)),
+                      ),
+              child: Avatar(
+                url: me?.avatarUrl,
+                size: 36,
+                ring: me?.hasUnseenStory ?? false,
+                fallback: me?.username,
+              ),
+            ),
             const SizedBox(width: 12),
             const Expanded(
-                child: Center(
-                    child: Text('NokhodX',
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: .8)))),
+              child: Center(
+                child: Text(
+                  'NokhodX',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: .8,
+                  ),
+                ),
+              ),
+            ),
             IconButton(
-                icon: Icon(Icons.bookmark_outline_rounded, color: p.sub),
-                onPressed: () => Navigator.push(context, FadeRoute(const BookmarksScreen()))),
+              icon: Icon(Icons.switch_account_outlined, color: p.sub),
+              onPressed: () => Navigator.push(
+                context,
+                FadeRoute(const AccountsScreen()),
+              ),
+            ),
             IconButton(
-                icon: Icon(Icons.tune_rounded, color: p.sub), onPressed: () => openSettings(context)),
+              icon: Icon(Icons.bookmark_outline_rounded, color: p.sub),
+              onPressed: () => Navigator.push(
+                context,
+                FadeRoute(const BookmarksScreen()),
+              ),
+            ),
+            IconButton(
+              icon: Icon(Icons.tune_rounded, color: p.sub),
+              onPressed: () => openSettings(context),
+            ),
           ]),
         ),
         Expanded(
           child: _loading
-              ? ListView(padding: EdgeInsets.zero, children: const [ShimmerPost(), ShimmerPost(), ShimmerPost()])
+              ? ListView(
+                  padding: EdgeInsets.zero,
+                  children: const [ShimmerPost(), ShimmerPost(), ShimmerPost()],
+                )
               : _error != null
                   ? ErrorState(message: _error!, onRetry: () => _load(reset: true))
                   : _posts.isEmpty
                       ? const EmptyState(
                           icon: Icons.notes_rounded,
                           title: 'No posts yet',
-                          subtitle: 'Be the first to share something!')
+                          subtitle: 'Be the first to share something!',
+                        )
                       : RefreshIndicator(
                           onRefresh: () => _load(reset: true, silent: true),
                           color: p.accent,
@@ -2228,12 +3416,20 @@ class _HomeScreenState extends State<HomeScreen> {
                                   child: SizedBox(
                                     height: 94,
                                     child: ListView(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 8,
+                                      ),
                                       scrollDirection: Axis.horizontal,
                                       children: [
                                         _StoryAddButton(me: me, onDone: _loadStories),
                                         const SizedBox(width: 8),
-                                        ..._storyUsers.map((u) => _StoryRing(user: u)),
+                                        ..._storyUsers.map(
+                                          (u) => _StoryRing(
+                                            user: u,
+                                            onChanged: _loadStories,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -2247,18 +3443,32 @@ class _HomeScreenState extends State<HomeScreen> {
                                         return _loadingMore
                                             ? const Padding(
                                                 padding: EdgeInsets.all(20),
-                                                child: Center(child: CircularProgressIndicator(strokeWidth: 2.4)))
+                                                child: Center(
+                                                  child: CircularProgressIndicator(
+                                                    strokeWidth: 2.4,
+                                                  ),
+                                                ),
+                                              )
                                             : const SizedBox(height: 1);
                                       }
+
                                       return Column(children: [
                                         SlideFadeIn(
-                                          delay: Duration(milliseconds: (i % 8) * 45),
+                                          delay: Duration(
+                                            milliseconds: (i % 8) * 45,
+                                          ),
                                           child: PostCard(
-                                              post: _posts[i],
-                                              onChanged: () => setState(() {}),
-                                              onDeleted: () => setState(() => _posts.removeAt(i))),
+                                            post: _posts[i],
+                                            onChanged: () => setState(() {}),
+                                            onDeleted: () =>
+                                                setState(() => _posts.removeAt(i)),
+                                          ),
                                         ),
-                                        Divider(height: 1, thickness: 1, color: p.border.withOpacity(.4)),
+                                        Divider(
+                                          height: 1,
+                                          thickness: 1,
+                                          color: p.border.withOpacity(.4),
+                                        ),
                                       ]);
                                     },
                                     childCount: _posts.length + 1,
@@ -2274,7 +3484,10 @@ class _HomeScreenState extends State<HomeScreen> {
         right: 20,
         bottom: MediaQuery.of(context).padding.bottom + 80,
         child: GestureDetector(
-          onTap: () => Navigator.push(context, SlideUpRoute(const ComposeScreen())).then((v) {
+          onTap: () => Navigator.push(
+            context,
+            SlideUpRoute(const ComposeScreen()),
+          ).then((v) {
             if (v == true) {
               _load(reset: true, silent: true);
             }
@@ -2283,9 +3496,12 @@ class _HomeScreenState extends State<HomeScreen> {
             width: 58,
             height: 58,
             decoration: BoxDecoration(
-                gradient: p.brand,
-                shape: BoxShape.circle,
-                boxShadow: [BoxShadow(color: p.accent.withOpacity(.5), blurRadius: 22)]),
+              gradient: p.brand,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(color: p.accent.withOpacity(.5), blurRadius: 22)
+              ],
+            ),
             child: const Icon(Icons.add_rounded, color: Colors.white, size: 30),
           ),
         ),
@@ -2294,39 +3510,42 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ═══════════════════════════════ STORIES ═══════════════════════════
-
+// ═══════════════════════════════════════════════════════════════
+// STORIES
+// ═══════════════════════════════════════════════════════════════
 class _StoryRing extends StatelessWidget {
   final User user;
-  const _StoryRing({required this.user});
+  final VoidCallback? onChanged;
+
+  const _StoryRing({required this.user, this.onChanged});
 
   @override
   Widget build(BuildContext context) {
-    final p = _p(context);
     return GestureDetector(
       onTap: () {
         Navigator.push(
-            context, FadeRoute(StoryViewerScreen(userId: user.id!, user: user)));
+          context,
+          FadeRoute(StoryViewerScreen(userId: user.id!, user: user)),
+        ).then((_) => onChanged?.call());
       },
       child: Container(
         width: 74,
         margin: const EdgeInsets.only(right: 4),
         child: Column(children: [
-          Container(
-            padding: const EdgeInsets.all(2),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: user.hasUnseenStory ? p.reel : null,
-              border: user.hasUnseenStory ? null : Border.all(color: p.border, width: 2),
-            ),
-            child: Avatar(url: user.avatarUrl, size: 58, ring: false),
+          Avatar(
+            url: user.avatarUrl,
+            size: 58,
+            ring: user.hasUnseenStory,
+            fallback: user.username,
           ),
           const SizedBox(height: 4),
-          Text(user.username,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+          Text(
+            user.username,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+          ),
         ]),
       ),
     );
@@ -2336,14 +3555,19 @@ class _StoryRing extends StatelessWidget {
 class _StoryAddButton extends StatelessWidget {
   final User me;
   final VoidCallback onDone;
+
   const _StoryAddButton({required this.me, required this.onDone});
 
   @override
   Widget build(BuildContext context) {
     final p = _p(context);
+
     return GestureDetector(
       onTap: () {
-        Navigator.push(context, SlideUpRoute(const CreateStoryScreen())).then((v) {
+        Navigator.push(
+          context,
+          SlideUpRoute(const CreateStoryScreen()),
+        ).then((v) {
           if (v == true) onDone();
         });
       },
@@ -2352,24 +3576,29 @@ class _StoryAddButton extends StatelessWidget {
         margin: const EdgeInsets.only(right: 4),
         child: Column(children: [
           Stack(children: [
-            Avatar(url: me.avatarUrl, size: 62, ring: false),
+            Avatar(url: me.avatarUrl, size: 62, fallback: me.username),
             Positioned(
               right: 0,
               bottom: 0,
               child: Container(
                 padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(gradient: p.brand, shape: BoxShape.circle,
-                    border: Border.all(color: p.bg, width: 2)),
+                decoration: BoxDecoration(
+                  gradient: p.brand,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: p.bg, width: 2),
+                ),
                 child: const Icon(Icons.add_rounded, color: Colors.white, size: 16),
               ),
             ),
           ]),
           const SizedBox(height: 4),
-          const Text('Your story',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+          const Text(
+            'Your story',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+          ),
         ]),
       ),
     );
@@ -2378,30 +3607,65 @@ class _StoryAddButton extends StatelessWidget {
 
 class CreateStoryScreen extends StatefulWidget {
   const CreateStoryScreen({super.key});
+
   @override
   State<CreateStoryScreen> createState() => _CreateStoryScreenState();
 }
 
 class _CreateStoryScreenState extends State<CreateStoryScreen> {
   final _text = TextEditingController();
+
   String? _mediaId;
   String? _mediaPreview;
+  String _mediaKind = 'image';
+
   double _uploadProgress = 0;
   bool _uploading = false;
   bool _posting = false;
 
-  Future<void> _pickMedia() async {
-    final f = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
+  Future<void> _pickImage() async {
+    final f = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
     if (f == null) return;
+
     setState(() {
       _mediaPreview = f.path;
+      _mediaKind = 'image';
       _uploading = true;
       _uploadProgress = 0;
     });
+
+    await _upload(f.path);
+  }
+
+  Future<void> _pickVideo() async {
+    final f = await ImagePicker().pickVideo(
+      source: ImageSource.gallery,
+      maxDuration: const Duration(minutes: 2),
+    );
+    if (f == null) return;
+
+    setState(() {
+      _mediaPreview = f.path;
+      _mediaKind = 'video';
+      _uploading = true;
+      _uploadProgress = 0;
+    });
+
+    await _upload(f.path);
+  }
+
+  Future<void> _upload(String path) async {
     try {
-      final res = await ApiClient.instance.uploadMedia(f.path, onProgress: (v) {
-        if (mounted) setState(() => _uploadProgress = v);
-      });
+      final res = await ApiClient.instance.uploadMedia(
+        path,
+        onProgress: (v) {
+          if (mounted) setState(() => _uploadProgress = v);
+        },
+      );
+
       if (res is Map) {
         setState(() {
           _mediaId = jstr(jpick(res, ['id', 'media_id']));
@@ -2418,16 +3682,20 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
 
   Future<void> _post() async {
     if (_posting || _uploading) return;
+
     if (_text.text.trim().isEmpty && _mediaId == null) {
       showSnack(context, 'Write something or add media', error: true);
       return;
     }
+
     setState(() => _posting = true);
+
     try {
       await ApiClient.instance.post('/api/stories', body: {
         'text': _text.text.trim(),
         if (_mediaId != null) 'media_id': _mediaId,
       });
+
       if (mounted) {
         showSnack(context, 'Story posted!');
         Navigator.pop(context, true);
@@ -2448,30 +3716,36 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
   @override
   Widget build(BuildContext context) {
     final p = _p(context);
+
     return Scaffold(
       backgroundColor: p.bg,
       appBar: AppBar(
         leading: IconButton(
-            icon: Icon(Icons.close_rounded, color: p.sub), onPressed: () => Navigator.pop(context)),
-        title: const Text('Add story',
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+          icon: Icon(Icons.close_rounded, color: p.sub),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'Add story',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+        ),
         actions: [
           Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: GradientButton(
-                text: 'Post story',
-                width: 110,
-                height: 40,
-                loading: _posting || _uploading,
-                onPressed: (_posting || _uploading) ? null : _post,
-              )),
+            padding: const EdgeInsets.only(right: 12),
+            child: GradientButton(
+              text: 'Post story',
+              width: 110,
+              height: 40,
+              loading: _posting || _uploading,
+              onPressed: (_posting || _uploading) ? null : _post,
+            ),
+          ),
         ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(children: [
           GestureDetector(
-            onTap: _uploading ? null : _pickMedia,
+            onTap: _uploading ? null : _pickImage,
             child: Container(
               width: double.infinity,
               height: 280,
@@ -2483,8 +3757,20 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
               child: _mediaPreview != null
                   ? Stack(fit: StackFit.expand, children: [
                       ClipRRect(
-                          borderRadius: BorderRadius.circular(20),
-                          child: Image.file(File(_mediaPreview!), fit: BoxFit.cover)),
+                        borderRadius: BorderRadius.circular(20),
+                        child: _mediaKind == 'image'
+                            ? Image.file(File(_mediaPreview!), fit: BoxFit.cover)
+                            : Container(
+                                color: Colors.black,
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.videocam_rounded,
+                                    color: Colors.white,
+                                    size: 56,
+                                  ),
+                                ),
+                              ),
+                      ),
                       if (_uploading)
                         Positioned.fill(
                           child: Container(
@@ -2503,8 +3789,14 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
                                     ),
                                   ),
                                   const SizedBox(height: 8),
-                                  Text('${(_uploadProgress * 100).toInt()}%',
-                                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+                                  Text(
+                                    '${(_uploadProgress * 100).toInt()}%',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -2516,7 +3808,13 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
                       children: [
                         Icon(Icons.add_photo_alternate_outlined, color: p.sub, size: 50),
                         const SizedBox(height: 8),
-                        Text('Add story', style: TextStyle(color: p.sub, fontSize: 13)),
+                        Text('Add image', style: TextStyle(color: p.sub, fontSize: 13)),
+                        const SizedBox(height: 14),
+                        OutlinePillButton(
+                          text: 'Add video',
+                          icon: Icons.videocam_rounded,
+                          onTap: _pickVideo,
+                        ),
                       ],
                     ),
             ),
@@ -2533,7 +3831,9 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
               filled: true,
               fillColor: p.card,
               border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide.none,
+              ),
               contentPadding: const EdgeInsets.all(16),
             ),
           ),
@@ -2546,7 +3846,13 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
 class StoryViewerScreen extends StatefulWidget {
   final int userId;
   final User user;
-  const StoryViewerScreen({super.key, required this.userId, required this.user});
+
+  const StoryViewerScreen({
+    super.key,
+    required this.userId,
+    required this.user,
+  });
+
   @override
   State<StoryViewerScreen> createState() => _StoryViewerScreenState();
 }
@@ -2555,6 +3861,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
   List<Story> _stories = [];
   int _current = 0;
   bool _loading = true;
+  Timer? _auto;
 
   @override
   void initState() {
@@ -2566,19 +3873,53 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
     try {
       final res = await ApiClient.instance.get('/api/stories/${widget.userId}');
       if (!mounted) return;
+
       final items = extractItems(res).map(Story.fromJson).toList();
+
       setState(() {
         _stories = items;
         _loading = false;
       });
+
       for (final s in items) {
         if (!s.viewedByMe) {
           ApiClient.instance.post('/api/stories/${s.id}/view').catchError((_) {});
         }
       }
+
+      _startTimer();
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  void _startTimer() {
+    _auto?.cancel();
+    _auto = Timer(const Duration(seconds: 6), _next);
+  }
+
+  void _next() {
+    if (!mounted) return;
+
+    if (_current < _stories.length - 1) {
+      setState(() => _current++);
+      _startTimer();
+    } else {
+      Navigator.pop(context);
+    }
+  }
+
+  void _prev() {
+    if (_current > 0) {
+      setState(() => _current--);
+      _startTimer();
+    }
+  }
+
+  @override
+  void dispose() {
+    _auto?.cancel();
+    super.dispose();
   }
 
   @override
@@ -2586,41 +3927,42 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
     if (_loading) {
       return Scaffold(
         backgroundColor: Colors.black,
-        body: Center(child: CircularProgressIndicator(color: Colors.white)),
+        body: Center(
+          child: CircularProgressIndicator(color: Colors.white),
+        ),
       );
     }
+
     if (_stories.isEmpty) {
       return Scaffold(
         backgroundColor: Colors.black,
         body: GestureDetector(
           onTap: () => Navigator.pop(context),
           child: const Center(
-            child: Text('No stories',
-                style: TextStyle(color: Colors.white, fontSize: 18)),
+            child: Text('No stories', style: TextStyle(color: Colors.white, fontSize: 18)),
           ),
         ),
       );
     }
+
     final story = _stories[_current];
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: GestureDetector(
         onTapUp: (details) {
           final w = MediaQuery.of(context).size.width;
           if (details.globalPosition.dx < w / 3) {
-            if (_current > 0) setState(() => _current--);
+            _prev();
           } else {
-            if (_current < _stories.length - 1) {
-              setState(() => _current++);
-            } else {
-              Navigator.pop(context);
-            }
+            _next();
           }
         },
         child: Stack(fit: StackFit.expand, children: [
           if (story.media != null && story.media!.type == 'image')
-            CachedNetworkImage(imageUrl: story.media!.url, fit: BoxFit.cover)
-          else if (story.media != null && (story.media!.type == 'video' || story.media!.type == 'gif'))
+            CachedFileImage(url: story.media!.url, fit: BoxFit.cover)
+          else if (story.media != null &&
+              (story.media!.type == 'video' || story.media!.type == 'gif'))
             _StoryVideo(url: story.media!.url)
           else
             Container(
@@ -2628,9 +3970,15 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
               child: Center(
                 child: Padding(
                   padding: const EdgeInsets.all(40),
-                  child: Text(story.text,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w700)),
+                  child: Text(
+                    story.text,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -2664,12 +4012,21 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
               ]),
               const SizedBox(height: 12),
               Row(children: [
-                Avatar(url: widget.user.avatarUrl, size: 36),
+                Avatar(
+                  url: widget.user.avatarUrl,
+                  size: 36,
+                  fallback: widget.user.username,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text('@${widget.user.username}',
-                      style: const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15)),
+                  child: Text(
+                    '@${widget.user.username}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close_rounded, color: Colors.white, size: 26),
@@ -2689,8 +4046,10 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
                   color: Colors.black.withOpacity(.5),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Text(story.text,
-                    style: const TextStyle(color: Colors.white, fontSize: 16)),
+                child: Text(
+                  story.text,
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                ),
               ),
             ),
         ]),
@@ -2701,13 +4060,19 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
 
 class _StoryVideo extends StatefulWidget {
   final String url;
+
   const _StoryVideo({required this.url});
+
   @override
   State<_StoryVideo> createState() => _StoryVideoState();
 }
 
 class _StoryVideoState extends State<_StoryVideo> {
   VideoPlayerController? _c;
+  bool _caching = true;
+  double _progress = 0;
+  bool _error = false;
+
   @override
   void initState() {
     super.initState();
@@ -2716,14 +4081,38 @@ class _StoryVideoState extends State<_StoryVideo> {
 
   Future<void> _init() async {
     AudioController.instance.muteTemporarily();
-    final c = VideoPlayerController.networkUrl(Uri.parse(widget.url));
-    _c = c;
+
+    final full = _fullUrl(widget.url);
+
     try {
+      final local = await FileCache.instance.downloadWithResume(
+        full,
+        headers: authHeaders(),
+        onProgress: (v) {
+          if (mounted) setState(() => _progress = v);
+        },
+      );
+
+      final c = VideoPlayerController.file(File(local));
+      _c = c;
+
       await c.initialize();
       c.setLooping(true);
       await c.play();
-      if (mounted) setState(() {});
-    } catch (_) {}
+
+      if (mounted) {
+        setState(() {
+          _caching = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _caching = false;
+          _error = true;
+        });
+      }
+    }
   }
 
   @override
@@ -2735,9 +4124,33 @@ class _StoryVideoState extends State<_StoryVideo> {
 
   @override
   Widget build(BuildContext context) {
-    if (_c == null || !_c!.value.isInitialized) {
-      return const Center(child: CircularProgressIndicator(color: Colors.white));
+    if (_caching) {
+      return Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          SizedBox(
+            width: 44,
+            height: 44,
+            child: CircularProgressIndicator(
+              value: _progress > 0 ? _progress : null,
+              color: Colors.white,
+              strokeWidth: 3,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '${(_progress * 100).toInt()}%',
+            style: const TextStyle(color: Colors.white, fontSize: 12),
+          ),
+        ]),
+      );
     }
+
+    if (_error || _c == null || !_c!.value.isInitialized) {
+      return const Center(
+        child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 48),
+      );
+    }
+
     return FittedBox(
       fit: BoxFit.cover,
       child: SizedBox(
@@ -2749,8 +4162,9 @@ class _StoryVideoState extends State<_StoryVideo> {
   }
 }
 
-// ═══════════════════════════════ POST CARD ═══════════════════════
-
+// ═══════════════════════════════════════════════════════════════
+// POST ACTION BUTTON
+// ═══════════════════════════════════════════════════════════════
 class ActionButton extends StatefulWidget {
   final IconData icon;
   final IconData? activeIcon;
@@ -2758,6 +4172,7 @@ class ActionButton extends StatefulWidget {
   final bool active;
   final int count;
   final VoidCallback onTap;
+
   const ActionButton({
     super.key,
     required this.icon,
@@ -2767,13 +4182,18 @@ class ActionButton extends StatefulWidget {
     this.count = 0,
     required this.onTap,
   });
+
   @override
   State<ActionButton> createState() => _ActionButtonState();
 }
 
-class _ActionButtonState extends State<ActionButton> with SingleTickerProviderStateMixin {
-  late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 380));
+class _ActionButtonState extends State<ActionButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 380),
+  );
+
   @override
   void dispose() {
     _c.dispose();
@@ -2784,6 +4204,7 @@ class _ActionButtonState extends State<ActionButton> with SingleTickerProviderSt
   Widget build(BuildContext context) {
     final p = _p(context);
     final label = widget.count > 0 ? formatCount(widget.count) : '';
+
     return InkWell(
       onTap: () {
         HapticFeedback.selectionClick();
@@ -2801,19 +4222,25 @@ class _ActionButtonState extends State<ActionButton> with SingleTickerProviderSt
               final scale = t < .5 ? 1 + t * .5 : 1.25 - (t - .5) * .5;
               return Transform.scale(scale: scale, child: child);
             },
-            child: Icon(widget.active ? (widget.activeIcon ?? widget.icon) : widget.icon,
-                size: 20, color: widget.active ? widget.color : p.sub),
+            child: Icon(
+              widget.active ? (widget.activeIcon ?? widget.icon) : widget.icon,
+              size: 20,
+              color: widget.active ? widget.color : p.sub,
+            ),
           ),
           if (label.isNotEmpty) ...[
             const SizedBox(width: 5),
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 240),
-              child: Text(label,
-                  key: ValueKey('${widget.count}-${widget.active}'),
-                  style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      color: widget.active ? widget.color : p.sub)),
+              child: Text(
+                label,
+                key: ValueKey('${widget.count}-${widget.active}'),
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: widget.active ? widget.color : p.sub,
+                ),
+              ),
             ),
           ],
         ]),
@@ -2822,13 +4249,19 @@ class _ActionButtonState extends State<ActionButton> with SingleTickerProviderSt
   }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// MEDIA GRID
+// ═══════════════════════════════════════════════════════════════
 class MediaGrid extends StatelessWidget {
   final Post post;
+
   const MediaGrid({super.key, required this.post});
 
   @override
   Widget build(BuildContext context) {
-    final media = post.media.where((m) => m.type != 'audio' && m.type != 'file').toList();
+    final media = post.media
+        .where((m) => m.type != 'audio' && m.type != 'file')
+        .toList();
     final audios = post.media.where((m) => m.type == 'audio').toList();
     final files = post.media.where((m) => m.type == 'file').toList();
 
@@ -2856,6 +4289,7 @@ class MediaGrid extends StatelessWidget {
   Widget _buildImageVideoGrid(List<MediaItem> media) {
     if (media.length == 1) {
       final m = media.first;
+
       return Padding(
         padding: const EdgeInsets.only(top: 10),
         child: (m.type == 'video' || m.type == 'gif')
@@ -2863,6 +4297,7 @@ class MediaGrid extends StatelessWidget {
             : _MediaImage(media: m, heroTag: 'media_${post.id}_0', height: 230),
       );
     }
+
     return Padding(
       padding: const EdgeInsets.only(top: 10),
       child: ClipRRect(
@@ -2883,9 +4318,21 @@ class MediaGrid extends StatelessWidget {
       height: 190,
       child: Row(
         children: [
-          Expanded(child: _MediaImage(media: media[0], heroTag: 'media_${post.id}_0', height: 190)),
+          Expanded(
+            child: _MediaImage(
+              media: media[0],
+              heroTag: 'media_${post.id}_0',
+              height: 190,
+            ),
+          ),
           const SizedBox(width: 2),
-          Expanded(child: _MediaImage(media: media[1], heroTag: 'media_${post.id}_1', height: 190)),
+          Expanded(
+            child: _MediaImage(
+              media: media[1],
+              heroTag: 'media_${post.id}_1',
+              height: 190,
+            ),
+          ),
         ],
       ),
     );
@@ -2898,15 +4345,31 @@ class MediaGrid extends StatelessWidget {
         children: [
           Expanded(
             flex: 2,
-            child: _MediaImage(media: media[0], heroTag: 'media_${post.id}_0', height: 150),
+            child: _MediaImage(
+              media: media[0],
+              heroTag: 'media_${post.id}_0',
+              height: 150,
+            ),
           ),
           const SizedBox(width: 2),
           Expanded(
             child: Column(
               children: [
-                Expanded(child: _MediaImage(media: media[1], heroTag: 'media_${post.id}_1', height: 74)),
+                Expanded(
+                  child: _MediaImage(
+                    media: media[1],
+                    heroTag: 'media_${post.id}_1',
+                    height: 74,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Expanded(child: _MediaImage(media: media[2], heroTag: 'media_${post.id}_2', height: 74)),
+                Expanded(
+                  child: _MediaImage(
+                    media: media[2],
+                    heroTag: 'media_${post.id}_2',
+                    height: 74,
+                  ),
+                ),
               ],
             ),
           ),
@@ -2923,9 +4386,21 @@ class MediaGrid extends StatelessWidget {
           Expanded(
             child: Row(
               children: [
-                Expanded(child: _MediaImage(media: media[0], heroTag: 'media_${post.id}_0', height: 74)),
+                Expanded(
+                  child: _MediaImage(
+                    media: media[0],
+                    heroTag: 'media_${post.id}_0',
+                    height: 74,
+                  ),
+                ),
                 const SizedBox(width: 2),
-                Expanded(child: _MediaImage(media: media[1], heroTag: 'media_${post.id}_1', height: 74)),
+                Expanded(
+                  child: _MediaImage(
+                    media: media[1],
+                    heroTag: 'media_${post.id}_1',
+                    height: 74,
+                  ),
+                ),
               ],
             ),
           ),
@@ -2933,12 +4408,22 @@ class MediaGrid extends StatelessWidget {
           Expanded(
             child: Row(
               children: [
-                Expanded(child: _MediaImage(media: media[2], heroTag: 'media_${post.id}_2', height: 74)),
+                Expanded(
+                  child: _MediaImage(
+                    media: media[2],
+                    heroTag: 'media_${post.id}_2',
+                    height: 74,
+                  ),
+                ),
                 const SizedBox(width: 2),
                 Expanded(
                   child: Stack(
                     children: [
-                      _MediaImage(media: media[3], heroTag: 'media_${post.id}_3', height: 74),
+                      _MediaImage(
+                        media: media[3],
+                        heroTag: 'media_${post.id}_3',
+                        height: 74,
+                      ),
                       if (media.length > 4)
                         Positioned.fill(
                           child: Container(
@@ -2971,51 +4456,65 @@ class _MediaImage extends StatelessWidget {
   final MediaItem media;
   final String heroTag;
   final double height;
-  const _MediaImage({required this.media, required this.heroTag, required this.height});
+
+  const _MediaImage({
+    required this.media,
+    required this.heroTag,
+    required this.height,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final p = _p(context);
     final imageUrl = media.thumbnail ?? media.url;
+
     return GestureDetector(
       onTap: () {
         if (media.type == 'video' || media.type == 'gif') {
           Navigator.push(
-              context, FadeRoute(FullScreenVideoScreen(url: media.url, thumbnail: media.thumbnail)));
+            context,
+            FadeRoute(FullScreenVideoScreen(url: media.url, thumbnail: media.thumbnail)),
+          );
         } else {
-          Navigator.push(context, FadeRoute(MediaViewerScreen(media: media, heroTag: heroTag)));
+          Navigator.push(
+            context,
+            FadeRoute(MediaViewerScreen(media: media, heroTag: heroTag)),
+          );
         }
       },
       child: Hero(
-          tag: heroTag,
-          child: SizedBox(
-            width: double.infinity,
-            height: height,
-            child: Stack(fit: StackFit.expand, children: [
-              CachedNetworkImage(
-                imageUrl: imageUrl,
-                fit: BoxFit.cover,
-                placeholder: (_, __) => Shimmer.fromColors(
-                    baseColor: p.card, highlightColor: p.card2, child: Container(color: p.card)),
-                errorWidget: (_, __, ___) => Container(
-                    color: p.card, child: Icon(Icons.image_not_supported_outlined, color: p.sub, size: 30)),
-              ),
-              if (media.type == 'video' || media.type == 'gif')
-                Center(
-                    child: Container(
+        tag: heroTag,
+        child: SizedBox(
+          width: double.infinity,
+          height: height,
+          child: Stack(fit: StackFit.expand, children: [
+            CachedFileImage(url: imageUrl, fit: BoxFit.cover),
+            if (media.type == 'video' || media.type == 'gif')
+              Center(
+                child: Container(
                   padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(color: Colors.black.withOpacity(.55), shape: BoxShape.circle),
-                  child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 38),
-                )),
-            ]),
-          )),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(.55),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.play_arrow_rounded,
+                    color: Colors.white,
+                    size: 38,
+                  ),
+                ),
+              ),
+          ]),
+        ),
+      ),
     );
   }
 }
 
 class FileCard extends StatefulWidget {
   final MediaItem media;
+
   const FileCard({super.key, required this.media});
+
   @override
   State<FileCard> createState() => _FileCardState();
 }
@@ -3035,6 +4534,7 @@ class _FileCardState extends State<FileCard> {
   Future<void> _checkCache() async {
     final fullUrl = _fullUrl(widget.media.url);
     final cached = await FileCache.instance.hasFile(fullUrl);
+
     if (cached && mounted) {
       setState(() {
         _done = true;
@@ -3045,6 +4545,7 @@ class _FileCardState extends State<FileCard> {
 
   Future<void> _download() async {
     if (_downloading) return;
+
     try {
       final status = await Permission.storage.request();
       if (!status.isGranted && Platform.isAndroid) {
@@ -3070,16 +4571,17 @@ class _FileCardState extends State<FileCard> {
         onProgress: (v) {
           if (mounted) setState(() => _progress = v);
         },
-        headers: ApiClient.instance.token != null
-            ? {'Authorization': 'Bearer ${ApiClient.instance.token}'}
-            : null,
+        headers: authHeaders(),
       );
+
       if (!mounted) return;
+
       setState(() {
         _downloading = false;
         _done = true;
         _savedPath = path;
       });
+
       showSnack(context, 'Download complete ✓');
       OpenFile.open(path);
     } catch (e) {
@@ -3093,7 +4595,10 @@ class _FileCardState extends State<FileCard> {
   IconData _fileIcon() {
     final name = widget.media.originalName?.toLowerCase() ?? '';
     final mime = widget.media.mimeType?.toLowerCase() ?? '';
-    if (mime.contains('pdf') || name.endsWith('.pdf')) return Icons.picture_as_pdf_rounded;
+
+    if (mime.contains('pdf') || name.endsWith('.pdf')) {
+      return Icons.picture_as_pdf_rounded;
+    }
     if (mime.contains('word') || name.endsWith('.doc') || name.endsWith('.docx')) {
       return Icons.description_rounded;
     }
@@ -3101,13 +4606,17 @@ class _FileCardState extends State<FileCard> {
       return Icons.folder_zip_rounded;
     }
     if (mime.contains('text') || name.endsWith('.txt')) return Icons.article_rounded;
+
     return Icons.attach_file_rounded;
   }
 
   @override
   Widget build(BuildContext context) {
     final p = _p(context);
-    final name = widget.media.originalName?.isNotEmpty == true ? widget.media.originalName! : 'File';
+    final name = widget.media.originalName?.isNotEmpty == true
+        ? widget.media.originalName!
+        : 'File';
+
     final fullUrl = _fullUrl(widget.media.url);
     final cacheProgress = FileCache.instance.getProgress(fullUrl);
     final isCacheActive = FileCache.instance.isDownloading(fullUrl);
@@ -3116,53 +4625,73 @@ class _FileCardState extends State<FileCard> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-          color: p.card, borderRadius: BorderRadius.circular(16), border: Border.all(color: p.border)),
+        color: p.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: p.border),
+      ),
       child: Row(children: [
         Container(
           width: 52,
           height: 52,
-          decoration: BoxDecoration(color: p.accent.withOpacity(.15), borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+            color: p.accent.withOpacity(.15),
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: Icon(_fileIcon(), color: p.accent, size: 28),
         ),
         const SizedBox(width: 12),
         Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(name,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(
+              name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-          const SizedBox(height: 4),
-          if (_downloading || isCacheActive)
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              LinearProgressIndicator(
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+            ),
+            const SizedBox(height: 4),
+            if (_downloading || isCacheActive)
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                LinearProgressIndicator(
                   value: displayProgress,
                   color: p.accent,
-                  backgroundColor: p.card2),
-              const SizedBox(height: 3),
-              Text('${(displayProgress * 100).toInt()}%',
-                  style: TextStyle(fontSize: 11, color: p.sub)),
-            ])
-          else if (_done && _savedPath != null)
-            GestureDetector(
-              onTap: () => OpenFile.open(_savedPath),
-              child: Row(children: [
-                Icon(Icons.check_circle_rounded, color: p.green, size: 16),
-                const SizedBox(width: 4),
-                Text('Downloaded — tap to open',
-                    style: TextStyle(fontSize: 11, color: p.green)),
-              ]),
-            )
-          else
-            Text('Tap download to save', style: TextStyle(fontSize: 11, color: p.sub)),
-        ])),
+                  backgroundColor: p.card2,
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${(displayProgress * 100).toInt()}%',
+                  style: TextStyle(fontSize: 11, color: p.sub),
+                ),
+              ])
+            else if (_done && _savedPath != null)
+              GestureDetector(
+                onTap: () => OpenFile.open(_savedPath),
+                child: Row(children: [
+                  Icon(Icons.check_circle_rounded, color: p.green, size: 16),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Downloaded — tap to open',
+                    style: TextStyle(fontSize: 11, color: p.green),
+                  ),
+                ]),
+              )
+            else
+              Text(
+                'Tap download to save',
+                style: TextStyle(fontSize: 11, color: p.sub),
+              ),
+          ]),
+        ),
         GestureDetector(
           onTap: _done && _savedPath != null ? () => OpenFile.open(_savedPath) : _download,
           child: Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-                gradient: p.brand,
-                shape: BoxShape.circle,
-                boxShadow: [BoxShadow(color: p.accent.withOpacity(.3), blurRadius: 10)]),
+              gradient: p.brand,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(color: p.accent.withOpacity(.3), blurRadius: 10)
+              ],
+            ),
             child: Icon(
               _downloading
                   ? Icons.hourglass_top_rounded
@@ -3181,7 +4710,14 @@ class InlineVideo extends StatefulWidget {
   final String url;
   final String? thumbnail;
   final String type;
-  const InlineVideo({super.key, required this.url, this.thumbnail, this.type = 'video'});
+
+  const InlineVideo({
+    super.key,
+    required this.url,
+    this.thumbnail,
+    this.type = 'video',
+  });
+
   @override
   State<InlineVideo> createState() => _InlineVideoState();
 }
@@ -3191,29 +4727,55 @@ class _InlineVideoState extends State<InlineVideo> {
   bool _initializing = false;
   bool _error = false;
   bool _started = false;
+  double _cacheProgress = 0;
 
   Future<void> _toggle() async {
     if (_error) return;
+
     HapticFeedback.selectionClick();
+
     if (!_started) {
       setState(() {
         _initializing = true;
         _started = true;
       });
-      final c = VideoPlayerController.networkUrl(Uri.parse(widget.url));
-      _c = c;
-      await c.initialize().catchError((_) {
-        if (mounted) setState(() => _error = true);
-      });
-      if (!mounted || _error) return;
-      c.setLooping(true);
-      c.setVolume(1);
-      AudioController.instance.muteTemporarily();
-      await c.play();
-      setState(() => _initializing = false);
+
+      try {
+        final full = _fullUrl(widget.url);
+        final local = await FileCache.instance.downloadWithResume(
+          full,
+          headers: authHeaders(),
+          onProgress: (v) {
+            if (mounted) setState(() => _cacheProgress = v);
+          },
+        );
+
+        final c = VideoPlayerController.file(File(local));
+        _c = c;
+
+        await c.initialize();
+        c.setLooping(true);
+        c.setVolume(1);
+
+        AudioController.instance.muteTemporarily();
+        await c.play();
+
+        setState(() => _initializing = false);
+      } catch (_) {
+        if (mounted) {
+          setState(() {
+            _initializing = false;
+            _error = true;
+          });
+        }
+      }
     } else if (_c != null) {
       setState(() {
-        _c!.value.isPlaying ? _c!.pause() : _c!.play();
+        if (_c!.value.isPlaying) {
+          _c!.pause();
+        } else {
+          _c!.play();
+        }
       });
     }
   }
@@ -3221,6 +4783,7 @@ class _InlineVideoState extends State<InlineVideo> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+
     final tab = context.read<AppState>().currentTab.value;
     if (tab != 0 && _c != null && _c!.value.isPlaying) {
       _c!.pause();
@@ -3237,115 +4800,195 @@ class _InlineVideoState extends State<InlineVideo> {
   @override
   Widget build(BuildContext context) {
     final p = _p(context);
+
     if (!_started && widget.thumbnail != null && widget.thumbnail!.isNotEmpty) {
       return GestureDetector(
         onTap: _toggle,
         child: ClipRRect(
-            borderRadius: BorderRadius.circular(18),
-            child: AspectRatio(aspectRatio: 16 / 9, child: Stack(fit: StackFit.expand, children: [
-              CachedNetworkImage(
-                  imageUrl: widget.thumbnail!,
-                  fit: BoxFit.cover,
-                  placeholder: (_, __) => Container(color: p.card),
-                  errorWidget: (_, __, ___) => Container(color: p.card)),
+          borderRadius: BorderRadius.circular(18),
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Stack(fit: StackFit.expand, children: [
+              CachedFileImage(url: widget.thumbnail!, fit: BoxFit.cover),
               Container(color: Colors.black.withOpacity(.25)),
               Center(
-                  child: Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(.6),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white24)),
-                      child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 40))),
+                child: Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(.6),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: const Icon(
+                    Icons.play_arrow_rounded,
+                    color: Colors.white,
+                    size: 40,
+                  ),
+                ),
+              ),
               Positioned(
-                  right: 12,
-                  top: 12,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(.6), borderRadius: BorderRadius.circular(8)),
-                    child: GestureDetector(
-                      onTap: () => Navigator.push(context,
-                          FadeRoute(FullScreenVideoScreen(url: widget.url, thumbnail: widget.thumbnail))),
-                      child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Icons.fullscreen_rounded, color: Colors.white, size: 16),
-                        SizedBox(width: 4),
-                        Text('Full',
-                            style: TextStyle(
-                                color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
-                      ]),
+                right: 12,
+                top: 12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(.6),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      FadeRoute(FullScreenVideoScreen(
+                        url: widget.url,
+                        thumbnail: widget.thumbnail,
+                      )),
                     ),
-                  )),
-            ]))),
+                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.fullscreen_rounded, color: Colors.white, size: 16),
+                      SizedBox(width: 4),
+                      Text(
+                        'Full',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ]),
+                  ),
+                ),
+              ),
+            ]),
+          ),
+        ),
       );
     }
 
     return ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: AspectRatio(
-            aspectRatio: 16 / 9,
-            child: Container(color: Colors.black, child: Stack(children: [
-              if (_c != null && _c!.value.isInitialized)
-                Positioned.fill(
-                    child: FittedBox(
-                        fit: BoxFit.cover,
-                        child: SizedBox(
-                            width: _c!.value.size.width,
-                            height: _c!.value.size.height,
-                            child: VideoPlayer(_c!)))),
-              GestureDetector(onTap: _toggle, behavior: HitTestBehavior.opaque),
-              if (_initializing) const Center(child: CircularProgressIndicator(strokeWidth: 2.6)),
-              if (_error)
-                Center(
-                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+      borderRadius: BorderRadius.circular(18),
+      child: AspectRatio(
+        aspectRatio: 16 / 9,
+        child: Container(
+          color: Colors.black,
+          child: Stack(children: [
+            if (_c != null && _c!.value.isInitialized)
+              Positioned.fill(
+                child: FittedBox(
+                  fit: BoxFit.cover,
+                  child: SizedBox(
+                    width: _c!.value.size.width,
+                    height: _c!.value.size.height,
+                    child: VideoPlayer(_c!),
+                  ),
+                ),
+              ),
+            GestureDetector(onTap: _toggle, behavior: HitTestBehavior.opaque),
+            if (_initializing)
+              Center(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  CircularProgressIndicator(
+                    strokeWidth: 2.6,
+                    value: _cacheProgress > 0 ? _cacheProgress : null,
+                    color: p.accent,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${(_cacheProgress * 100).toInt()}%',
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                ]),
+              ),
+            if (_error)
+              Center(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
                   Icon(Icons.videocam_off_rounded, color: p.sub, size: 34),
                   const SizedBox(height: 6),
                   Text('Video unavailable', style: TextStyle(color: p.sub, fontSize: 12)),
-                ])),
-              if (_c != null && !_c!.value.isPlaying && !_initializing && !_error)
-                Center(
-                    child: Container(
-                        width: 58,
-                        height: 58,
-                        decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(.55),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white24)),
-                        child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 36))),
-              if (_c != null && _c!.value.isInitialized) ...[
-                Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    child: VideoProgressIndicator(_c!,
-                        allowScrubbing: true,
-                        colors: VideoProgressColors(
-                            playedColor: p.accent,
-                            bufferedColor: Colors.white24,
-                            backgroundColor: Colors.white10))),
-                Positioned(
-                    right: 8,
-                    top: 8,
-                    child: GestureDetector(
-                      onTap: () => Navigator.push(context,
-                          FadeRoute(FullScreenVideoScreen(url: widget.url, thumbnail: widget.thumbnail))),
-                      child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(color: Colors.black.withOpacity(.6), shape: BoxShape.circle),
-                          child: const Icon(Icons.fullscreen_rounded, color: Colors.white, size: 22)),
+                ]),
+              ),
+            if (_c != null && !_c!.value.isPlaying && !_initializing && !_error)
+              Center(
+                child: Container(
+                  width: 58,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(.55),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: const Icon(
+                    Icons.play_arrow_rounded,
+                    color: Colors.white,
+                    size: 36,
+                  ),
+                ),
+              ),
+            if (_c != null && _c!.value.isInitialized) ...[
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: VideoProgressIndicator(
+                  _c!,
+                  allowScrubbing: true,
+                  colors: VideoProgressColors(
+                    playedColor: p.accent,
+                    bufferedColor: Colors.white24,
+                    backgroundColor: Colors.white10,
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 8,
+                top: 8,
+                child: GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    FadeRoute(FullScreenVideoScreen(
+                      url: widget.url,
+                      thumbnail: widget.thumbnail,
                     )),
-              ],
-            ]))));
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(.6),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.fullscreen_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ]),
+        ),
+      ),
+    );
   }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// POST CARD
+// ═══════════════════════════════════════════════════════════════
 class PostCard extends StatefulWidget {
   final Post post;
   final bool detail;
   final VoidCallback? onChanged;
   final VoidCallback? onDeleted;
-  const PostCard({super.key, required this.post, this.detail = false, this.onChanged, this.onDeleted});
+
+  const PostCard({
+    super.key,
+    required this.post,
+    this.detail = false,
+    this.onChanged,
+    this.onDeleted,
+  });
+
   @override
   State<PostCard> createState() => _PostCardState();
 }
@@ -3353,67 +4996,112 @@ class PostCard extends StatefulWidget {
 class _PostCardState extends State<PostCard> {
   final _api = ApiClient.instance;
 
+  Post get displayPost => widget.post.repostOf ?? widget.post;
+
   void _toggleLike() {
     setState(() {
-      widget.post.liked = !widget.post.liked;
-      widget.post.likeCount += widget.post.liked ? 1 : -1;
+      displayPost.liked = !displayPost.liked;
+      displayPost.likeCount += displayPost.liked ? 1 : -1;
     });
+
     widget.onChanged?.call();
-    _api.post('/api/posts/${widget.post.id}/like').catchError((_) {});
+    _api.post('/api/posts/${displayPost.id}/like').catchError((_) {});
   }
 
   void _toggleRetweet() {
     setState(() {
-      widget.post.retweeted = !widget.post.retweeted;
-      widget.post.retweetCount += widget.post.retweeted ? 1 : -1;
+      displayPost.retweeted = !displayPost.retweeted;
+      displayPost.retweetCount += displayPost.retweeted ? 1 : -1;
     });
+
     widget.onChanged?.call();
-    _api.post('/api/posts/${widget.post.id}/retweet').catchError((_) {});
+    _api.post('/api/posts/${displayPost.id}/retweet').catchError((_) {});
   }
 
   void _toggleBookmark() {
-    setState(() => widget.post.bookmarked = !widget.post.bookmarked);
+    setState(() => displayPost.bookmarked = !displayPost.bookmarked);
+
     widget.onChanged?.call();
-    showSnack(context,
-        widget.post.bookmarked ? 'Added to bookmarks 🔖' : 'Removed bookmark');
-    _api.post('/api/posts/${widget.post.id}/bookmark').catchError((_) {});
+    showSnack(
+      context,
+      displayPost.bookmarked ? 'Added to bookmarks 🔖' : 'Removed bookmark',
+    );
+
+    _api.post('/api/posts/${displayPost.id}/bookmark').catchError((_) {});
+  }
+
+  Future<void> _share() async {
+    try {
+      final res = await _api.post('/api/posts/${displayPost.id}/share');
+
+      final count = jint(jpick(res, ['shares_count']));
+      if (count > 0) {
+        setState(() => displayPost.shareCount = count);
+      } else {
+        setState(() => displayPost.shareCount++);
+      }
+
+      final path = jstr(jpick(res, ['share_url']));
+      final full = path.startsWith('http')
+          ? path
+          : '${ApiClient.instance.baseUrl ?? ''}$path';
+
+      await Clipboard.setData(ClipboardData(text: full));
+      if (mounted) showSnack(context, 'Shared and link copied');
+    } catch (e) {
+      if (mounted) showSnack(context, 'Share failed', error: true);
+    }
   }
 
   void _openDetail() {
     if (widget.detail) return;
-    Navigator.push(context, FadeRoute(PostDetailScreen(postId: widget.post.id, initial: widget.post)));
+
+    Navigator.push(
+      context,
+      FadeRoute(PostDetailScreen(postId: displayPost.id, initial: displayPost)),
+    );
   }
 
   void _openAuthorProfile() {
-    final u = widget.post.author?.username;
+    final u = displayPost.author?.username;
     if (u == null || u.isEmpty) return;
+
     Navigator.push(context, FadeRoute(ProfileScreen(username: u)));
   }
 
   Future<void> _delete() async {
     final p = _p(context);
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: p.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        title: const Text('Delete post?',
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+        title: const Text(
+          'Delete post?',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+        ),
         content: const Text('This cannot be undone.', style: TextStyle(fontSize: 13.5)),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text('Cancel', style: TextStyle(color: p.sub))),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: TextStyle(color: p.sub)),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text('Delete',
-                  style: TextStyle(color: p.red, fontWeight: FontWeight.w700))),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              'Delete',
+              style: TextStyle(color: p.red, fontWeight: FontWeight.w700),
+            ),
+          ),
         ],
       ),
     );
+
     if (ok != true) return;
+
     try {
-      await _api.delete('/api/posts/${widget.post.id}');
+      await _api.delete('/api/posts/${displayPost.id}');
       if (mounted) {
         showSnack(context, 'Post deleted');
         widget.onDeleted?.call();
@@ -3426,54 +5114,87 @@ class _PostCardState extends State<PostCard> {
   void _menu() {
     final p = _p(context);
     final me = context.read<AppState>().me;
-    final own = me != null && widget.post.author != null && me.username == widget.post.author!.username;
+    final own = me != null &&
+        displayPost.author != null &&
+        me.username == displayPost.author!.username;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: p.card,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (ctx) => SafeArea(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
             margin: const EdgeInsets.only(top: 10),
             width: 40,
             height: 4,
-            decoration: BoxDecoration(color: p.border, borderRadius: BorderRadius.circular(4))),
-        if (own)
-          _mItem(Icons.edit_outlined, 'Edit post', p.accent, () {
+            decoration: BoxDecoration(
+              color: p.border,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          if (own)
+            _mItem(Icons.edit_outlined, 'Edit post', p.accent, () {
+              Navigator.pop(ctx);
+              Navigator.push(
+                context,
+                SlideUpRoute(
+                  ComposeScreen(
+                    editPost: displayPost,
+                    onDone: () => widget.onChanged?.call(),
+                  ),
+                ),
+              ).then((_) => widget.onChanged?.call());
+            }),
+          _mItem(Icons.format_quote_rounded, 'Quote post', p.orange, () {
             Navigator.pop(ctx);
             Navigator.push(
-                    context,
-                    SlideUpRoute(
-                        ComposeScreen(editPost: widget.post, onDone: () => widget.onChanged?.call())))
-                .then((_) => widget.onChanged?.call());
+              context,
+              SlideUpRoute(ComposeScreen(quotedPost: displayPost)),
+            ).then((v) {
+              if (v == true) widget.onChanged?.call();
+            });
           }),
-        _mItem(Icons.copy_rounded, 'Copy text', p.text, () {
-          Navigator.pop(ctx);
-          Clipboard.setData(ClipboardData(text: widget.post.text));
-          showSnack(context, 'Copied to clipboard');
-        }),
-        _mItem(
-          widget.post.bookmarked ? Icons.bookmark_remove_rounded : Icons.bookmark_add_rounded,
-          widget.post.bookmarked ? 'Remove bookmark' : 'Bookmark',
-          p.gold,
-          () {
+          _mItem(Icons.copy_rounded, 'Copy text', p.text, () {
             Navigator.pop(ctx);
-            _toggleBookmark();
-          },
-        ),
-        if (own)
-          _mItem(Icons.delete_outline_rounded, 'Delete post', p.red, () {
-            Navigator.pop(ctx);
-            _delete();
+            Clipboard.setData(ClipboardData(text: displayPost.text));
+            showSnack(context, 'Copied to clipboard');
           }),
-        const SizedBox(height: 8),
-      ])),
+          _mItem(
+            displayPost.bookmarked
+                ? Icons.bookmark_remove_rounded
+                : Icons.bookmark_add_rounded,
+            displayPost.bookmarked ? 'Remove bookmark' : 'Bookmark',
+            p.gold,
+            () {
+              Navigator.pop(ctx);
+              _toggleBookmark();
+            },
+          ),
+          _mItem(Icons.share_rounded, 'Share', p.purple, () {
+            Navigator.pop(ctx);
+            _share();
+          }),
+          if (own)
+            _mItem(Icons.delete_outline_rounded, 'Delete post', p.red, () {
+              Navigator.pop(ctx);
+              _delete();
+            }),
+          const SizedBox(height: 8),
+        ]),
+      ),
     );
   }
 
-  Widget _mItem(IconData icon, String label, Color color, VoidCallback onTap) => ListTile(
+  Widget _mItem(IconData icon, String label, Color color, VoidCallback onTap) =>
+      ListTile(
         leading: Icon(icon, color: color, size: 22),
-        title: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+        title: Text(
+          label,
+          style: TextStyle(color: color, fontWeight: FontWeight.w600),
+        ),
         onTap: onTap,
       );
 
@@ -3482,127 +5203,179 @@ class _PostCardState extends State<PostCard> {
     final p = _p(context);
     final post = widget.post;
     final author = post.author;
-    final displayPost = post.repostOf ?? post;
     final isRepost = post.repostOf != null;
 
     String? likedByText;
     if (post.likedByFollowings.isNotEmpty) {
       final names = post.likedByFollowings.take(2).map((e) => '@$e').toList();
-      likedByText = 'Liked by ${names.join(', ')}${post.likedByFollowings.length > 2 ? ' and others' : ''}';
+      likedByText =
+          'Liked by ${names.join(', ')}${post.likedByFollowings.length > 2 ? ' and others' : ''}';
     }
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       if (isRepost && post.repostedByFollowings.isNotEmpty)
         Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Row(children: [
+            Icon(Icons.repeat_rounded, color: p.green, size: 14),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                '${post.repostedByFollowings.take(2).map((e) => '@$e').join(', ')} reposted',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: p.sub,
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ]),
+        ),
+      if (isRepost && post.repostedByFollowings.isEmpty)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(64, 10, 16, 0),
+          child: GestureDetector(
+            onTap: _openAuthorProfile,
             child: Row(children: [
               Icon(Icons.repeat_rounded, color: p.green, size: 14),
               const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                    '${post.repostedByFollowings.take(2).map((e) => '@$e').join(', ')} reposted',
-                    style: TextStyle(fontSize: 12, color: p.sub, fontWeight: FontWeight.w600),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
+              Text(
+                '${author?.displayName ?? 'Someone'} reposted',
+                style: TextStyle(fontSize: 12, color: p.sub, fontWeight: FontWeight.w600),
               ),
-            ])),
-      if (isRepost && post.repostedByFollowings.isEmpty)
-        Padding(
-            padding: const EdgeInsets.fromLTRB(64, 10, 16, 0),
-            child: GestureDetector(
-              onTap: _openAuthorProfile,
-              child: Row(children: [
-                Icon(Icons.repeat_rounded, color: p.green, size: 14),
-                const SizedBox(width: 6),
-                Text('${author?.displayName ?? 'Someone'} reposted',
-                    style: TextStyle(fontSize: 12, color: p.sub, fontWeight: FontWeight.w600)),
-              ]),
-            )),
+            ]),
+          ),
+        ),
       InkWell(
         onTap: _openDetail,
         child: Padding(
           padding: EdgeInsets.fromLTRB(16, 14, 16, widget.detail ? 4 : 10),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             GestureDetector(
-                onTap: _openAuthorProfile,
-                child: Avatar(url: displayPost.author?.avatarUrl, size: widget.detail ? 48 : 44)),
+              onTap: _openAuthorProfile,
+              child: Avatar(
+                url: displayPost.author?.avatarUrl,
+                size: widget.detail ? 48 : 44,
+                ring: displayPost.author?.hasUnseenStory ?? false,
+                fallback: displayPost.author?.username,
+              ),
+            ),
             const SizedBox(width: 12),
             Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Flexible(
-                    child: GestureDetector(
-                  onTap: _openAuthorProfile,
-                  child: Text(displayPost.author?.displayName ?? 'Unknown',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: p.text)),
-                )),
-                if (displayPost.author?.verified ?? false) ...[
-                  const SizedBox(width: 4),
-                  Icon(Icons.verified_rounded, size: 16, color: p.accent),
-                ],
-                if (displayPost.author != null) ...[
-                  const SizedBox(width: 5),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
                   Flexible(
-                      child: Text('@${displayPost.author!.username} · ${timeAgo(context, displayPost.createdAt)}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: p.sub, fontSize: 13))),
-                ],
-                const Spacer(),
-                GestureDetector(
-                    onTap: _menu,
-                    child: Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: Icon(Icons.more_horiz_rounded, size: 19, color: p.sub))),
-              ]),
-              if (displayPost.text.isNotEmpty)
-                Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(displayPost.text,
-                        maxLines: widget.detail ? null : 12,
+                    child: GestureDetector(
+                      onTap: _openAuthorProfile,
+                      child: Text(
+                        displayPost.author?.displayName ?? 'Unknown',
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                            fontSize: widget.detail ? 17 : 14.5, height: 1.38, color: p.text))),
-              MediaGrid(post: displayPost),
-              if (displayPost.quoted != null) QuoteCard(post: displayPost.quoted!),
-              const SizedBox(height: 6),
-              Row(children: [
-                ActionButton(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                          color: p.text,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (displayPost.author?.verified ?? false) ...[
+                    const SizedBox(width: 4),
+                    Icon(Icons.verified_rounded, size: 16, color: p.accent),
+                  ],
+                  if (displayPost.author != null) ...[
+                    const SizedBox(width: 5),
+                    Flexible(
+                      child: Text(
+                        '@${displayPost.author!.username} · ${timeAgo(context, displayPost.createdAt)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: p.sub, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: _menu,
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Icon(Icons.more_horiz_rounded, size: 19, color: p.sub),
+                    ),
+                  ),
+                ]),
+                if (displayPost.text.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      displayPost.text,
+                      maxLines: widget.detail ? null : 12,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: widget.detail ? 17 : 14.5,
+                        height: 1.38,
+                        color: p.text,
+                      ),
+                    ),
+                  ),
+                MediaGrid(post: displayPost),
+                if (displayPost.quoted != null) QuoteCard(post: displayPost.quoted!),
+                const SizedBox(height: 6),
+                Row(children: [
+                  ActionButton(
                     icon: Icons.chat_bubble_outline_rounded,
                     color: p.accent,
                     count: displayPost.replyCount,
-                    onTap: _openDetail),
-                const Spacer(),
-                ActionButton(
+                    onTap: _openDetail,
+                  ),
+                  const Spacer(),
+                  ActionButton(
                     icon: Icons.repeat_rounded,
                     color: p.green,
                     active: displayPost.retweeted,
                     count: displayPost.retweetCount,
-                    onTap: _toggleRetweet),
-                const Spacer(),
-                ActionButton(
+                    onTap: _toggleRetweet,
+                  ),
+                  const Spacer(),
+                  ActionButton(
                     icon: Icons.favorite_border_rounded,
                     activeIcon: Icons.favorite_rounded,
                     color: p.pink,
                     active: displayPost.liked,
                     count: displayPost.likeCount,
-                    onTap: _toggleLike),
-                const Spacer(),
-                ActionButton(
+                    onTap: _toggleLike,
+                  ),
+                  const Spacer(),
+                  ActionButton(
                     icon: Icons.bookmark_border_rounded,
                     activeIcon: Icons.bookmark_rounded,
-                    color: p.accent,
+                    color: p.gold,
                     active: displayPost.bookmarked,
-                    onTap: _toggleBookmark),
-              ]),
-              if (likedByText != null)
-                Padding(
+                    onTap: _toggleBookmark,
+                  ),
+                  const Spacer(),
+                  ActionButton(
+                    icon: Icons.share_rounded,
+                    color: p.purple,
+                    count: displayPost.shareCount,
+                    onTap: _share,
+                  ),
+                ]),
+                if (likedByText != null)
+                  Padding(
                     padding: const EdgeInsets.only(top: 6),
-                    child: Text(likedByText,
-                        style: TextStyle(fontSize: 12, color: p.sub, fontStyle: FontStyle.italic))),
-            ])),
+                    child: Text(
+                      likedByText,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: p.sub,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+              ]),
+            ),
           ]),
         ),
       ),
@@ -3612,70 +5385,97 @@ class _PostCardState extends State<PostCard> {
 
 class QuoteCard extends StatelessWidget {
   final Post post;
+
   const QuoteCard({super.key, required this.post});
 
   @override
   Widget build(BuildContext context) {
     final p = _p(context);
+
     return GestureDetector(
-      onTap: () => Navigator.push(context, FadeRoute(PostDetailScreen(postId: post.id, initial: post))),
+      onTap: () => Navigator.push(
+        context,
+        FadeRoute(PostDetailScreen(postId: post.id, initial: post)),
+      ),
       child: Container(
         margin: const EdgeInsets.only(top: 10),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-            color: p.card, borderRadius: BorderRadius.circular(16), border: Border.all(color: p.border)),
+          color: p.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: p.border),
+        ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           GestureDetector(
             onTap: () {
               if (post.author?.username != null) {
-                Navigator.push(context, FadeRoute(ProfileScreen(username: post.author!.username)));
+                Navigator.push(
+                  context,
+                  FadeRoute(ProfileScreen(username: post.author!.username)),
+                );
               }
             },
             child: Row(children: [
-              Avatar(url: post.author?.avatarUrl, size: 22),
+              Avatar(
+                url: post.author?.avatarUrl,
+                size: 22,
+                ring: post.author?.hasUnseenStory ?? false,
+                fallback: post.author?.username,
+              ),
               const SizedBox(width: 6),
               Flexible(
-                  child: Text('${post.author?.displayName ?? 'Unknown'}  ·  ${timeAgo(context, post.createdAt)}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700))),
+                child: Text(
+                  '${post.author?.displayName ?? 'Unknown'}  ·  ${timeAgo(context, post.createdAt)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                ),
+              ),
             ]),
           ),
           if (post.text.isNotEmpty)
             Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(post.text,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13.5, height: 1.3))),
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                post.text,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13.5, height: 1.3),
+              ),
+            ),
           if (post.media.isNotEmpty)
             Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: SizedBox(
-                        height: 120,
-                        width: double.infinity,
-                        child: (post.media.first.type == 'video' || post.media.first.type == 'gif')
-                            ? (post.media.first.thumbnail != null
-                                ? Stack(fit: StackFit.expand, children: [
-                                    CachedNetworkImage(
-                                        imageUrl: post.media.first.thumbnail!,
-                                        fit: BoxFit.cover,
-                                        errorWidget: (_, __, ___) => Container(color: p.card)),
-                                    const Center(
-                                        child: Icon(Icons.play_circle_fill_rounded,
-                                            color: Colors.white70, size: 40)),
-                                  ])
-                                : Container(
-                                    color: Colors.black,
-                                    child: const Center(
-                                        child: Icon(Icons.play_circle_fill_rounded,
-                                            color: Colors.white70, size: 40))))
-                            : CachedNetworkImage(
-                                imageUrl: post.media.first.thumbnail ?? post.media.first.url,
-                                fit: BoxFit.cover,
-                                errorWidget: (_, __, ___) => Container(color: p.card))))),
+              padding: const EdgeInsets.only(top: 8),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  height: 120,
+                  width: double.infinity,
+                  child: (post.media.first.type == 'video' ||
+                          post.media.first.type == 'gif')
+                      ? Stack(fit: StackFit.expand, children: [
+                          if (post.media.first.thumbnail != null)
+                            CachedFileImage(
+                              url: post.media.first.thumbnail!,
+                              fit: BoxFit.cover,
+                            )
+                          else
+                            Container(color: Colors.black),
+                          const Center(
+                            child: Icon(
+                              Icons.play_circle_fill_rounded,
+                              color: Colors.white70,
+                              size: 40,
+                            ),
+                          ),
+                        ])
+                      : CachedFileImage(
+                          url: post.media.first.thumbnail ?? post.media.first.url,
+                          fit: BoxFit.cover,
+                        ),
+                ),
+              ),
+            ),
         ]),
       ),
     );
@@ -3684,49 +5484,124 @@ class QuoteCard extends StatelessWidget {
 
 class AudioChip extends StatelessWidget {
   final MediaItem media;
+
   const AudioChip({super.key, required this.media});
+
+  Future<void> _play(BuildContext context) async {
+    final audio = AudioController.instance;
+    final fullUrl = _fullUrl(media.url);
+
+    if (audio.currentKey == media.url) {
+      if (audio.playing) {
+        await audio.pause();
+      } else {
+        await audio.resume();
+      }
+      return;
+    }
+
+    try {
+      final path = await FileCache.instance.downloadWithResume(
+        fullUrl,
+        headers: authHeaders(),
+      );
+
+      await audio.play(
+        path,
+        key: media.url,
+        title: media.title?.isNotEmpty == true ? media.title : media.originalName,
+        artist: media.artist,
+        duration: media.duration,
+      );
+    } catch (_) {
+      if (context.mounted) showSnack(context, 'Audio playback failed', error: true);
+    }
+  }
+
+  Future<void> _downloadAudio(BuildContext context) async {
+    try {
+      final status = await Permission.storage.request();
+      if (!status.isGranted && Platform.isAndroid) {
+        final s2 = await Permission.manageExternalStorage.request();
+        if (!s2.isGranted) {
+          if (context.mounted) {
+            showSnack(context, 'Storage permission required', error: true);
+          }
+          return;
+        }
+      }
+    } catch (_) {}
+
+    final fullUrl = _fullUrl(media.url);
+
+    try {
+      if (context.mounted) showSnack(context, 'Downloading...');
+
+      final path = await FileCache.instance.downloadWithResume(
+        fullUrl,
+        headers: authHeaders(),
+      );
+
+      if (context.mounted) showSnack(context, 'Download complete ✓');
+      OpenFile.open(path);
+    } catch (e) {
+      if (context.mounted) showSnack(context, 'Download failed', error: true);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final p = _p(context);
     final audio = context.watch<AudioController>();
     final cache = context.watch<FileCache>();
-    final isPlaying = audio.currentUrl == media.url && audio.playing;
+
+    final isPlaying = audio.currentKey == media.url && audio.playing;
+    final isCurrent = audio.currentKey == media.url;
+
     final title = media.title?.isNotEmpty == true
         ? media.title!
-        : (media.originalName?.isNotEmpty == true ? media.originalName! : 'Audio track');
-    final progress = audio.currentUrl == media.url && audio.currentDuration != null && audio.currentDuration! > 0
+        : (media.originalName?.isNotEmpty == true
+            ? media.originalName!
+            : 'Audio track');
+
+    final progress = isCurrent &&
+            audio.currentDuration != null &&
+            audio.currentDuration! > 0
         ? (audio.position / audio.currentDuration!).clamp(0.0, 1.0)
         : 0.0;
 
     final fullUrl = _fullUrl(media.url);
     final dlProgress = cache.getProgress(fullUrl);
-    final isDlActive = cache.isDownloading(fullUrl);
+    final isDlActive = cache.isDownloading(fullUrl) && !isCurrent;
 
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-          color: p.card, borderRadius: BorderRadius.circular(14), border: Border.all(color: p.border)),
+        color: p.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: p.border),
+      ),
       child: Column(children: [
         Row(children: [
           GestureDetector(
-            onTap: () {
-              if (isPlaying) {
-                audio.pause();
-              } else {
-                audio.play(media.url, title: title, artist: media.artist, duration: media.duration);
-              }
-            },
+            onTap: () => _play(context),
             child: Container(
               width: 44,
               height: 44,
               decoration: BoxDecoration(
                 gradient: p.brand,
                 shape: BoxShape.circle,
-                boxShadow: [BoxShadow(color: p.accent.withOpacity(.3), blurRadius: 8)],
+                boxShadow: [
+                  BoxShadow(color: p.accent.withOpacity(.3), blurRadius: 8)
+                ],
               ),
-              child: Icon(isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                  color: Colors.white, size: 24),
+              child: Icon(
+                isDlActive
+                    ? Icons.hourglass_top_rounded
+                    : (isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                color: Colors.white,
+                size: 24,
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -3734,23 +5609,29 @@ class AudioChip extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                ),
                 const SizedBox(height: 2),
                 Row(children: [
                   if (media.artist?.isNotEmpty == true)
                     Expanded(
-                      child: Text(media.artist!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 11, color: p.sub)),
+                      child: Text(
+                        media.artist!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 11, color: p.sub),
+                      ),
                     ),
                   if (media.duration != null) ...[
                     if (media.artist?.isNotEmpty == true) const SizedBox(width: 6),
-                    Text(formatDuration(media.duration),
-                        style: TextStyle(fontSize: 11, color: p.sub)),
+                    Text(
+                      formatDuration(media.duration),
+                      style: TextStyle(fontSize: 11, color: p.sub),
+                    ),
                   ],
                 ]),
               ],
@@ -3769,7 +5650,11 @@ class AudioChip extends StatelessWidget {
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, value: dlProgress, color: p.accent))
+                        strokeWidth: 2,
+                        value: dlProgress,
+                        color: p.accent,
+                      ),
+                    )
                   : Icon(Icons.download_rounded, color: p.accent, size: 18),
             ),
           ),
@@ -3780,14 +5665,19 @@ class AudioChip extends StatelessWidget {
             child: Row(children: [
               Expanded(
                 child: LinearProgressIndicator(
-                    value: dlProgress, color: p.accent, backgroundColor: p.card2),
+                  value: dlProgress,
+                  color: p.accent,
+                  backgroundColor: p.card2,
+                ),
               ),
               const SizedBox(width: 8),
-              Text('${(dlProgress * 100).toInt()}%',
-                  style: TextStyle(fontSize: 10, color: p.sub)),
+              Text(
+                '${(dlProgress * 100).toInt()}%',
+                style: TextStyle(fontSize: 10, color: p.sub),
+              ),
             ]),
           ),
-        if (audio.currentUrl == media.url) ...[
+        if (isCurrent) ...[
           const SizedBox(height: 8),
           SliderTheme(
             data: SliderTheme.of(context).copyWith(
@@ -3807,58 +5697,38 @@ class AudioChip extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Text(formatDuration(audio.position),
-                  style: TextStyle(fontSize: 10, color: p.sub)),
-              Text(formatDuration(audio.currentDuration),
-                  style: TextStyle(fontSize: 10, color: p.sub)),
+              Text(
+                formatDuration(audio.position),
+                style: TextStyle(fontSize: 10, color: p.sub),
+              ),
+              Text(
+                formatDuration(audio.currentDuration),
+                style: TextStyle(fontSize: 10, color: p.sub),
+              ),
             ]),
           ),
         ],
       ]),
     );
   }
-
-  Future<void> _downloadAudio(BuildContext context) async {
-    try {
-      final status = await Permission.storage.request();
-      if (!status.isGranted && Platform.isAndroid) {
-        final s2 = await Permission.manageExternalStorage.request();
-        if (!s2.isGranted) {
-          if (context.mounted) showSnack(context, 'Storage permission required', error: true);
-          return;
-        }
-      }
-    } catch (_) {}
-
-    final fullUrl = _fullUrl(media.url);
-    try {
-      showSnack(context, 'Downloading...');
-      final path = await FileCache.instance.downloadWithResume(
-        fullUrl,
-        headers: ApiClient.instance.token != null
-            ? {'Authorization': 'Bearer ${ApiClient.instance.token}'}
-            : null,
-      );
-      if (context.mounted) showSnack(context, 'Download complete ✓');
-      OpenFile.open(path);
-    } catch (e) {
-      if (context.mounted) showSnack(context, 'Download failed', error: true);
-    }
-  }
 }
 
-// ═══════════════════════════════ COMPOSE ══════════════════════════
-
+// ═══════════════════════════════════════════════════════════════
+// COMPOSE
+// ═══════════════════════════════════════════════════════════════
 class _PendingMedia {
   final String path;
   final String? name;
   final String mediaKind;
+
   String? id;
   String? url;
   String? thumbnail;
+
   bool uploading = true;
   bool error = false;
   double progress = 0;
+
   _PendingMedia(this.path, this.mediaKind, {this.name});
 }
 
@@ -3867,7 +5737,15 @@ class ComposeScreen extends StatefulWidget {
   final Post? quotedPost;
   final Post? editPost;
   final VoidCallback? onDone;
-  const ComposeScreen({super.key, this.parentPost, this.quotedPost, this.editPost, this.onDone});
+
+  const ComposeScreen({
+    super.key,
+    this.parentPost,
+    this.quotedPost,
+    this.editPost,
+    this.onDone,
+  });
+
   @override
   State<ComposeScreen> createState() => _ComposeScreenState();
 }
@@ -3876,15 +5754,23 @@ class _ComposeScreenState extends State<ComposeScreen> {
   final _api = ApiClient.instance;
   final _text = TextEditingController();
   final _picker = ImagePicker();
+
   final List<_PendingMedia> _media = [];
+
   bool _posting = false;
   static const int _limit = 500;
 
   @override
   void initState() {
     super.initState();
+
+    _text.addListener(() {
+      if (mounted) setState(() {});
+    });
+
     if (widget.editPost != null) {
       _text.text = widget.editPost!.text;
+
       for (final m in widget.editPost!.media) {
         _media.add(_PendingMedia('', m.type, name: m.originalName)
           ..id = m.id ?? m.url
@@ -3898,45 +5784,66 @@ class _ComposeScreenState extends State<ComposeScreen> {
 
   @override
   void dispose() {
+    _text.removeListener(() {});
     _text.dispose();
     super.dispose();
   }
 
   Future<void> _pickImage({bool camera = false}) async {
     final f = await _picker.pickImage(
-        source: camera ? ImageSource.camera : ImageSource.gallery, imageQuality: 85);
+      source: camera ? ImageSource.camera : ImageSource.gallery,
+      imageQuality: 85,
+    );
     if (f == null) return;
+
     _addAndUpload(f.path, 'image', name: f.name);
   }
 
   Future<void> _pickVideo({bool camera = false}) async {
     final f = await _picker.pickVideo(
-        source: camera ? ImageSource.camera : ImageSource.gallery, maxDuration: const Duration(minutes: 3));
+      source: camera ? ImageSource.camera : ImageSource.gallery,
+      maxDuration: const Duration(minutes: 3),
+    );
     if (f == null) return;
+
     _addAndUpload(f.path, 'video', name: f.name);
   }
 
   Future<void> _pickAudio() async {
     final result = await FilePicker.platform.pickFiles(type: FileType.audio);
     if (result == null || result.files.isEmpty) return;
+
     final file = result.files.first;
     if (file.path == null) return;
+
     _addAndUpload(file.path!, 'audio', name: file.name);
   }
 
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(type: FileType.any);
     if (result == null || result.files.isEmpty) return;
+
     final file = result.files.first;
     if (file.path == null) return;
-    final mime = lookupMimeType(file.path!) ?? '';
-    final kind = mime.startsWith('video/')
-        ? 'video'
-        : mime.startsWith('audio/')
-            ? 'audio'
-            : mime.startsWith('image/')
-                ? 'image'
-                : 'file';
+
+    final name = file.name.toLowerCase();
+
+    String kind = 'file';
+    if (name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.mkv')) {
+      kind = 'video';
+    } else if (name.endsWith('.mp3') ||
+        name.endsWith('.wav') ||
+        name.endsWith('.ogg') ||
+        name.endsWith('.m4a')) {
+      kind = 'audio';
+    } else if (name.endsWith('.jpg') ||
+        name.endsWith('.jpeg') ||
+        name.endsWith('.png') ||
+        name.endsWith('.webp') ||
+        name.endsWith('.gif')) {
+      kind = 'image';
+    }
+
     _addAndUpload(file.path!, kind, name: file.name);
   }
 
@@ -3948,17 +5855,24 @@ class _ComposeScreenState extends State<ComposeScreen> {
 
   Future<void> _upload(_PendingMedia pm) async {
     try {
-      final res = await _api.uploadMedia(pm.path, onProgress: (v) {
-        if (mounted) setState(() => pm.progress = v);
-      });
+      final res = await _api.uploadMedia(
+        pm.path,
+        onProgress: (v) {
+          if (mounted) setState(() => pm.progress = v);
+        },
+      );
+
       String id = '';
       String? url, thumb;
+
       if (res is Map) {
         id = jstr(jpick(res, ['id', 'media_id']));
         url = resolveMedia(jpick(res, ['url', 'file_url']));
         thumb = resolveMedia(jpick(res, ['thumbnail', 'thumb']));
       }
+
       if (!mounted) return;
+
       setState(() {
         pm.id = id.isNotEmpty ? id : null;
         pm.url = url;
@@ -3967,6 +5881,7 @@ class _ComposeScreenState extends State<ComposeScreen> {
         pm.progress = 1.0;
         pm.error = id.isEmpty;
       });
+
       if (id.isEmpty && mounted) {
         showSnack(context, 'Upload failed', error: true);
       }
@@ -3983,34 +5898,48 @@ class _ComposeScreenState extends State<ComposeScreen> {
 
   Future<void> _submit() async {
     if (_posting) return;
+
     final text = _text.text.trim();
+
     if (_media.any((m) => m.uploading)) {
       if (mounted) showSnack(context, 'Wait for uploads to finish…');
       return;
     }
+
     final validMedia = _media.where((m) => !m.error && m.id != null).toList();
+
     if (text.isEmpty && validMedia.isEmpty) {
       if (mounted) showSnack(context, 'Write something or add media', error: true);
       return;
     }
+
     setState(() => _posting = true);
+
     try {
       final ids = validMedia.map((m) => m.id!).toList();
+
       final body = <String, dynamic>{
         'text': text,
         if (ids.isNotEmpty) 'media_ids': ids,
         if (widget.parentPost?.id != null) 'parent_id': widget.parentPost!.id,
-        if (widget.quotedPost?.id != null) 'quoted_post_id': widget.quotedPost!.id,
+        if (widget.quotedPost?.id != null)
+          'quoted_post_id': widget.quotedPost!.id,
       };
+
       if (widget.editPost != null) {
         await _api.put('/api/posts/${widget.editPost!.id}', body: body);
       } else {
         await _api.post('/api/posts', body: body);
       }
+
       context.read<AppState>().pokeFeed();
       widget.onDone?.call();
+
       if (mounted) {
-        showSnack(context, widget.editPost != null ? 'Post updated ✨' : 'Posted! 🎉');
+        showSnack(
+          context,
+          widget.editPost != null ? 'Post updated ✨' : 'Posted! 🎉',
+        );
         Navigator.pop(context, true);
       }
     } catch (e) {
@@ -4031,8 +5960,10 @@ class _ComposeScreenState extends State<ComposeScreen> {
   @override
   Widget build(BuildContext context) {
     _applyBars(context);
+
     final p = _p(context);
     final me = context.watch<AppState>().me;
+
     final remaining = _limit - _text.text.length;
     final hasText = _text.text.trim().isNotEmpty;
     final validMediaCount = _media.where((m) => !m.error && m.id != null).length;
@@ -4042,204 +5973,294 @@ class _ComposeScreenState extends State<ComposeScreen> {
       backgroundColor: p.bg,
       appBar: AppBar(
         leading: IconButton(
-            icon: Icon(Icons.close_rounded, color: p.sub), onPressed: () => Navigator.pop(context)),
+          icon: Icon(Icons.close_rounded, color: p.sub),
+          onPressed: () => Navigator.pop(context),
+        ),
         actions: [
           Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: GradientButton(
-                text: widget.editPost != null ? 'Save' : 'Post',
-                width: 96,
-                height: 40,
-                loading: _posting,
-                onPressed: canPost ? _submit : null,
-              )),
+            padding: const EdgeInsets.only(right: 12),
+            child: GradientButton(
+              text: widget.editPost != null ? 'Save' : 'Post',
+              width: 96,
+              height: 40,
+              loading: _posting,
+              onPressed: canPost ? _submit : null,
+            ),
+          ),
         ],
       ),
       body: SafeArea(
-          child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                if (widget.parentPost != null)
-                  _banner(Icons.reply_rounded,
-                      'Replying to @${widget.parentPost!.author?.username ?? ''}'),
-                if (widget.quotedPost != null) _banner(Icons.format_quote_rounded, 'Quote post'),
-                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Avatar(url: me?.avatarUrl, size: 44, ring: true),
-                  const SizedBox(width: 12),
-                  Expanded(
-                      child: TextField(
-                    controller: _text,
-                    autofocus: true,
-                    maxLines: null,
-                    minLines: 6,
-                    style: TextStyle(fontSize: 17, height: 1.4, color: p.text),
-                    decoration: InputDecoration(
-                        hintText: widget.parentPost != null
-                            ? 'Post your reply…'
-                            : "What's happening?",
-                        hintStyle: TextStyle(color: p.sub),
-                        border: InputBorder.none),
-                  )),
-                ]),
-                if (widget.quotedPost != null) QuoteCard(post: widget.quotedPost!),
-                if (_media.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  SizedBox(
-                      height: 130,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: _media.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 8),
-                        itemBuilder: (context, i) {
-                          final m = _media[i];
-                          return Stack(children: [
-                            ClipRRect(
-                                borderRadius: BorderRadius.circular(14),
-                                child: SizedBox(
-                                    width: 110,
-                                    height: 130,
-                                    child: m.url != null && m.url!.isNotEmpty
-                                        ? (m.mediaKind == 'audio'
-                                            ? Container(
-                                                color: p.card,
-                                                child: Column(
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    mainAxisAlignment: MainAxisAlignment.center,
-                                                    children: [
-                                                        Icon(Icons.audiotrack_rounded,
-                                                            color: p.accent, size: 34),
-                                                        const SizedBox(height: 4),
-                                                        Padding(
-                                                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                                                            child: Text(m.name ?? 'Audio',
-                                                                style: TextStyle(fontSize: 10, color: p.sub),
-                                                                maxLines: 1,
-                                                                overflow: TextOverflow.ellipsis,
-                                                                textAlign: TextAlign.center)),
-                                                      ]))
-                                            : (m.thumbnail != null && m.thumbnail!.isNotEmpty
-                                                ? CachedNetworkImage(
-                                                    imageUrl: m.thumbnail!,
-                                                    fit: BoxFit.cover,
-                                                    errorWidget: (_, __, ___) => Container(
-                                                        color: p.card,
-                                                        child: Icon(_iconFor(m.mediaKind),
-                                                            color: p.sub, size: 34)))
-                                                : (m.mediaKind == 'image' && m.path.isNotEmpty
-                                                    ? Image.file(File(m.path), fit: BoxFit.cover)
-                                                    : Container(
-                                                        color: p.card,
-                                                        child: Center(
-                                                            child: Icon(_iconFor(m.mediaKind),
-                                                                color: p.sub, size: 34))))))
-                                        : Container(
-                                            color: p.card,
-                                            child: Center(
-                                                child: Icon(_iconFor(m.mediaKind), color: p.sub, size: 34))))),
-                            if (m.uploading)
-                              Positioned.fill(
-                                  child: Container(
-                                      color: Colors.black.withOpacity(.55),
-                                      child: Center(
-                                          child: Column(mainAxisSize: MainAxisSize.min, children: [
-                                        SizedBox(
-                                            width: 30,
-                                            height: 30,
-                                            child: CircularProgressIndicator(
-                                                strokeWidth: 2.4, value: m.progress, color: p.accent)),
-                                        const SizedBox(height: 4),
-                                        Text('${(m.progress * 100).toInt()}%',
-                                            style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w700)),
-                                      ])))),
-                            if (m.error)
-                              Positioned.fill(
-                                  child: GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    m.uploading = true;
-                                    m.error = false;
-                                    m.progress = 0;
-                                  });
-                                  _upload(m);
-                                },
-                                child: Container(
-                                    color: Colors.black.withOpacity(.6),
-                                    child: const Center(
-                                        child: Icon(Icons.refresh_rounded, color: Colors.red, size: 28))),
-                              )),
-                            Positioned(
-                                top: 4,
-                                right: 4,
-                                child: GestureDetector(
-                                    onTap: () => setState(() => _media.removeAt(i)),
-                                    child: Container(
-                                        padding: const EdgeInsets.all(3),
-                                        decoration: BoxDecoration(
-                                            color: Colors.black.withOpacity(.65), shape: BoxShape.circle),
-                                        child: const Icon(Icons.close_rounded, size: 14, color: Colors.white)))),
-                          ]);
-                        },
-                      )),
-                ],
-              ]))),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (widget.parentPost != null)
+              _banner(
+                Icons.reply_rounded,
+                'Replying to @${widget.parentPost!.author?.username ?? ''}',
+              ),
+            if (widget.quotedPost != null)
+              _banner(Icons.format_quote_rounded, 'Quote post'),
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Avatar(
+                url: me?.avatarUrl,
+                size: 44,
+                ring: me?.hasUnseenStory ?? false,
+                fallback: me?.username,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _text,
+                  autofocus: true,
+                  maxLines: null,
+                  minLines: 6,
+                  style: TextStyle(fontSize: 17, height: 1.4, color: p.text),
+                  decoration: InputDecoration(
+                    hintText: widget.parentPost != null
+                        ? 'Post your reply…'
+                        : "What's happening?",
+                    hintStyle: TextStyle(color: p.sub),
+                    border: InputBorder.none,
+                  ),
+                ),
+              ),
+            ]),
+            if (widget.quotedPost != null) QuoteCard(post: widget.quotedPost!),
+            if (_media.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 130,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _media.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, i) {
+                    final m = _media[i];
+
+                    return Stack(children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: SizedBox(
+                          width: 110,
+                          height: 130,
+                          child: m.url != null && m.url!.isNotEmpty
+                              ? (m.mediaKind == 'audio'
+                                  ? Container(
+                                      color: p.card,
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.audiotrack_rounded,
+                                              color: p.accent, size: 34),
+                                          const SizedBox(height: 4),
+                                          Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 6,
+                                            ),
+                                            child: Text(
+                                              m.name ?? 'Audio',
+                                              style: TextStyle(fontSize: 10, color: p.sub),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  : (m.thumbnail != null && m.thumbnail!.isNotEmpty
+                                      ? CachedFileImage(
+                                          url: m.thumbnail!,
+                                          fit: BoxFit.cover,
+                                        )
+                                      : (m.mediaKind == 'image' && m.path.isNotEmpty
+                                          ? Image.file(File(m.path), fit: BoxFit.cover)
+                                          : Container(
+                                              color: p.card,
+                                              child: Center(
+                                                child: Icon(
+                                                  _iconFor(m.mediaKind),
+                                                  color: p.sub,
+                                                  size: 34,
+                                                ),
+                                              ),
+                                            ))))
+                              : Container(
+                                  color: p.card,
+                                  child: Center(
+                                    child: Icon(
+                                      _iconFor(m.mediaKind),
+                                      color: p.sub,
+                                      size: 34,
+                                    ),
+                                  ),
+                                ),
+                        ),
+                      ),
+                      if (m.uploading)
+                        Positioned.fill(
+                          child: Container(
+                            color: Colors.black.withOpacity(.55),
+                            child: Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  SizedBox(
+                                    width: 30,
+                                    height: 30,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.4,
+                                      value: m.progress,
+                                      color: p.accent,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${(m.progress * 100).toInt()}%',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      if (m.error)
+                        Positioned.fill(
+                          child: GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                m.uploading = true;
+                                m.error = false;
+                                m.progress = 0;
+                              });
+                              _upload(m);
+                            },
+                            child: Container(
+                              color: Colors.black.withOpacity(.6),
+                              child: const Center(
+                                child: Icon(Icons.refresh_rounded, color: Colors.red, size: 28),
+                              ),
+                            ),
+                          ),
+                        ),
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: GestureDetector(
+                          onTap: () => setState(() => _media.removeAt(i)),
+                          child: Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(.65),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close_rounded,
+                              size: 14,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ]);
+                  },
+                ),
+              ),
+            ],
+          ]),
+        ),
+      ),
       bottomNavigationBar: SafeArea(
-          child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
-        decoration: BoxDecoration(border: Border(top: BorderSide(color: p.border))),
-        child: Row(children: [
-          IconButton(
-              onPressed: _pickImage, icon: Icon(Icons.photo_library_rounded, color: p.accent, size: 24)),
-          IconButton(
-              onPressed: () => _pickImage(camera: true),
-              icon: Icon(Icons.photo_camera_rounded, color: p.accent, size: 24)),
-          IconButton(
-              onPressed: _pickVideo, icon: Icon(Icons.videocam_rounded, color: p.accent, size: 24)),
-          IconButton(
-              onPressed: _pickAudio, icon: Icon(Icons.audiotrack_rounded, color: p.accent, size: 24)),
-          IconButton(
-              onPressed: _pickFile, icon: Icon(Icons.attach_file_rounded, color: p.accent, size: 24)),
-          const Spacer(),
-          AnimatedOpacity(
-            opacity: _text.text.isEmpty ? 0 : 1,
-            duration: const Duration(milliseconds: 200),
-            child: Text('$remaining',
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: remaining < 0 ? p.red : remaining < 30 ? p.gold : p.sub)),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: p.border)),
           ),
-        ]),
-      )),
+          child: Row(children: [
+            IconButton(
+              onPressed: _pickImage,
+              icon: Icon(Icons.photo_library_rounded, color: p.accent, size: 24),
+            ),
+            IconButton(
+              onPressed: () => _pickImage(camera: true),
+              icon: Icon(Icons.photo_camera_rounded, color: p.accent, size: 24),
+            ),
+            IconButton(
+              onPressed: _pickVideo,
+              icon: Icon(Icons.videocam_rounded, color: p.accent, size: 24),
+            ),
+            IconButton(
+              onPressed: _pickAudio,
+              icon: Icon(Icons.audiotrack_rounded, color: p.accent, size: 24),
+            ),
+            IconButton(
+              onPressed: _pickFile,
+              icon: Icon(Icons.attach_file_rounded, color: p.accent, size: 24),
+            ),
+            const Spacer(),
+            AnimatedOpacity(
+              opacity: _text.text.isEmpty ? 0 : 1,
+              duration: const Duration(milliseconds: 200),
+              child: Text(
+                '$remaining',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: remaining < 0
+                      ? p.red
+                      : remaining < 30
+                          ? p.gold
+                          : p.sub,
+                ),
+              ),
+            ),
+          ]),
+        ),
+      ),
     );
   }
 
   Widget _banner(IconData icon, String label) {
     final p = _p(context);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-          color: p.accent.withOpacity(.1),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: p.accent.withOpacity(.3))),
+        color: p.accent.withOpacity(.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: p.accent.withOpacity(.3)),
+      ),
       child: Row(children: [
         Icon(icon, size: 18, color: p.accent),
         const SizedBox(width: 8),
-        Text(label, style: TextStyle(color: p.accent, fontWeight: FontWeight.w600, fontSize: 13)),
+        Text(
+          label,
+          style: TextStyle(
+            color: p.accent,
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
+        ),
       ]),
     );
   }
 }
 
-// ═══════════════════════════════ POST DETAIL ═════════════════════
-
+// ═══════════════════════════════════════════════════════════════
+// POST DETAIL
+// ═══════════════════════════════════════════════════════════════
 class PostDetailScreen extends StatefulWidget {
   final int? postId;
   final Post? initial;
+
   const PostDetailScreen({super.key, this.postId, this.initial});
+
   @override
   State<PostDetailScreen> createState() => _PostDetailScreenState();
 }
@@ -4247,8 +6268,10 @@ class PostDetailScreen extends StatefulWidget {
 class _PostDetailScreenState extends State<PostDetailScreen> {
   final _api = ApiClient.instance;
   final _reply = TextEditingController();
+
   Post? _post;
   List<Post> _replies = [];
+
   bool _loading = true;
   bool _sending = false;
 
@@ -4262,17 +6285,23 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   Future<void> _load() async {
     try {
       final results = await Future.wait([
-        if (widget.postId != null) _api.get('/api/posts/${widget.postId}').catchError((_) => null),
         if (widget.postId != null)
-          _api.get('/api/posts/${widget.postId}/replies', query: {'limit': '50'}).catchError((_) => null),
+          _api.get('/api/posts/${widget.postId}').catchError((_) => null),
+        if (widget.postId != null)
+          _api
+              .get('/api/posts/${widget.postId}/replies', query: {'limit': '50'})
+              .catchError((_) => null),
       ]);
+
       if (!mounted) return;
+
       setState(() {
         if (results[0] is Map) {
           try {
             _post = Post.fromJson(Map<String, dynamic>.from(results[0]));
           } catch (_) {}
         }
+
         _replies = extractItems(results[1]).map(Post.fromJson).toList();
         _loading = false;
       });
@@ -4283,16 +6312,23 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   Future<void> _sendReply() async {
     if (_sending || _reply.text.trim().isEmpty) return;
+
     setState(() => _sending = true);
+
     try {
       await _api.post('/api/posts', body: {
         'text': _reply.text.trim(),
         'parent_id': _post?.id ?? widget.postId,
       });
+
       _reply.clear();
       context.read<AppState>().pokeFeed();
+
       await _load();
-      if (mounted) setState(() => _post?.replyCount = (_post?.replyCount ?? 0) + 1);
+
+      if (mounted) {
+        setState(() => _post?.replyCount = (_post?.replyCount ?? 0) + 1);
+      }
     } on ApiException catch (e) {
       if (mounted) showSnack(context, e.message, error: true);
     } finally {
@@ -4309,52 +6345,71 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   @override
   Widget build(BuildContext context) {
     _applyBars(context);
+
     final p = _p(context);
     final me = context.watch<AppState>().me;
+
     return Scaffold(
       backgroundColor: p.bg,
       appBar: AppBar(
-        title: const Text('Post',
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
-        leading: IconButton(icon: const Icon(Icons.arrow_back_rounded), onPressed: () => Navigator.pop(context)),
+        title: const Text('Post', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: _loading && _post == null
           ? const Center(child: CircularProgressIndicator())
           : Column(children: [
               Expanded(
-                  child: ListView(padding: const EdgeInsets.only(bottom: 20), children: [
-                if (_post != null)
-                  PostCard(
-                      post: _post!,
-                      detail: true,
-                      onChanged: () => setState(() {}),
-                      onDeleted: () => Navigator.pop(context)),
-                if (_loading)
-                  const Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Center(child: CircularProgressIndicator(strokeWidth: 2.4))),
-                if (!_loading && _replies.isEmpty)
-                  const Padding(
-                      padding: EdgeInsets.only(top: 30),
-                      child: EmptyState(
+                child: ListView(
+                  padding: const EdgeInsets.only(bottom: 20),
+                  children: [
+                    if (_post != null)
+                      PostCard(
+                        post: _post!,
+                        detail: true,
+                        onChanged: () => setState(() {}),
+                        onDeleted: () => Navigator.pop(context),
+                      ),
+                    if (_loading)
+                      const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Center(child: CircularProgressIndicator(strokeWidth: 2.4)),
+                      ),
+                    if (!_loading && _replies.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 30),
+                        child: EmptyState(
                           icon: Icons.chat_bubble_outline_rounded,
                           title: 'No replies yet',
-                          subtitle: 'Start the conversation!')),
-                ..._replies.map((r) => Column(children: [
-                      Divider(height: 1, thickness: 1, color: p.border.withOpacity(.4)),
-                      SlideFadeIn(child: PostCard(post: r)),
-                    ])),
-              ])),
+                          subtitle: 'Start the conversation!',
+                        ),
+                      ),
+                    ..._replies.map((r) => Column(children: [
+                          Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: p.border.withOpacity(.4),
+                          ),
+                          SlideFadeIn(child: PostCard(post: r)),
+                        ])),
+                  ],
+                ),
+              ),
               SafeArea(
-                  top: false,
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
-                    decoration: BoxDecoration(color: p.surface, border: Border(top: BorderSide(color: p.border))),
-                    child: Row(children: [
-                      Avatar(url: me?.avatarUrl, size: 36),
-                      const SizedBox(width: 10),
-                      Expanded(
-                          child: TextField(
+                top: false,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
+                  decoration: BoxDecoration(
+                    color: p.surface,
+                    border: Border(top: BorderSide(color: p.border)),
+                  ),
+                  child: Row(children: [
+                    Avatar(url: me?.avatarUrl, size: 36, fallback: me?.username),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextField(
                         controller: _reply,
                         maxLines: 4,
                         minLines: 1,
@@ -4363,37 +6418,48 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                           hintText: 'Post your reply…',
                           hintStyle: TextStyle(color: p.sub),
                           isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 11,
+                          ),
                           filled: true,
                           fillColor: p.card,
                           border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(22), borderSide: BorderSide.none),
+                            borderRadius: BorderRadius.circular(22),
+                            borderSide: BorderSide.none,
+                          ),
                         ),
-                      )),
-                      const SizedBox(width: 8),
-                      GradientButton(
-                          text: 'Reply',
-                          width: 84,
-                          height: 42,
-                          loading: _sending,
-                          onPressed: _sending ? null : _sendReply),
-                    ]),
-                  )),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GradientButton(
+                      text: 'Reply',
+                      width: 84,
+                      height: 42,
+                      loading: _sending,
+                      onPressed: _sending ? null : _sendReply,
+                    ),
+                  ]),
+                ),
+              ),
             ]),
     );
   }
 }
 
-// ═══════════════════════════════ BOOKMARKS ═══════════════════════
-
+// ═══════════════════════════════════════════════════════════════
+// BOOKMARKS
+// ═══════════════════════════════════════════════════════════════
 class BookmarksScreen extends StatefulWidget {
   const BookmarksScreen({super.key});
+
   @override
   State<BookmarksScreen> createState() => _BookmarksScreenState();
 }
 
 class _BookmarksScreenState extends State<BookmarksScreen> {
   final _api = ApiClient.instance;
+
   List<Post> _posts = [];
   bool _loading = true;
   String? _error;
@@ -4409,17 +6475,29 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
       _loading = true;
       _error = null;
     });
+
     try {
       final res = await _api.get('/api/bookmarks', query: {'limit': '50'});
       if (!mounted) return;
+
       setState(() {
         _posts = extractItems(res).map(Post.fromJson).toList();
         _loading = false;
       });
     } on ApiException catch (e) {
-      if (mounted) setState(() { _loading = false; _error = e.message; });
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = e.message;
+        });
+      }
     } catch (_) {
-      if (mounted) setState(() { _loading = false; _error = 'Could not load.'; });
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Could not load.';
+        });
+      }
     }
   }
 
@@ -4427,12 +6505,15 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
   Widget build(BuildContext context) {
     _applyBars(context);
     final p = _p(context);
+
     return Scaffold(
       backgroundColor: p.bg,
       appBar: AppBar(
-        title: const Text('Bookmarks',
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
-        leading: IconButton(icon: const Icon(Icons.arrow_back_rounded), onPressed: () => Navigator.pop(context)),
+        title: const Text('Bookmarks', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: _loading
           ? ListView(children: const [ShimmerPost(), ShimmerPost()])
@@ -4442,14 +6523,18 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                   ? const EmptyState(
                       icon: Icons.bookmark_outline_rounded,
                       title: 'No bookmarks',
-                      subtitle: 'Save posts to read later')
+                      subtitle: 'Save posts to read later',
+                    )
                   : RefreshIndicator(
                       onRefresh: _load,
                       color: p.accent,
                       child: ListView.separated(
                         itemCount: _posts.length,
-                        separatorBuilder: (_, __) =>
-                            Divider(height: 1, thickness: 1, color: p.border.withOpacity(.4)),
+                        separatorBuilder: (_, __) => Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: p.border.withOpacity(.4),
+                        ),
                         itemBuilder: (context, i) {
                           return PostCard(
                             post: _posts[i],
@@ -4463,10 +6548,12 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
   }
 }
 
-// ═══════════════════════════════ SHORTS ══════════════════════════
-
+// ═══════════════════════════════════════════════════════════════
+// SHORTS
+// ═══════════════════════════════════════════════════════════════
 class ShortsScreen extends StatefulWidget {
   const ShortsScreen({super.key});
+
   @override
   State<ShortsScreen> createState() => _ShortsScreenState();
 }
@@ -4474,8 +6561,10 @@ class ShortsScreen extends StatefulWidget {
 class _ShortsScreenState extends State<ShortsScreen> {
   final _api = ApiClient.instance;
   final _page = PageController();
+
   List<Post> _posts = [];
   int _current = 0;
+
   bool _loading = true;
   bool _loadingMore = false;
   String? _error;
@@ -4483,7 +6572,7 @@ class _ShortsScreenState extends State<ShortsScreen> {
   @override
   void initState() {
     super.initState();
-    _applyBlackBars();
+    _applyBars(context);
     _load();
   }
 
@@ -4492,10 +6581,16 @@ class _ShortsScreenState extends State<ShortsScreen> {
       _loading = true;
       _error = null;
     });
+
     try {
       final res = await _api.get('/api/shorts', query: {'limit': '20'});
-      final items = extractItems(res).map(Post.fromJson).where((x) => x.media.isNotEmpty).toList();
+      final items = extractItems(res)
+          .map(Post.fromJson)
+          .where((x) => x.media.isNotEmpty)
+          .toList();
+
       if (!mounted) return;
+
       setState(() {
         _posts = items;
         _loading = false;
@@ -4520,12 +6615,21 @@ class _ShortsScreenState extends State<ShortsScreen> {
   Future<void> _loadMore() async {
     if (_loadingMore) return;
     _loadingMore = true;
+
     try {
-      final res =
-          await _api.get('/api/shorts', query: {'limit': '20', 'offset': '${_posts.length}'});
-      final items = extractItems(res).map(Post.fromJson).where((x) => x.media.isNotEmpty).toList();
+      final res = await _api.get(
+        '/api/shorts',
+        query: {'limit': '20', 'offset': '${_posts.length}'},
+      );
+
+      final items = extractItems(res)
+          .map(Post.fromJson)
+          .where((x) => x.media.isNotEmpty)
+          .toList();
+
       if (mounted) setState(() => _posts.addAll(items));
     } catch (_) {}
+
     _loadingMore = false;
   }
 
@@ -4537,46 +6641,64 @@ class _ShortsScreenState extends State<ShortsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    _applyBlackBars();
+    _applyBars(context);
+
     return Stack(fit: StackFit.expand, children: [
       Container(
         padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
         decoration: const BoxDecoration(
-            color: Colors.black,
-            border: Border(bottom: BorderSide(color: Colors.black12))),
+          color: Colors.black,
+          border: Border(bottom: BorderSide(color: Colors.black12)),
+        ),
         child: Row(children: [
           ShaderMask(
-              shaderCallback: (b) => Pal(isDark: true).reel.createShader(Offset.zero & b.size),
-              child: const Text('Shorts',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white))),
+            shaderCallback: (b) =>
+                Pal(isDark: true).reel.createShader(Offset.zero & b.size),
+            child: const Text(
+              'Shorts',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+              ),
+            ),
+          ),
           const Spacer(),
-          IconButton(icon: const Icon(Icons.refresh_rounded, color: Colors.white54), onPressed: _load),
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white54),
+            onPressed: _load,
+          ),
         ]),
       ),
       Positioned(
-          top: 55,
-          left: 0,
-          right: 0,
-          bottom: 90,
-          child: _loading
-              ? const Center(child: CircularProgressIndicator(color: Colors.white))
-              : _error != null
-                  ? ErrorState(message: _error!, onRetry: _load)
-                  : _posts.isEmpty
-                      ? const EmptyState(
-                          icon: Icons.movie_creation_outlined,
-                          title: 'No shorts yet',
-                          subtitle: 'Check back soon!')
-                      : PageView.builder(
-                          controller: _page,
-                          scrollDirection: Axis.vertical,
-                          itemCount: _posts.length,
-                          onPageChanged: (i) {
-                            setState(() => _current = i);
-                            if (i >= _posts.length - 2) _loadMore();
-                          },
-                          itemBuilder: (context, i) => ReelItem(post: _posts[i], active: i == _current),
-                        )),
+        top: 55,
+        left: 0,
+        right: 0,
+        bottom: 90,
+        child: _loading
+            ? const Center(child: CircularProgressIndicator(color: Colors.white))
+            : _error != null
+                ? ErrorState(message: _error!, onRetry: _load)
+                : _posts.isEmpty
+                    ? const EmptyState(
+                        icon: Icons.movie_creation_outlined,
+                        title: 'No shorts yet',
+                        subtitle: 'Check back soon!',
+                      )
+                    : PageView.builder(
+                        controller: _page,
+                        scrollDirection: Axis.vertical,
+                        itemCount: _posts.length,
+                        onPageChanged: (i) {
+                          setState(() => _current = i);
+                          if (i >= _posts.length - 2) _loadMore();
+                        },
+                        itemBuilder: (context, i) => ReelItem(
+                          post: _posts[i],
+                          active: i == _current,
+                        ),
+                      ),
+      ),
     ]);
   }
 }
@@ -4584,36 +6706,53 @@ class _ShortsScreenState extends State<ShortsScreen> {
 class ReelItem extends StatefulWidget {
   final Post post;
   final bool active;
+
   const ReelItem({super.key, required this.post, required this.active});
+
   @override
   State<ReelItem> createState() => _ReelItemState();
 }
 
 class _ReelItemState extends State<ReelItem> with TickerProviderStateMixin {
   VideoPlayerController? _vc;
+
   bool _videoError = false;
   bool _muted = false;
   bool _holding = false;
   bool _cachingVideo = false;
   double _cacheProgress = 0;
+
   late final AnimationController _disc;
   late final AnimationController _heartAnim;
+
   bool get _isVideo =>
-      widget.post.media.first.type == 'video' || widget.post.media.first.type == 'gif';
+      widget.post.media.first.type == 'video' ||
+      widget.post.media.first.type == 'gif';
 
   @override
   void initState() {
     super.initState();
+
     _disc = AnimationController(vsync: this, duration: const Duration(seconds: 5));
-    _heartAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 750));
+    _heartAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 750),
+    );
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+
     final currentTab = context.read<AppState>().currentTab.value;
     final inReelsTab = currentTab == 2;
-    if (widget.active && inReelsTab && _isVideo && _vc == null && !_videoError && !_cachingVideo) {
+
+    if (widget.active &&
+        inReelsTab &&
+        _isVideo &&
+        _vc == null &&
+        !_videoError &&
+        !_cachingVideo) {
       _initVideo();
     }
   }
@@ -4630,9 +6769,7 @@ class _ReelItemState extends State<ReelItem> with TickerProviderStateMixin {
         onProgress: (v) {
           if (mounted) setState(() => _cacheProgress = v);
         },
-        headers: ApiClient.instance.token != null
-            ? {'Authorization': 'Bearer ${ApiClient.instance.token}'}
-            : null,
+        headers: authHeaders(),
       );
 
       if (!mounted) return;
@@ -4641,9 +6778,12 @@ class _ReelItemState extends State<ReelItem> with TickerProviderStateMixin {
       if (await file.exists()) {
         final c = VideoPlayerController.file(file);
         _vc = c;
+
         await c.initialize();
         c.setLooping(true);
+
         AudioController.instance.muteTemporarily();
+
         if (mounted && widget.active) {
           c.play();
           _disc.repeat();
@@ -4651,26 +6791,33 @@ class _ReelItemState extends State<ReelItem> with TickerProviderStateMixin {
       } else {
         final c = VideoPlayerController.networkUrl(Uri.parse(fullUrl));
         _vc = c;
+
         await c.initialize();
         c.setLooping(true);
+
         AudioController.instance.muteTemporarily();
+
         if (mounted && widget.active) {
           c.play();
           _disc.repeat();
         }
       }
+
       if (mounted) setState(() => _cachingVideo = false);
     } catch (_) {
-      if (mounted) setState(() {
-        _videoError = true;
-        _cachingVideo = false;
-      });
+      if (mounted) {
+        setState(() {
+          _videoError = true;
+          _cachingVideo = false;
+        });
+      }
     }
   }
 
   @override
   void didUpdateWidget(covariant ReelItem old) {
     super.didUpdateWidget(old);
+
     final currentTab = context.read<AppState>().currentTab.value;
     final inReelsTab = currentTab == 2;
 
@@ -4705,7 +6852,10 @@ class _ReelItemState extends State<ReelItem> with TickerProviderStateMixin {
       widget.post.liked = !widget.post.liked;
       widget.post.likeCount += widget.post.liked ? 1 : -1;
     });
-    ApiClient.instance.post('/api/posts/${widget.post.id}/like').catchError((_) {});
+
+    ApiClient.instance
+        .post('/api/posts/${widget.post.id}/like')
+        .catchError((_) {});
   }
 
   void _toggleRetweet() {
@@ -4713,17 +6863,24 @@ class _ReelItemState extends State<ReelItem> with TickerProviderStateMixin {
       widget.post.retweeted = !widget.post.retweeted;
       widget.post.retweetCount += widget.post.retweeted ? 1 : -1;
     });
-    ApiClient.instance.post('/api/posts/${widget.post.id}/retweet').catchError((_) {});
+
+    ApiClient.instance
+        .post('/api/posts/${widget.post.id}/retweet')
+        .catchError((_) {});
   }
 
   void _toggleBookmark() {
     setState(() => widget.post.bookmarked = !widget.post.bookmarked);
-    ApiClient.instance.post('/api/posts/${widget.post.id}/bookmark').catchError((_) {});
+
+    ApiClient.instance
+        .post('/api/posts/${widget.post.id}/bookmark')
+        .catchError((_) {});
   }
 
   Future<void> _downloadReel() async {
     final m = widget.post.media.first;
     if (m.url.isEmpty) return;
+
     try {
       final status = await Permission.storage.request();
       if (!status.isGranted && Platform.isAndroid) {
@@ -4736,14 +6893,15 @@ class _ReelItemState extends State<ReelItem> with TickerProviderStateMixin {
     } catch (_) {}
 
     final fullUrl = _fullUrl(m.url);
+
     try {
       showSnack(context, 'Downloading...');
+
       final path = await FileCache.instance.downloadWithResume(
         fullUrl,
-        headers: ApiClient.instance.token != null
-            ? {'Authorization': 'Bearer ${ApiClient.instance.token}'}
-            : null,
+        headers: authHeaders(),
       );
+
       if (mounted) {
         showSnack(context, 'Download complete ✓');
         OpenFile.open(path);
@@ -4762,6 +6920,7 @@ class _ReelItemState extends State<ReelItem> with TickerProviderStateMixin {
 
   void _onLongPressStart(LongPressStartDetails details) {
     setState(() => _holding = true);
+
     if (_vc != null && _vc!.value.isPlaying) {
       _vc!.pause();
       _disc.stop();
@@ -4770,6 +6929,7 @@ class _ReelItemState extends State<ReelItem> with TickerProviderStateMixin {
 
   void _onLongPressEnd(LongPressEndDetails details) {
     setState(() => _holding = false);
+
     if (_vc != null && !_vc!.value.isPlaying) {
       _vc!.play();
       _disc.repeat();
@@ -4789,234 +6949,314 @@ class _ReelItemState extends State<ReelItem> with TickerProviderStateMixin {
     }
 
     return Container(
-        color: Colors.black,
-        child: Stack(fit: StackFit.expand, children: [
-          GestureDetector(
-            onDoubleTap: _onDoubleTap,
-            onLongPressStart: _onLongPressStart,
-            onLongPressEnd: _onLongPressEnd,
-            onLongPressCancel: () => setState(() => _holding = false),
-            child: Stack(fit: StackFit.expand, children: [
-              if (_isVideo && !_videoError && _vc != null && _vc!.value.isInitialized)
-                FittedBox(
-                    fit: BoxFit.cover,
-                    child: SizedBox(
-                        width: _vc!.value.size.width,
-                        height: _vc!.value.size.height,
-                        child: VideoPlayer(_vc!)))
-              else if (!_isVideo || _videoError)
-                CachedNetworkImage(
-                    imageUrl: m.thumbnail ?? m.url,
-                    fit: BoxFit.cover,
-                    errorWidget: (_, __, ___) => Container(color: Colors.black12)),
+      color: Colors.black,
+      child: Stack(fit: StackFit.expand, children: [
+        GestureDetector(
+          onDoubleTap: _onDoubleTap,
+          onLongPressStart: _onLongPressStart,
+          onLongPressEnd: _onLongPressEnd,
+          onLongPressCancel: () => setState(() => _holding = false),
+          child: Stack(fit: StackFit.expand, children: [
+            if (_isVideo && !_videoError && _vc != null && _vc!.value.isInitialized)
+              FittedBox(
+                fit: BoxFit.cover,
+                child: SizedBox(
+                  width: _vc!.value.size.width,
+                  height: _vc!.value.size.height,
+                  child: VideoPlayer(_vc!),
+                ),
+              )
+            else if (!_isVideo || _videoError)
+              CachedFileImage(
+                url: m.thumbnail ?? m.url,
+                fit: BoxFit.cover,
+                errorWidget: Container(color: Colors.black12),
+              ),
+            if (_heartAnim.isAnimating || _heartAnim.value > 0)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: AnimatedBuilder(
+                    animation: _heartAnim,
+                    builder: (_, __) {
+                      final t = _heartAnim.value;
+                      final scale = t < .3 ? t / .3 * 1.5 : 1.5 - (t - .3) * .28;
+                      final opacity = t > .7 ? (1 - t) / .3 : 1.0;
 
-              if (_heartAnim.isAnimating || _heartAnim.value > 0)
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: AnimatedBuilder(
-                      animation: _heartAnim,
-                      builder: (_, __) {
-                        final t = _heartAnim.value;
-                        final scale = t < .3 ? t / .3 * 1.5 : 1.5 - (t - .3) * .28;
-                        final opacity = t > .7 ? (1 - t) / .3 : 1.0;
-                        return Opacity(
-                          opacity: opacity.clamp(0.0, 1.0),
-                          child: Center(
-                            child: Transform.scale(
-                              scale: scale,
-                              child: const Icon(Icons.favorite_rounded,
-                                  size: 120, color: Colors.white),
+                      return Opacity(
+                        opacity: opacity.clamp(0.0, 1.0),
+                        child: Center(
+                          child: Transform.scale(
+                            scale: scale,
+                            child: const Icon(
+                              Icons.favorite_rounded,
+                              size: 120,
+                              color: Colors.white,
                             ),
                           ),
-                        );
-                      },
-                    ),
+                        ),
+                      );
+                    },
                   ),
                 ),
-
-              if (_holding)
-                Center(
+              ),
+            if (_holding)
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.5),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.pause_rounded, color: Colors.white, size: 60),
+                ),
+              ),
+            if (_cachingVideo)
+              Center(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  SizedBox(
+                    width: 50,
+                    height: 50,
+                    child: CircularProgressIndicator(
+                      value: _cacheProgress > 0 ? _cacheProgress : null,
+                      color: Colors.white,
+                      strokeWidth: 3,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Loading video... ${(_cacheProgress * 100).toInt()}%',
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                ]),
+              ),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.black.withOpacity(.55), Colors.transparent],
+                  begin: Alignment.topCenter,
+                  end: Alignment.center,
+                ),
+              ),
+            ),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.transparent, Colors.black.withOpacity(.75)],
+                  begin: Alignment.center,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            ),
+            if (_isVideo &&
+                _vc != null &&
+                !_vc!.value.isPlaying &&
+                !_holding &&
+                !_cachingVideo)
+              GestureDetector(
+                onTap: () {
+                  _vc!.play();
+                  _disc.repeat();
+                },
+                child: Center(
                   child: Container(
-                    padding: const EdgeInsets.all(16),
+                    width: 70,
+                    height: 70,
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.5),
+                      color: Colors.black.withOpacity(.45),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.pause_rounded,
-                        color: Colors.white, size: 60),
+                    child: const Icon(
+                      Icons.play_arrow_rounded,
+                      color: Colors.white,
+                      size: 44,
+                    ),
                   ),
                 ),
-
-              if (_cachingVideo)
-                Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: 50,
-                        height: 50,
-                        child: CircularProgressIndicator(
-                          value: _cacheProgress > 0 ? _cacheProgress : null,
-                          color: Colors.white,
-                          strokeWidth: 3,
-                        ),
+              ),
+          ]),
+        ),
+        Positioned(
+          right: 10,
+          bottom: 90,
+          child: Column(children: [
+            _railBtn(
+              icon: post.liked
+                  ? Icons.favorite_rounded
+                  : Icons.favorite_border_rounded,
+              label: formatCount(post.likeCount),
+              color: post.liked ? const Color(0xFFF91880) : Colors.white,
+              onTap: _toggleLike,
+            ),
+            const SizedBox(height: 16),
+            _railBtn(
+              icon: Icons.chat_bubble_rounded,
+              label: formatCount(post.replyCount),
+              color: Colors.white,
+              onTap: () => Navigator.push(
+                context,
+                FadeRoute(PostDetailScreen(postId: post.id, initial: post)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            _railBtn(
+              icon: Icons.repeat_rounded,
+              label: formatCount(post.retweetCount),
+              color: post.retweeted ? const Color(0xFF00BA7C) : Colors.white,
+              onTap: _toggleRetweet,
+            ),
+            const SizedBox(height: 16),
+            _railBtn(
+              icon: post.bookmarked
+                  ? Icons.bookmark_rounded
+                  : Icons.bookmark_border_rounded,
+              label: 'Save',
+              color: post.bookmarked ? const Color(0xFFFFD400) : Colors.white,
+              onTap: _toggleBookmark,
+            ),
+            const SizedBox(height: 16),
+            _railBtn(
+              icon: Icons.download_rounded,
+              label: 'Download',
+              color: Colors.white,
+              onTap: _downloadReel,
+            ),
+          ]),
+        ),
+        Positioned(
+          left: 14,
+          right: 80,
+          bottom: 34,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            GestureDetector(
+              onTap: () {
+                if (author?.username != null && author!.username.isNotEmpty) {
+                  Navigator.push(
+                    context,
+                    FadeRoute(ProfileScreen(username: author.username)),
+                  );
+                }
+              },
+              child: Row(children: [
+                Avatar(
+                  url: author?.avatarUrl,
+                  size: 32,
+                  ring: author?.hasUnseenStory ?? false,
+                  fallback: author?.username,
+                ),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Text(
+                    '@${author?.username ?? 'user'}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                if (author?.verified ?? false) ...[
+                  const SizedBox(width: 4),
+                  const Icon(Icons.verified_rounded, size: 15, color: Color(0xFF1D9BF0)),
+                ],
+                const SizedBox(width: 8),
+                Text(
+                  '· ${timeAgo(context, post.createdAt)}',
+                  style: TextStyle(color: Colors.white.withOpacity(.7), fontSize: 12),
+                ),
+              ]),
+            ),
+            if (post.text.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  post.text,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    height: 1.3,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            if (likedByText != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  likedByText,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 11,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+            if (m.type == 'audio' && (m.title != null || m.artist != null))
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Row(children: [
+                  const Icon(Icons.music_note_rounded, color: Colors.white, size: 14),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      '${m.title ?? 'Audio'}${m.artist != null ? ' • ${m.artist}' : ''}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.85),
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
                       ),
-                      const SizedBox(height: 10),
-                      Text('Loading video... ${(_cacheProgress * 100).toInt()}%',
-                          style: const TextStyle(color: Colors.white, fontSize: 12)),
-                    ],
+                    ),
                   ),
+                ]),
+              ),
+          ]),
+        ),
+        if (_isVideo && _vc != null && _vc!.value.isInitialized) ...[
+          Positioned(
+            top: 10,
+            right: 14,
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _muted = !_muted;
+                  _vc!.setVolume(_muted ? 0 : 1);
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(.4),
+                  shape: BoxShape.circle,
                 ),
-
-              Container(
-                  decoration: BoxDecoration(gradient: LinearGradient(
-                      colors: [Colors.black.withOpacity(.55), Colors.transparent],
-                      begin: Alignment.topCenter,
-                      end: Alignment.center))),
-              Container(
-                  decoration: BoxDecoration(gradient: LinearGradient(
-                      colors: [Colors.transparent, Colors.black.withOpacity(.75)],
-                      begin: Alignment.center,
-                      end: Alignment.bottomCenter))),
-
-              if (_isVideo && _vc != null && !_vc!.value.isPlaying && !_holding && !_cachingVideo)
-                GestureDetector(
-                  onTap: () {
-                    _vc!.play();
-                    _disc.repeat();
-                  },
-                  child: Center(
-                      child: Container(
-                          width: 70,
-                          height: 70,
-                          decoration: BoxDecoration(color: Colors.black.withOpacity(.45), shape: BoxShape.circle),
-                          child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 44))),
+                child: Icon(
+                  _muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                  color: Colors.white,
+                  size: 18,
                 ),
-            ]),
+              ),
+            ),
           ),
-
           Positioned(
-              right: 10,
-              bottom: 90,
-              child: Column(children: [
-                _railBtn(
-                    icon: post.liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                    label: formatCount(post.likeCount),
-                    color: post.liked ? const Color(0xFFF91880) : Colors.white,
-                    onTap: _toggleLike),
-                const SizedBox(height: 16),
-                _railBtn(
-                    icon: Icons.chat_bubble_rounded,
-                    label: formatCount(post.replyCount),
-                    color: Colors.white,
-                    onTap: () => Navigator.push(
-                        context, FadeRoute(PostDetailScreen(postId: post.id, initial: post)))),
-                const SizedBox(height: 16),
-                _railBtn(
-                    icon: Icons.repeat_rounded,
-                    label: formatCount(post.retweetCount),
-                    color: post.retweeted ? const Color(0xFF00BA7C) : Colors.white,
-                    onTap: _toggleRetweet),
-                const SizedBox(height: 16),
-                _railBtn(
-                    icon: post.bookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                    label: 'Save',
-                    color: post.bookmarked ? const Color(0xFFFFD400) : Colors.white,
-                    onTap: _toggleBookmark),
-                const SizedBox(height: 16),
-                _railBtn(
-                    icon: Icons.download_rounded,
-                    label: 'Download',
-                    color: Colors.white,
-                    onTap: _downloadReel),
-              ])),
-
-          Positioned(
-              left: 14,
-              right: 80,
-              bottom: 34,
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                GestureDetector(
-                  onTap: () {
-                    if (author?.username != null && author!.username.isNotEmpty) {
-                      Navigator.push(context, FadeRoute(ProfileScreen(username: author.username)));
-                    }
-                  },
-                  child: Row(children: [
-                    Avatar(url: author?.avatarUrl, size: 32, ring: true),
-                    const SizedBox(width: 10),
-                    Flexible(
-                        child: Text('@${author?.username ?? 'user'}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w800, fontSize: 15, color: Colors.white))),
-                    if (author?.verified ?? false) ...[
-                      const SizedBox(width: 4),
-                      const Icon(Icons.verified_rounded, size: 15, color: Color(0xFF1D9BF0)),
-                    ],
-                    const SizedBox(width: 8),
-                    Text('· ${timeAgo(context, post.createdAt)}',
-                        style: TextStyle(color: Colors.white.withOpacity(.7), fontSize: 12)),
-                  ]),
-                ),
-                if (post.text.isNotEmpty)
-                  Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(post.text,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 13.5, height: 1.3, color: Colors.white))),
-                if (likedByText != null)
-                  Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(likedByText,
-                          style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11, fontStyle: FontStyle.italic))),
-                if (m.type == 'audio' && (m.title != null || m.artist != null))
-                  Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Row(children: [
-                        const Icon(Icons.music_note_rounded, color: Colors.white, size: 14),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                              '${m.title ?? 'Audio'}${m.artist != null ? ' • ${m.artist}' : ''}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 12, fontStyle: FontStyle.italic)),
-                        ),
-                      ])),
-              ])),
-
-          if (_isVideo && _vc != null && _vc!.value.isInitialized) ...[
-            Positioned(
-                top: 10,
-                right: 14,
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _muted = !_muted;
-                      _vc!.setVolume(_muted ? 0 : 1);
-                    });
-                  },
-                  child: Container(
-                      padding: const EdgeInsets.all(9),
-                      decoration: BoxDecoration(color: Colors.black.withOpacity(.4), shape: BoxShape.circle),
-                      child: Icon(_muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
-                          color: Colors.white, size: 18)),
-                )),
-            Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: VideoProgressIndicator(_vc!,
-                    allowScrubbing: true,
-                    colors: VideoProgressColors(
-                        playedColor: const Color(0xFFF91880),
-                        bufferedColor: Colors.white24,
-                        backgroundColor: Colors.white10))),
-          ],
-        ]));
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: VideoProgressIndicator(
+              _vc!,
+              allowScrubbing: true,
+              colors: VideoProgressColors(
+                playedColor: const Color(0xFFF91880),
+                bufferedColor: Colors.white24,
+                backgroundColor: Colors.white10,
+              ),
+            ),
+          ),
+        ],
+      ]),
+    );
   }
 
   Widget _railBtn({
@@ -5031,24 +7271,30 @@ class _ReelItemState extends State<ReelItem> with TickerProviderStateMixin {
         onTap();
       },
       child: Column(children: [
-        Icon(icon,
-            color: color, size: 30, shadows: [Shadow(color: Colors.black.withOpacity(.6), blurRadius: 8)]),
+        Icon(icon, color: color, size: 30, shadows: [
+          Shadow(color: Colors.black.withOpacity(.6), blurRadius: 8)
+        ]),
         const SizedBox(height: 3),
-        Text(label,
-            style: TextStyle(
-                color: color,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                shadows: [Shadow(color: Colors.black.withOpacity(.6), blurRadius: 6)])),
+        Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            shadows: [Shadow(color: Colors.black.withOpacity(.6), blurRadius: 6)],
+          ),
+        ),
       ]),
     );
   }
 }
 
-// ═══════════════════════════════ EXPLORE ══════════════════════════
-
+// ═══════════════════════════════════════════════════════════════
+// EXPLORE
+// ═══════════════════════════════════════════════════════════════
 class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key});
+
   @override
   State<ExploreScreen> createState() => _ExploreScreenState();
 }
@@ -5056,14 +7302,18 @@ class ExploreScreen extends StatefulWidget {
 class _ExploreScreenState extends State<ExploreScreen> {
   final _api = ApiClient.instance;
   final _search = TextEditingController();
+
   Timer? _debounce;
+
   List<Post> _explore = [];
   List<User> _users = [];
   List<Post> _posts = [];
   List<Map<String, dynamic>> _tags = [];
+
   bool _loading = true;
   bool _searching = false;
   String _query = '';
+  String? _mediaType;
 
   @override
   void initState() {
@@ -5075,23 +7325,28 @@ class _ExploreScreenState extends State<ExploreScreen> {
     try {
       final res = await _api.get('/api/explore');
       if (!mounted) return;
+
       if (res is Map) {
         final postsList = res['posts'];
         final usersList = res['users'];
         final tagsList = res['tags'];
+
         setState(() {
           _explore = (postsList is List ? postsList : [])
               .whereType<Map>()
               .map((e) => Post.fromJson(Map<String, dynamic>.from(e)))
               .toList();
+
           _users = (usersList is List ? usersList : [])
               .whereType<Map>()
               .map((e) => User.fromJson(Map<String, dynamic>.from(e)))
               .toList();
+
           _tags = (tagsList is List ? tagsList : [])
               .whereType<Map>()
               .map((e) => Map<String, dynamic>.from(e))
               .toList();
+
           _loading = false;
         });
       } else {
@@ -5113,9 +7368,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
   Future<void> _doSearch(String q) async {
     setState(() {
       _query = q.trim();
-      if (_query.isNotEmpty) _searching = true;
+      if (_query.isNotEmpty || _mediaType != null) _searching = true;
     });
-    if (_query.isEmpty) {
+
+    if (_query.isEmpty && _mediaType == null) {
       setState(() {
         _searching = false;
         _users = [];
@@ -5123,11 +7379,18 @@ class _ExploreScreenState extends State<ExploreScreen> {
       });
       return;
     }
+
     try {
-      final res = await _api.get('/api/search', query: {'q': _query});
+      final res = await _api.get('/api/search', query: {
+        if (_query.isNotEmpty) 'q': _query,
+        if (_mediaType != null) 'media_type': _mediaType!,
+      });
+
       if (!mounted) return;
+
       List<User> users = [];
       List<Post> posts = [];
+
       if (res is Map) {
         if (res['users'] is List) {
           users = (res['users'] as List)
@@ -5135,6 +7398,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
               .map((e) => User.fromJson(Map<String, dynamic>.from(e)))
               .toList();
         }
+
         if (res['posts'] is List) {
           posts = (res['posts'] as List)
               .whereType<Map>()
@@ -5142,6 +7406,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
               .toList();
         }
       }
+
       setState(() {
         _users = users;
         _posts = posts;
@@ -5159,47 +7424,98 @@ class _ExploreScreenState extends State<ExploreScreen> {
     super.dispose();
   }
 
+  Widget _typeChip(String? value, String label) {
+    final p = _p(context);
+    final selected = _mediaType == value;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() => _mediaType = value);
+        _doSearch(_search.text);
+      },
+      child: Container(
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? p.accent : p.card,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: selected ? p.accent : p.border),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.white : p.sub,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     _applyBars(context);
     final p = _p(context);
+
     return Column(children: [
       Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-          child: TextField(
-            controller: _search,
-            onChanged: _onQuery,
-            style: TextStyle(fontSize: 14.5, color: p.text),
-            decoration: InputDecoration(
-              hintText: 'Search NokhodX…',
-              hintStyle: TextStyle(color: p.sub),
-              prefixIcon: Icon(Icons.search_rounded, color: p.sub),
-              suffixIcon: _query.isNotEmpty
-                  ? IconButton(
-                      icon: Icon(Icons.close_rounded, color: p.sub, size: 20),
-                      onPressed: () {
-                        _search.clear();
-                        _doSearch('');
-                      })
-                  : null,
-              filled: true,
-              fillColor: p.card,
-              contentPadding: const EdgeInsets.symmetric(vertical: 13),
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+        child: TextField(
+          controller: _search,
+          onChanged: _onQuery,
+          style: TextStyle(fontSize: 14.5, color: p.text),
+          decoration: InputDecoration(
+            hintText: 'Search NokhodX…',
+            hintStyle: TextStyle(color: p.sub),
+            prefixIcon: Icon(Icons.search_rounded, color: p.sub),
+            suffixIcon: _query.isNotEmpty
+                ? IconButton(
+                    icon: Icon(Icons.close_rounded, color: p.sub, size: 20),
+                    onPressed: () {
+                      _search.clear();
+                      _doSearch('');
+                    },
+                  )
+                : null,
+            filled: true,
+            fillColor: p.card,
+            contentPadding: const EdgeInsets.symmetric(vertical: 13),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(24),
+              borderSide: BorderSide.none,
             ),
-          )),
+          ),
+        ),
+      ),
+      SizedBox(
+        height: 40,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          children: [
+            _typeChip(null, 'All'),
+            _typeChip('image', 'Images'),
+            _typeChip('video', 'Videos'),
+            _typeChip('audio', 'Audio'),
+            _typeChip('file', 'Files'),
+          ],
+        ),
+      ),
+      const SizedBox(height: 6),
       Expanded(
-          child: _query.isEmpty
-              ? _buildExplore()
-              : _searching
-                  ? const Center(child: CircularProgressIndicator(strokeWidth: 2.4))
-                  : _buildResults()),
+        child: (_query.isEmpty && _mediaType == null)
+            ? _buildExplore()
+            : _searching
+                ? const Center(child: CircularProgressIndicator(strokeWidth: 2.4))
+                : _buildResults(),
+      ),
     ]);
   }
 
   Widget _buildExplore() {
     final p = _p(context);
+
     if (_loading) {
       return GridView.count(
         crossAxisCount: 2,
@@ -5209,15 +7525,21 @@ class _ExploreScreenState extends State<ExploreScreen> {
         childAspectRatio: .82,
         physics: const NeverScrollableScrollPhysics(),
         children: List.generate(
-            4,
-            (_) => Shimmer.fromColors(
-                  baseColor: p.card,
-                  highlightColor: p.card2,
-                  child: Container(
-                      decoration: BoxDecoration(color: p.card, borderRadius: BorderRadius.circular(18))),
-                )),
+          4,
+          (_) => Shimmer.fromColors(
+            baseColor: p.card,
+            highlightColor: p.card2,
+            child: Container(
+              decoration: BoxDecoration(
+                color: p.card,
+                borderRadius: BorderRadius.circular(18),
+              ),
+            ),
+          ),
+        ),
       );
     }
+
     return RefreshIndicator(
       onRefresh: _loadExplore,
       color: p.accent,
@@ -5233,6 +7555,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 children: _tags.map((t) {
                   final tag = t['tag']?.toString() ?? '';
                   final count = jint(t['count']);
+
                   return GestureDetector(
                     onTap: () {
                       _search.text = '#$tag';
@@ -5247,12 +7570,19 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         border: Border.all(color: p.border),
                       ),
                       child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Text('#$tag',
-                            style: TextStyle(
-                                color: p.accent, fontWeight: FontWeight.w700, fontSize: 13)),
+                        Text(
+                          '#$tag',
+                          style: TextStyle(
+                            color: p.accent,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
                         const SizedBox(width: 6),
-                        Text(formatCount(count),
-                            style: TextStyle(color: p.sub, fontSize: 11)),
+                        Text(
+                          formatCount(count),
+                          style: TextStyle(color: p.sub, fontSize: 11),
+                        ),
                       ]),
                     ),
                   );
@@ -5262,9 +7592,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
           if (_users.isNotEmpty) ...[
             const SizedBox(height: 10),
             Padding(
-                padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
-                child: Text('People',
-                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: p.sub))),
+              padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
+              child: Text(
+                'People',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: p.sub),
+              ),
+            ),
             SizedBox(
               height: 118,
               child: ListView.separated(
@@ -5274,32 +7607,49 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 separatorBuilder: (_, __) => const SizedBox(width: 10),
                 itemBuilder: (context, i) {
                   final u = _users[i];
+
                   return GestureDetector(
-                    onTap: () => Navigator.push(context, FadeRoute(ProfileScreen(username: u.username))),
+                    onTap: () => Navigator.push(
+                      context,
+                      FadeRoute(ProfileScreen(username: u.username)),
+                    ),
                     child: Container(
-                        width: 130,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                            color: p.card,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: p.border)),
-                        child: Column(children: [
-                          Avatar(url: u.avatarUrl, size: 44),
-                          const SizedBox(height: 6),
-                          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                            Flexible(
-                                child: Text(u.displayName,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700))),
-                            if (u.verified) ...[
-                              const SizedBox(width: 2),
-                              Icon(Icons.verified_rounded, size: 13, color: p.accent),
-                            ],
-                          ]),
-                          const SizedBox(height: 6),
-                          FollowButton(user: u, compact: true),
-                        ])),
+                      width: 130,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: p.card,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: p.border),
+                      ),
+                      child: Column(children: [
+                        Avatar(
+                          url: u.avatarUrl,
+                          size: 44,
+                          ring: u.hasUnseenStory,
+                          fallback: u.username,
+                        ),
+                        const SizedBox(height: 6),
+                        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                          Flexible(
+                            child: Text(
+                              u.displayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          if (u.verified) ...[
+                            const SizedBox(width: 2),
+                            Icon(Icons.verified_rounded, size: 13, color: p.accent),
+                          ],
+                        ]),
+                        const SizedBox(height: 6),
+                        FollowButton(user: u, compact: true),
+                      ]),
+                    ),
                   );
                 },
               ),
@@ -5308,93 +7658,138 @@ class _ExploreScreenState extends State<ExploreScreen> {
           const SizedBox(height: 10),
           if (_explore.isEmpty)
             const Padding(
-                padding: EdgeInsets.all(40),
-                child: EmptyState(
-                    icon: Icons.explore_outlined,
-                    title: 'Nothing to explore yet',
-                    subtitle: 'New posts will appear here.'))
+              padding: EdgeInsets.all(40),
+              child: EmptyState(
+                icon: Icons.explore_outlined,
+                title: 'Nothing to explore yet',
+                subtitle: 'New posts will appear here.',
+              ),
+            )
           else
             GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(14, 4, 14, 14),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2, mainAxisSpacing: 10, crossAxisSpacing: 10, childAspectRatio: .82),
+                crossAxisCount: 2,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                childAspectRatio: .82,
+              ),
               itemCount: _explore.length,
               itemBuilder: (context, i) {
                 final post = _explore[i];
+
                 return SlideFadeIn(
-                    delay: Duration(milliseconds: (i % 6) * 50),
-                    child: GestureDetector(
-                      onTap: () => Navigator.push(
-                          context, FadeRoute(PostDetailScreen(postId: post.id, initial: post))),
-                      child: Container(
-                        decoration: BoxDecoration(
-                            color: p.card,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: p.border)),
-                        clipBehavior: Clip.antiAlias,
-                        child: Stack(fit: StackFit.expand, children: [
-                          if (post.media.isNotEmpty)
-                            CachedNetworkImage(
-                                imageUrl: post.media.first.thumbnail ?? post.media.first.url,
-                                fit: BoxFit.cover,
-                                errorWidget: (_, __, ___) => Container(color: p.card2))
-                          else
-                            Container(
-                                padding: const EdgeInsets.all(14),
-                                decoration: BoxDecoration(gradient: p.brand),
-                                child: Center(
-                                    child: Text(post.text,
-                                        maxLines: 6,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 13.5,
-                                            height: 1.35,
-                                            color: Colors.white)))),
-                          if (post.media.isNotEmpty &&
-                              (post.media.first.type == 'video' || post.media.first.type == 'gif'))
-                            const Center(
-                                child: Icon(Icons.play_circle_fill_rounded, color: Colors.white70, size: 44)),
-                          Positioned(
-                              left: 0,
-                              right: 0,
-                              bottom: 0,
-                              child: GestureDetector(
-                                onTap: () {
-                                  if (post.author?.username != null) {
-                                    Navigator.push(context,
-                                        FadeRoute(ProfileScreen(username: post.author!.username)));
-                                  }
-                                },
-                                child: Container(
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                            colors: [Colors.transparent, Colors.black.withOpacity(.85)],
-                                            begin: Alignment.topCenter,
-                                            end: Alignment.bottomCenter)),
-                                    child: Row(children: [
-                                      Avatar(url: post.author?.avatarUrl, size: 22),
-                                      const SizedBox(width: 6),
-                                      Expanded(
-                                          child: Text('@${post.author?.username ?? 'user'}',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
-                                                  fontSize: 11.5,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: Colors.white))),
-                                      const Icon(Icons.favorite_rounded, size: 13, color: Color(0xFFF91880)),
-                                      const SizedBox(width: 3),
-                                      Text(formatCount(post.likeCount),
-                                          style: const TextStyle(fontSize: 11, color: Colors.white)),
-                                    ])),
-                              )),
-                        ]),
+                  delay: Duration(milliseconds: (i % 6) * 50),
+                  child: GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      FadeRoute(PostDetailScreen(postId: post.id, initial: post)),
+                    ),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: p.card,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: p.border),
                       ),
-                    ));
+                      clipBehavior: Clip.antiAlias,
+                      child: Stack(fit: StackFit.expand, children: [
+                        if (post.media.isNotEmpty)
+                          CachedFileImage(
+                            url: post.media.first.thumbnail ?? post.media.first.url,
+                            fit: BoxFit.cover,
+                          )
+                        else
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(gradient: p.brand),
+                            child: Center(
+                              child: Text(
+                                post.text,
+                                maxLines: 6,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13.5,
+                                  height: 1.35,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        if (post.media.isNotEmpty &&
+                            (post.media.first.type == 'video' ||
+                                post.media.first.type == 'gif'))
+                          const Center(
+                            child: Icon(
+                              Icons.play_circle_fill_rounded,
+                              color: Colors.white70,
+                              size: 44,
+                            ),
+                          ),
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: GestureDetector(
+                            onTap: () {
+                              if (post.author?.username != null) {
+                                Navigator.push(
+                                  context,
+                                  FadeRoute(ProfileScreen(username: post.author!.username)),
+                                );
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.transparent,
+                                    Colors.black.withOpacity(.85)
+                                  ],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                ),
+                              ),
+                              child: Row(children: [
+                                Avatar(
+                                  url: post.author?.avatarUrl,
+                                  size: 22,
+                                  fallback: post.author?.username,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    '@${post.author?.username ?? 'user'}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                                const Icon(
+                                  Icons.favorite_rounded,
+                                  size: 13,
+                                  color: Color(0xFFF91880),
+                                ),
+                                const SizedBox(width: 3),
+                                Text(
+                                  formatCount(post.likeCount),
+                                  style: const TextStyle(fontSize: 11, color: Colors.white),
+                                ),
+                              ]),
+                            ),
+                          ),
+                        ),
+                      ]),
+                    ),
+                  ),
+                );
               },
             ),
         ],
@@ -5404,63 +7799,90 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   Widget _buildResults() {
     final p = _p(context);
+
     if (_users.isEmpty && _posts.isEmpty) {
       return const EmptyState(
-          icon: Icons.search_off_rounded,
-          title: 'No results',
-          subtitle: 'Nothing found');
+        icon: Icons.search_off_rounded,
+        title: 'No results',
+        subtitle: 'Nothing found',
+      );
     }
+
     return ListView(padding: const EdgeInsets.only(bottom: 110), children: [
       if (_users.isNotEmpty) ...[
         Padding(
-            padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
-            child: Text('People',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: p.sub))),
+          padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
+          child: Text(
+            'People',
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: p.sub),
+          ),
+        ),
         SizedBox(
-            height: 118,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              itemCount: _users.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 10),
-              itemBuilder: (context, i) {
-                final u = _users[i];
-                return GestureDetector(
-                  onTap: () => Navigator.push(context, FadeRoute(ProfileScreen(username: u.username))),
-                  child: Container(
-                      width: 130,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                          color: p.card,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: p.border)),
-                      child: Column(children: [
-                        Avatar(url: u.avatarUrl, size: 44),
-                        const SizedBox(height: 6),
-                        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                          Flexible(
-                              child: Text(u.displayName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700))),
-                          if (u.verified) ...[
-                            const SizedBox(width: 2),
-                            Icon(Icons.verified_rounded, size: 13, color: p.accent),
-                          ],
-                        ]),
-                        const SizedBox(height: 6),
-                        FollowButton(user: u, compact: true),
-                      ])),
-                );
-              },
-            )),
+          height: 118,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            itemCount: _users.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (context, i) {
+              final u = _users[i];
+
+              return GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  FadeRoute(ProfileScreen(username: u.username)),
+                ),
+                child: Container(
+                  width: 130,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: p.card,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: p.border),
+                  ),
+                  child: Column(children: [
+                    Avatar(
+                      url: u.avatarUrl,
+                      size: 44,
+                      ring: u.hasUnseenStory,
+                      fallback: u.username,
+                    ),
+                    const SizedBox(height: 6),
+                    Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Flexible(
+                        child: Text(
+                          u.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (u.verified) ...[
+                        const SizedBox(width: 2),
+                        Icon(Icons.verified_rounded, size: 13, color: p.accent),
+                      ],
+                    ]),
+                    const SizedBox(height: 6),
+                    FollowButton(user: u, compact: true),
+                  ]),
+                ),
+              );
+            },
+          ),
+        ),
         const SizedBox(height: 8),
       ],
       if (_posts.isNotEmpty) ...[
         Padding(
-            padding: const EdgeInsets.fromLTRB(18, 8, 18, 4),
-            child: Text('Posts',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: p.sub))),
+          padding: const EdgeInsets.fromLTRB(18, 8, 18, 4),
+          child: Text(
+            'Posts',
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: p.sub),
+          ),
+        ),
         ..._posts.map((post) => Column(children: [
               PostCard(post: post),
               Divider(height: 1, thickness: 1, color: p.border.withOpacity(.4)),
@@ -5470,16 +7892,19 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 }
 
-// ═══════════════════════════════ NOTIFICATIONS ═══════════════════
-
+// ═══════════════════════════════════════════════════════════════
+// NOTIFICATIONS
+// ═══════════════════════════════════════════════════════════════
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
+
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   final _api = ApiClient.instance;
+
   List<Noti> _items = [];
   bool _loading = true;
   String? _error;
@@ -5495,9 +7920,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       _loading = true;
       _error = null;
     });
+
     try {
       final res = await _api.get('/api/notifications', query: {'limit': '50'});
       if (!mounted) return;
+
       setState(() {
         _items = extractItems(res).map(Noti.fromJson).toList();
         _loading = false;
@@ -5522,11 +7949,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<void> _markAllRead() async {
     try {
       await _api.post('/api/notifications/read');
+
       setState(() {
         for (final n in _items) {
           n.read = true;
         }
       });
+
       if (mounted) showSnack(context, 'All caught up ✅');
     } on ApiException catch (e) {
       if (mounted) showSnack(context, e.message, error: true);
@@ -5535,21 +7964,29 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   (IconData, Color) _iconFor(String type) {
     final p = _p(context);
+
     if (type.contains('like')) return (Icons.favorite_rounded, p.pink);
-    if (type.contains('retweet') || type.contains('repost')) return (Icons.repeat_rounded, p.green);
+    if (type.contains('retweet') || type.contains('repost')) {
+      return (Icons.repeat_rounded, p.green);
+    }
     if (type.contains('follow')) return (Icons.person_add_rounded, p.accent);
     if (type.contains('reply')) return (Icons.chat_bubble_rounded, p.accent);
     if (type.contains('mention')) return (Icons.alternate_email_rounded, p.purple);
-    if (type.contains('direct') || type.contains('message')) return (Icons.mail_rounded, p.gold);
+    if (type.contains('direct') || type.contains('message')) {
+      return (Icons.mail_rounded, p.gold);
+    }
     if (type.contains('quote')) return (Icons.format_quote_rounded, p.orange);
     if (type.contains('bookmark')) return (Icons.bookmark_rounded, p.gold);
     if (type.contains('group')) return (Icons.group_rounded, p.purple);
+
     return (Icons.notifications_rounded, p.sub);
   }
 
   String _verbFor(String type) {
     if (type.contains('like')) return 'liked your post';
-    if (type.contains('retweet') || type.contains('repost')) return 'reposted your post';
+    if (type.contains('retweet') || type.contains('repost')) {
+      return 'reposted your post';
+    }
     if (type.contains('follow')) return 'followed you';
     if (type.contains('reply')) return 'replied to your post';
     if (type.contains('mention')) return 'mentioned you';
@@ -5557,6 +7994,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (type.contains('quote')) return 'quoted your post';
     if (type.contains('direct')) return 'sent you a message';
     if (type.contains('group_add')) return 'added you to a group';
+
     return type.isEmpty ? 'interacted with you' : type;
   }
 
@@ -5564,127 +8002,188 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Widget build(BuildContext context) {
     _applyBars(context);
     final p = _p(context);
+
     return Column(children: [
       Padding(
-          padding: const EdgeInsets.fromLTRB(18, 8, 8, 10),
-          child: Row(children: [
-            const Text('Notifications',
-                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 21)),
-            const Spacer(),
-            IconButton(
-                tooltip: 'Mark all as read',
-                icon: Icon(Icons.done_all_rounded, color: p.sub),
-                onPressed: _markAllRead),
-          ])),
+        padding: const EdgeInsets.fromLTRB(18, 8, 8, 10),
+        child: Row(children: [
+          const Text(
+            'Notifications',
+            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 21),
+          ),
+          const Spacer(),
+          IconButton(
+            tooltip: 'Mark all as read',
+            icon: Icon(Icons.done_all_rounded, color: p.sub),
+            onPressed: _markAllRead,
+          ),
+        ]),
+      ),
       Expanded(
-          child: _loading
-              ? ListView(
-                  children: List.generate(
-                      6,
-                      (_) => Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                          child: ShimmerBlock(height: 66))))
-              : _error != null
-                  ? ErrorState(message: _error!, onRetry: _load)
-                  : _items.isEmpty
-                      ? const EmptyState(
-                          icon: Icons.notifications_none_rounded,
-                          title: 'No notifications',
-                          subtitle: "You're all caught up!")
-                      : RefreshIndicator(
-                          onRefresh: _load,
-                          color: p.accent,
-                          backgroundColor: p.card2,
-                          child: ListView.separated(
-                            padding: const EdgeInsets.only(bottom: 110),
-                            itemCount: _items.length,
-                            separatorBuilder: (_, __) =>
-                                Divider(height: 1, thickness: 1, color: p.border.withOpacity(.35)),
-                            itemBuilder: (context, i) {
-                              final n = _items[i];
-                              final (icon, color) = _iconFor(n.type);
-                              return SlideFadeIn(
-                                  delay: Duration(milliseconds: (i % 10) * 35),
-                                  child: InkWell(
-                                    onTap: () {
-                                      if (n.actor != null && n.type.contains('follow')) {
-                                        Navigator.push(context,
-                                            FadeRoute(ProfileScreen(username: n.actor!.username)));
-                                      } else if (n.postId != null && n.postId! > 0) {
-                                        Navigator.push(
-                                            context, FadeRoute(PostDetailScreen(postId: n.postId)));
-                                      }
-                                    },
-                                    child: Container(
-                                      color: n.read ? Colors.transparent : p.accent.withOpacity(.05),
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-                                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                        GestureDetector(
-                                          onTap: n.actor != null
-                                              ? () => Navigator.push(context,
-                                                  FadeRoute(ProfileScreen(username: n.actor!.username)))
-                                              : null,
-                                          child: Container(
-                                              width: 42,
-                                              height: 42,
-                                              decoration: BoxDecoration(
-                                                  color: color.withOpacity(.15), shape: BoxShape.circle),
-                                              child: Icon(icon, color: color, size: 21)),
+        child: _loading
+            ? ListView(
+                children: List.generate(
+                  6,
+                  (_) => Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    child: ShimmerBlock(height: 66),
+                  ),
+                ),
+              )
+            : _error != null
+                ? ErrorState(message: _error!, onRetry: _load)
+                : _items.isEmpty
+                    ? const EmptyState(
+                        icon: Icons.notifications_none_rounded,
+                        title: 'No notifications',
+                        subtitle: "You're all caught up!",
+                      )
+                    : RefreshIndicator(
+                        onRefresh: _load,
+                        color: p.accent,
+                        backgroundColor: p.card2,
+                        child: ListView.separated(
+                          padding: const EdgeInsets.only(bottom: 110),
+                          itemCount: _items.length,
+                          separatorBuilder: (_, __) => Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: p.border.withOpacity(.35),
+                          ),
+                          itemBuilder: (context, i) {
+                            final n = _items[i];
+                            final (icon, color) = _iconFor(n.type);
+
+                            return SlideFadeIn(
+                              delay: Duration(milliseconds: (i % 10) * 35),
+                              child: InkWell(
+                                onTap: () {
+                                  if (n.actor != null && n.type.contains('follow')) {
+                                    Navigator.push(
+                                      context,
+                                      FadeRoute(
+                                        ProfileScreen(username: n.actor!.username),
+                                      ),
+                                    );
+                                  } else if (n.postId != null && n.postId! > 0) {
+                                    Navigator.push(
+                                      context,
+                                      FadeRoute(PostDetailScreen(postId: n.postId)),
+                                    );
+                                  }
+                                },
+                                child: Container(
+                                  color: n.read
+                                      ? Colors.transparent
+                                      : p.accent.withOpacity(.05),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 13,
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      GestureDetector(
+                                        onTap: n.actor != null
+                                            ? () => Navigator.push(
+                                                  context,
+                                                  FadeRoute(
+                                                    ProfileScreen(
+                                                      username: n.actor!.username,
+                                                    ),
+                                                  ),
+                                                )
+                                            : null,
+                                        child: Container(
+                                          width: 42,
+                                          height: 42,
+                                          decoration: BoxDecoration(
+                                            color: color.withOpacity(.15),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(icon, color: color, size: 21),
                                         ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                            child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                              GestureDetector(
-                                                onTap: n.actor != null
-                                                    ? () => Navigator.push(
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            GestureDetector(
+                                              onTap: n.actor != null
+                                                  ? () => Navigator.push(
                                                         context,
                                                         FadeRoute(
-                                                            ProfileScreen(username: n.actor!.username)))
-                                                    : null,
-                                                child: Text.rich(
-                                                    TextSpan(style: const TextStyle(fontSize: 13.8), children: [
-                                                      if (n.actor != null)
-                                                        TextSpan(
-                                                            text: n.actor!.displayName,
-                                                            style: const TextStyle(
-                                                                fontWeight: FontWeight.w800)),
-                                                      TextSpan(
-                                                          text: ' ${n.text ?? _verbFor(n.type)}',
+                                                          ProfileScreen(
+                                                            username:
+                                                                n.actor!.username,
                                                           ),
-                                                    ])),
+                                                        ),
+                                                      )
+                                                  : null,
+                                              child: Text.rich(
+                                                TextSpan(
+                                                  style: const TextStyle(fontSize: 13.8),
+                                                  children: [
+                                                    if (n.actor != null)
+                                                      TextSpan(
+                                                        text: n.actor!.displayName,
+                                                        style: const TextStyle(
+                                                          fontWeight: FontWeight.w800,
+                                                        ),
+                                                      ),
+                                                    TextSpan(
+                                                      text: ' ${n.text ?? _verbFor(n.type)}',
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
-                                              const SizedBox(height: 3),
-                                              Text(timeAgo(context, n.createdAt),
-                                                  style: TextStyle(color: p.sub, fontSize: 12)),
-                                            ])),
-                                        if (!n.read)
-                                          Container(
-                                              margin: const EdgeInsets.only(top: 6),
-                                              width: 8,
-                                              height: 8,
-                                              decoration:
-                                                  BoxDecoration(color: p.accent, shape: BoxShape.circle)),
-                                      ]),
-                                    ),
-                                  ));
-                            },
-                          ))),
+                                            ),
+                                            const SizedBox(height: 3),
+                                            Text(
+                                              timeAgo(context, n.createdAt),
+                                              style: TextStyle(color: p.sub, fontSize: 12),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      if (!n.read)
+                                        Container(
+                                          margin: const EdgeInsets.only(top: 6),
+                                          width: 8,
+                                          height: 8,
+                                          decoration: BoxDecoration(
+                                            color: p.accent,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+      ),
     ]);
   }
 }
 
-// ═══════════════════════════════ MESSAGES ═════════════════════════
-
+// ═══════════════════════════════════════════════════════════════
+// MESSAGES
+// ═══════════════════════════════════════════════════════════════
 class MessagesScreen extends StatefulWidget {
   const MessagesScreen({super.key});
+
   @override
   State<MessagesScreen> createState() => _MessagesScreenState();
 }
 
 class _MessagesScreenState extends State<MessagesScreen> {
   final _api = ApiClient.instance;
+
   List<Conversation> _convs = [];
   bool _loading = true;
   String? _error;
@@ -5700,9 +8199,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
       _loading = true;
       _error = null;
     });
+
     try {
       final res = await _api.get('/api/dm/conversations');
       if (!mounted) return;
+
       setState(() {
         _convs = extractItems(res).map(Conversation.fromJson).toList();
         _loading = false;
@@ -5726,10 +8227,12 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   User? _other(Conversation c) {
     final me = context.read<AppState>().me;
+
     for (final m in c.members) {
       if (me == null) return m;
       if (m.username != me.username && m.id != me.id) return m;
     }
+
     return c.members.isNotEmpty ? c.members.first : null;
   }
 
@@ -5743,157 +8246,180 @@ class _MessagesScreenState extends State<MessagesScreen> {
   Widget build(BuildContext context) {
     _applyBars(context);
     final p = _p(context);
+
     return Column(children: [
       Padding(
-          padding: const EdgeInsets.fromLTRB(18, 8, 18, 10),
-          child: Row(children: [
-            const Text('Messages',
-                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 21)),
-            const Spacer(),
-            GestureDetector(
-                onTap: () => Navigator.push(context, SlideUpRoute(const NewConversationScreen()))
-                    .then((_) => _load()),
-                child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(gradient: p.brand, shape: BoxShape.circle),
-                    child: const Icon(Icons.edit_rounded, color: Colors.white, size: 18))),
-          ])),
+        padding: const EdgeInsets.fromLTRB(18, 8, 18, 10),
+        child: Row(children: [
+          const Text(
+            'Messages',
+            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 21),
+          ),
+          const Spacer(),
+          GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              SlideUpRoute(const NewConversationScreen()),
+            ).then((_) => _load()),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(gradient: p.brand, shape: BoxShape.circle),
+              child: const Icon(Icons.edit_rounded, color: Colors.white, size: 18),
+            ),
+          ),
+        ]),
+      ),
       Expanded(
-          child: _loading
-              ? ListView(
-                  children: List.generate(
-                      6,
-                      (_) => Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          child: ShimmerBlock(height: 64))))
-              : _error != null
-                  ? ErrorState(message: _error!, onRetry: _load)
-                  : _convs.isEmpty
-                      ? const EmptyState(
-                          icon: Icons.chat_bubble_outline_rounded,
-                          title: 'No conversations',
-                          subtitle: 'Start chatting with your friends!')
-                      : RefreshIndicator(
-                          onRefresh: _load,
-                          color: p.accent,
-                          backgroundColor: p.card2,
-                          child: ListView.builder(
-                            padding: const EdgeInsets.only(bottom: 110),
-                            itemCount: _convs.length,
-                            itemBuilder: (context, i) {
-                              final c = _convs[i];
-                              final other = _other(c);
-                              final isOnlineOther = other?.isOnline ?? false;
-                              final lastMsg = c.lastMessage;
-                              final lastText = lastMsg?.deleted == true
-                                  ? 'Message deleted'
-                                  : (lastMsg?.text.isNotEmpty == true
-                                      ? lastMsg!.text
-                                      : (lastMsg?.media.isNotEmpty == true
-                                          ? '📎 Media'
-                                          : 'Say hi 👋'));
-                              final lastTime = lastMsg?.createdAt;
-                              return SlideFadeIn(
-                                  delay: Duration(milliseconds: (i % 10) * 40),
-                                  child: InkWell(
-                                    onTap: () => Navigator.push(
-                                            context, FadeRoute(ChatScreen(conversation: c)))
-                                        .then((_) => _load()),
-                                    child: Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                        child: Row(children: [
-                                          GestureDetector(
-                                            onTap: other != null && other.username.isNotEmpty
-                                                ? () => Navigator.push(context,
-                                                    FadeRoute(ProfileScreen(username: other.username)))
-                                                : null,
-                                            child: Stack(children: [
-                                              Avatar(url: other?.avatarUrl, size: 52, fallback: _title(c)),
-                                              if (c.isGroup)
-                                                Positioned(
-                                                    right: 0,
-                                                    bottom: 0,
-                                                    child: Container(
-                                                        padding: const EdgeInsets.all(3),
-                                                        decoration: BoxDecoration(
-                                                            color: p.purple,
-                                                            shape: BoxShape.circle,
-                                                            border: Border.all(color: p.bg, width: 2)),
-                                                        child: const Icon(Icons.group_rounded,
-                                                            size: 11, color: Colors.white))),
-                                              if (!c.isGroup && isOnlineOther)
-                                                Positioned(
-                                                    right: 2,
-                                                    bottom: 2,
-                                                    child: Container(
-                                                        width: 12,
-                                                        height: 12,
-                                                        decoration: BoxDecoration(
-                                                            color: p.green,
-                                                            shape: BoxShape.circle,
-                                                            border: Border.all(color: p.bg, width: 2)))),
-                                            ]),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                              child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  children: [
-                                                Row(children: [
-                                                  Flexible(
-                                                      child: Text(_title(c),
-                                                          maxLines: 1,
-                                                          overflow: TextOverflow.ellipsis,
-                                                          style: TextStyle(
-                                                              fontWeight: c.unread > 0
-                                                                  ? FontWeight.w900
-                                                                  : FontWeight.w700,
-                                                              fontSize: 14.5,
-                                                              color: p.text))),
-                                                  const Spacer(),
-                                                  if (lastTime != null)
-                                                    Text(timeAgo(context, lastTime),
-                                                        style: TextStyle(
-                                                            fontSize: 11.5,
-                                                            color: c.unread > 0 ? p.accent : p.sub)),
-                                                ]),
-                                                const SizedBox(height: 3),
-                                                Row(children: [
-                                                  Expanded(
-                                                      child: Text(lastText,
-                                                          maxLines: 1,
-                                                          overflow: TextOverflow.ellipsis,
-                                                          style: TextStyle(
-                                                              fontSize: 13,
-                                                              color: c.unread > 0 ? p.text : p.sub,
-                                                              fontWeight: c.unread > 0
-                                                                  ? FontWeight.w600
-                                                                  : FontWeight.w400))),
-                                                  if (c.unread > 0)
-                                                    Container(
-                                                        padding: const EdgeInsets.symmetric(
-                                                            horizontal: 7, vertical: 2),
-                                                        decoration: BoxDecoration(
-                                                            gradient: p.brand,
-                                                            borderRadius: BorderRadius.circular(10)),
-                                                        child: Text('${c.unread}',
-                                                            style: const TextStyle(
-                                                                fontSize: 11,
-                                                                fontWeight: FontWeight.w800,
-                                                                color: Colors.white))),
-                                                ]),
-                                              ])),
-                                        ])),
-                                  ));
-                            },
-                          ))),
+        child: _loading
+            ? ListView(
+                children: List.generate(
+                  6,
+                  (_) => Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: ShimmerBlock(height: 64),
+                  ),
+                ),
+              )
+            : _error != null
+                ? ErrorState(message: _error!, onRetry: _load)
+                : _convs.isEmpty
+                    ? const EmptyState(
+                        icon: Icons.chat_bubble_outline_rounded,
+                        title: 'No conversations',
+                        subtitle: 'Start chatting with your friends!',
+                      )
+                    : RefreshIndicator(
+                        onRefresh: _load,
+                        color: p.accent,
+                        backgroundColor: p.card2,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.only(bottom: 110),
+                          itemCount: _convs.length,
+                          itemBuilder: (context, i) {
+                            final c = _convs[i];
+                            final other = _other(c);
+                            final isOnlineOther = other?.isOnline ?? false;
+
+                            final lastMsg = c.lastMessage;
+                            final lastText = lastMsg?.deleted == true
+                                ? 'Message deleted'
+                                : (lastMsg?.text.isNotEmpty == true
+                                    ? lastMsg!.text
+                                    : (lastMsg?.media.isNotEmpty == true
+                                        ? '📎 Media'
+                                        : 'Say hi 👋'));
+
+                            final lastTime = lastMsg?.createdAt;
+
+                            return SlideFadeIn(
+                              delay: Duration(milliseconds: (i % 10) * 40),
+                              child: InkWell(
+                                onTap: () => Navigator.push(
+                                  context,
+                                  FadeRoute(ChatScreen(conversation: c)),
+                                ).then((_) => _load()),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 10,
+                                  ),
+                                  child: Row(children: [
+                                    Avatar(
+                                      url: other?.avatarUrl,
+                                      size: 52,
+                                      ring: other?.hasUnseenStory ?? false,
+                                      online: isOnlineOther,
+                                      fallback: _title(c),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(children: [
+                                            Flexible(
+                                              child: Text(
+                                                _title(c),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontWeight: c.unread > 0
+                                                      ? FontWeight.w900
+                                                      : FontWeight.w700,
+                                                  fontSize: 14.5,
+                                                  color: p.text,
+                                                ),
+                                              ),
+                                            ),
+                                            const Spacer(),
+                                            if (lastTime != null)
+                                              Text(
+                                                timeAgo(context, lastTime),
+                                                style: TextStyle(
+                                                  fontSize: 11.5,
+                                                  color: c.unread > 0
+                                                      ? p.accent
+                                                      : p.sub,
+                                                ),
+                                              ),
+                                          ]),
+                                          const SizedBox(height: 3),
+                                          Row(children: [
+                                            Expanded(
+                                              child: Text(
+                                                lastText,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: c.unread > 0 ? p.text : p.sub,
+                                                  fontWeight: c.unread > 0
+                                                      ? FontWeight.w600
+                                                      : FontWeight.w400,
+                                                ),
+                                              ),
+                                            ),
+                                            if (c.unread > 0)
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 7,
+                                                  vertical: 2,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  gradient: p.brand,
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                ),
+                                                child: Text(
+                                                  '${c.unread}',
+                                                  style: const TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w800,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ),
+                                          ]),
+                                        ],
+                                      ),
+                                    ),
+                                  ]),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+      ),
     ]);
   }
 }
 
 class NewConversationScreen extends StatefulWidget {
   const NewConversationScreen({super.key});
+
   @override
   State<NewConversationScreen> createState() => _NewConversationScreenState();
 }
@@ -5902,8 +8428,10 @@ class _NewConversationScreenState extends State<NewConversationScreen> {
   final _api = ApiClient.instance;
   final _search = TextEditingController();
   final _groupName = TextEditingController();
+
   List<User> _users = [];
   final Set<int> _selected = {};
+
   bool _loading = false;
   bool _creating = false;
 
@@ -5915,12 +8443,22 @@ class _NewConversationScreenState extends State<NewConversationScreen> {
 
   Future<void> _doSearch(String q) async {
     setState(() => _loading = true);
+
     try {
-      final res = await _api.get('/api/users', query: {if (q.isNotEmpty) 'q': q, 'limit': '50'});
+      final res = await _api.get('/api/users', query: {
+        if (q.isNotEmpty) 'q': q,
+        'limit': '50'
+      });
+
       if (!mounted) return;
+
       final me = context.read<AppState>().me;
+
       setState(() {
-        _users = extractItems(res).map(User.fromJson).where((u) => u.username != me?.username).toList();
+        _users = extractItems(res)
+            .map(User.fromJson)
+            .where((u) => u.username != me?.username)
+            .toList();
         _loading = false;
       });
     } catch (_) {
@@ -5930,23 +8468,34 @@ class _NewConversationScreenState extends State<NewConversationScreen> {
 
   Future<void> _create() async {
     if (_selected.isEmpty || _creating) return;
+
     setState(() => _creating = true);
+
     try {
       final isGroup = _selected.length > 1;
+
       final res = await _api.post('/api/dm/conversations', body: {
         'user_ids': _selected.toList(),
-        if (isGroup && _groupName.text.trim().isNotEmpty) 'name': _groupName.text.trim(),
+        if (isGroup && _groupName.text.trim().isNotEmpty)
+          'name': _groupName.text.trim(),
         'is_group': isGroup,
       });
+
       Conversation? conv;
+
       if (res is Map) {
         try {
           conv = Conversation.fromJson(Map<String, dynamic>.from(res));
         } catch (_) {}
       }
+
       if (!mounted) return;
+
       if (conv?.id != null) {
-        Navigator.pushReplacement(context, FadeRoute(ChatScreen(conversation: conv!)));
+        Navigator.pushReplacement(
+          context,
+          FadeRoute(ChatScreen(conversation: conv!)),
+        );
       } else {
         Navigator.pop(context);
       }
@@ -5967,114 +8516,311 @@ class _NewConversationScreenState extends State<NewConversationScreen> {
   @override
   Widget build(BuildContext context) {
     final p = _p(context);
+
     return Scaffold(
       backgroundColor: p.bg,
       appBar: AppBar(
-        title: const Text('New message',
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
-        leading: IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => Navigator.pop(context)),
+        title: const Text(
+          'New message',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.close_rounded),
+          onPressed: () => Navigator.pop(context),
+        ),
         actions: [
           Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: GradientButton(
-                  text: 'Create',
-                  width: 100,
-                  height: 40,
-                  loading: _creating,
-                  onPressed: _selected.isNotEmpty ? _create : null)),
+            padding: const EdgeInsets.only(right: 12),
+            child: GradientButton(
+              text: 'Create',
+              width: 100,
+              height: 40,
+              loading: _creating,
+              onPressed: _selected.isNotEmpty ? _create : null,
+            ),
+          ),
         ],
       ),
       body: Column(children: [
         Padding(
-            padding: const EdgeInsets.all(14),
-            child: TextField(
-              controller: _search,
-              onChanged: (q) => _doSearch(q.trim()),
-              style: TextStyle(color: p.text),
-              decoration: InputDecoration(
-                hintText: 'Search people…',
-                hintStyle: TextStyle(color: p.sub),
-                prefixIcon: Icon(Icons.search_rounded, color: p.sub),
-                filled: true,
-                fillColor: p.card,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(22), borderSide: BorderSide.none),
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.all(14),
+          child: TextField(
+            controller: _search,
+            onChanged: (q) => _doSearch(q.trim()),
+            style: TextStyle(color: p.text),
+            decoration: InputDecoration(
+              hintText: 'Search people…',
+              hintStyle: TextStyle(color: p.sub),
+              prefixIcon: Icon(Icons.search_rounded, color: p.sub),
+              filled: true,
+              fillColor: p.card,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(22),
+                borderSide: BorderSide.none,
               ),
-            )),
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+        ),
         if (_selected.length > 1)
           Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
-              child: TextField(
-                controller: _groupName,
-                decoration: InputDecoration(
-                  hintText: 'Group name (optional)',
-                  hintStyle: TextStyle(color: p.sub),
-                  filled: true,
-                  fillColor: p.card,
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+            child: TextField(
+              controller: _groupName,
+              decoration: InputDecoration(
+                hintText: 'Group name (optional)',
+                hintStyle: TextStyle(color: p.sub),
+                filled: true,
+                fillColor: p.card,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
                 ),
-              )),
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 12,
+                  horizontal: 16,
+                ),
+              ),
+            ),
+          ),
         Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator(strokeWidth: 2.4))
-                : ListView.builder(
-                    itemCount: _users.length,
-                    itemBuilder: (context, i) {
-                      final u = _users[i];
-                      final selected = u.id != null && _selected.contains(u.id);
-                      return ListTile(
-                        onTap: u.id == null
-                            ? null
-                            : () => setState(() {
-                                  if (selected) {
-                                    _selected.remove(u.id);
-                                  } else {
-                                    _selected.add(u.id!);
-                                  }
-                                }),
-                        leading: Stack(children: [
-                          Avatar(url: u.avatarUrl, size: 46),
-                          if (selected)
-                            Positioned(
-                                right: 0,
-                                bottom: 0,
-                                child: Container(
-                                    padding: const EdgeInsets.all(2),
-                                    decoration: BoxDecoration(
-                                        gradient: p.brand,
-                                        shape: BoxShape.circle,
-                                        border: Border.all(color: p.bg, width: 2)),
-                                    child: const Icon(Icons.check_rounded,
-                                        size: 11, color: Colors.white))),
-                        ]),
-                        title: Row(children: [
-                          Flexible(
-                              child: Text(u.displayName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontWeight: FontWeight.w700))),
-                          if (u.verified) ...[
-                            const SizedBox(width: 4),
-                            Icon(Icons.verified_rounded, size: 15, color: p.accent),
-                          ],
-                        ]),
-                        subtitle: Text('@${u.username}', style: TextStyle(color: p.sub, fontSize: 12.5)),
-                        trailing: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            width: 24,
-                            height: 24,
-                            decoration: BoxDecoration(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator(strokeWidth: 2.4))
+              : ListView.builder(
+                  itemCount: _users.length,
+                  itemBuilder: (context, i) {
+                    final u = _users[i];
+                    final selected = u.id != null && _selected.contains(u.id);
+
+                    return ListTile(
+                      onTap: u.id == null
+                          ? null
+                          : () => setState(() {
+                                if (selected) {
+                                  _selected.remove(u.id);
+                                } else {
+                                  _selected.add(u.id!);
+                                }
+                              }),
+                      leading: Stack(children: [
+                        Avatar(
+                          url: u.avatarUrl,
+                          size: 46,
+                          ring: u.hasUnseenStory,
+                          fallback: u.username,
+                        ),
+                        if (selected)
+                          Positioned(
+                            right: 0,
+                            bottom: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: BoxDecoration(
+                                gradient: p.brand,
                                 shape: BoxShape.circle,
-                                color: selected ? p.accent : Colors.transparent,
-                                border: Border.all(
-                                    color: selected ? p.accent : p.sub, width: 1.6)),
-                            child: selected
-                                ? const Icon(Icons.check_rounded, size: 15, color: Colors.white)
-                                : null),
-                      );
-                    })),
+                                border: Border.all(color: p.bg, width: 2),
+                              ),
+                              child: const Icon(
+                                Icons.check_rounded,
+                                size: 11,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                      ]),
+                      title: Row(children: [
+                        Flexible(
+                          child: Text(
+                            u.displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        if (u.verified) ...[
+                          const SizedBox(width: 4),
+                          Icon(Icons.verified_rounded, size: 15, color: p.accent),
+                        ],
+                      ]),
+                      subtitle: Text(
+                        '@${u.username}',
+                        style: TextStyle(color: p.sub, fontSize: 12.5),
+                      ),
+                      trailing: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: selected ? p.accent : Colors.transparent,
+                          border: Border.all(
+                            color: selected ? p.accent : p.sub,
+                            width: 1.6,
+                          ),
+                        ),
+                        child: selected
+                            ? const Icon(Icons.check_rounded, size: 15, color: Colors.white)
+                            : null,
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ]),
+    );
+  }
+}
+
+class AddMemberScreen extends StatefulWidget {
+  final int conversationId;
+
+  const AddMemberScreen({super.key, required this.conversationId});
+
+  @override
+  State<AddMemberScreen> createState() => _AddMemberScreenState();
+}
+
+class _AddMemberScreenState extends State<AddMemberScreen> {
+  final _api = ApiClient.instance;
+  final _search = TextEditingController();
+
+  List<User> _users = [];
+  bool _loading = false;
+  bool _adding = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _doSearch('');
+  }
+
+  Future<void> _doSearch(String q) async {
+    setState(() => _loading = true);
+
+    try {
+      final res = await _api.get('/api/users', query: {
+        if (q.isNotEmpty) 'q': q,
+        'limit': '50'
+      });
+
+      if (!mounted) return;
+
+      final me = context.read<AppState>().me;
+
+      setState(() {
+        _users = extractItems(res)
+            .map(User.fromJson)
+            .where((u) => u.username != me?.username)
+            .toList();
+        _loading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _add(User u) async {
+    if (_adding || u.id == null) return;
+
+    setState(() => _adding = true);
+
+    try {
+      await _api.post(
+        '/api/dm/conversations/${widget.conversationId}/members',
+        body: {'user_id': u.id},
+      );
+
+      if (mounted) {
+        showSnack(context, '@${u.username} added');
+        Navigator.pop(context, true);
+      }
+    } on ApiException catch (e) {
+      if (mounted) showSnack(context, e.message, error: true);
+    } finally {
+      if (mounted) setState(() => _adding = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = _p(context);
+
+    return Scaffold(
+      backgroundColor: p.bg,
+      appBar: AppBar(
+        title: const Text(
+          'Add member',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.close_rounded),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: Column(children: [
+        Padding(
+          padding: const EdgeInsets.all(14),
+          child: TextField(
+            controller: _search,
+            onChanged: (q) => _doSearch(q.trim()),
+            style: TextStyle(color: p.text),
+            decoration: InputDecoration(
+              hintText: 'Search people…',
+              hintStyle: TextStyle(color: p.sub),
+              prefixIcon: Icon(Icons.search_rounded, color: p.sub),
+              filled: true,
+              fillColor: p.card,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(22),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+        ),
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator(strokeWidth: 2.4))
+              : ListView.builder(
+                  itemCount: _users.length,
+                  itemBuilder: (context, i) {
+                    final u = _users[i];
+
+                    return ListTile(
+                      onTap: () => _add(u),
+                      leading: Avatar(
+                        url: u.avatarUrl,
+                        size: 44,
+                        ring: u.hasUnseenStory,
+                        fallback: u.username,
+                      ),
+                      title: Text(
+                        u.displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      subtitle: Text(
+                        '@${u.username}',
+                        style: TextStyle(color: p.sub, fontSize: 12.5),
+                      ),
+                      trailing: _adding
+                          ? SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(Icons.person_add_rounded, color: p.accent),
+                    );
+                  },
+                ),
+        ),
       ]),
     );
   }
@@ -6082,7 +8828,9 @@ class _NewConversationScreenState extends State<NewConversationScreen> {
 
 class ChatScreen extends StatefulWidget {
   final Conversation conversation;
+
   const ChatScreen({super.key, required this.conversation});
+
   @override
   State<ChatScreen> createState() => _ChatScreenState();
 }
@@ -6091,11 +8839,18 @@ class _ChatScreenState extends State<ChatScreen> {
   final _api = ApiClient.instance;
   final _input = TextEditingController();
   final _scroll = ScrollController();
+
   List<DM> _messages = [];
+
   bool _loading = true;
   bool _sending = false;
   bool _loadingOlder = false;
   bool _hasMore = true;
+
+  bool _attaching = false;
+  double _attachProgress = 0;
+  String? _attachName;
+
   DM? _replyTo;
 
   int? get _convId => widget.conversation.id;
@@ -6121,15 +8876,23 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() => _loading = false);
       return;
     }
+
     try {
-      final res = await _api.get('/api/dm/conversations/$_convId/messages', query: {'limit': '50'});
+      final res = await _api.get(
+        '/api/dm/conversations/$_convId/messages',
+        query: {'limit': '50'},
+      );
+
       if (!mounted) return;
+
       final items = extractItems(res).map(DM.fromJson).toList();
+
       setState(() {
         _messages = items.reversed.toList();
         _hasMore = items.length >= 50;
         _loading = false;
       });
+
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scroll.hasClients) _scroll.jumpTo(0);
       });
@@ -6140,13 +8903,23 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _loadOlder() async {
     if (_messages.isEmpty) return;
+
     setState(() => _loadingOlder = true);
+
     try {
       final oldest = _messages.last.id;
-      final res = await _api.get('/api/dm/conversations/$_convId/messages',
-          query: {'limit': '50', if (oldest != null) 'before_id': '$oldest'});
+
+      final res = await _api.get(
+        '/api/dm/conversations/$_convId/messages',
+        query: {
+          'limit': '50',
+          if (oldest != null) 'before_id': '$oldest'
+        },
+      );
+
       final older = extractItems(res).map(DM.fromJson).toList().reversed.toList();
       if (!mounted) return;
+
       setState(() {
         _messages.addAll(older);
         _hasMore = older.length >= 50;
@@ -6160,26 +8933,36 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _send({String? overrideText}) async {
     final text = (overrideText ?? _input.text).trim();
     if (text.isEmpty || _sending || _convId == null) return;
+
     setState(() => _sending = true);
+
     try {
-      final res = await _api.post('/api/dm/conversations/$_convId/messages', body: {
-        'text': text,
-        if (_replyTo?.id != null) 'reply_to_id': _replyTo!.id,
-      });
+      final res = await _api.post(
+        '/api/dm/conversations/$_convId/messages',
+        body: {
+          'text': text,
+          if (_replyTo?.id != null) 'reply_to_id': _replyTo!.id,
+        },
+      );
+
       _input.clear();
       final replyTo = _replyTo;
       setState(() => _replyTo = null);
+
       DM? sent;
+
       if (res is Map) {
         try {
           sent = DM.fromJson(Map<String, dynamic>.from(res));
         } catch (_) {}
       }
+
       setState(() {
         if (sent != null && sent.id != null) {
           _messages.insert(0, sent);
         } else {
           final me = context.read<AppState>().me;
+
           _messages.insert(
             0,
             DM(
@@ -6193,9 +8976,14 @@ class _ChatScreenState extends State<ChatScreen> {
           );
         }
       });
+
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scroll.hasClients) {
-          _scroll.animateTo(0, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+          _scroll.animateTo(
+            0,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+          );
         }
       });
     } on ApiException catch (e) {
@@ -6205,17 +8993,121 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _attachAndSend() async {
+  void _attachMenu() {
+    final p = _p(context);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: p.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            margin: const EdgeInsets.only(top: 10),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: p.border,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          ListTile(
+            leading: Icon(Icons.image_rounded, color: p.accent),
+            title: const Text('Image', style: TextStyle(fontWeight: FontWeight.w600)),
+            onTap: () {
+              Navigator.pop(ctx);
+              _pickAndSend('image');
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.videocam_rounded, color: p.pink),
+            title: const Text('Video', style: TextStyle(fontWeight: FontWeight.w600)),
+            onTap: () {
+              Navigator.pop(ctx);
+              _pickAndSend('video');
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.audiotrack_rounded, color: p.purple),
+            title: const Text('Audio', style: TextStyle(fontWeight: FontWeight.w600)),
+            onTap: () {
+              Navigator.pop(ctx);
+              _pickAndSend('audio');
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.attach_file_rounded, color: p.gold),
+            title: const Text('Any file', style: TextStyle(fontWeight: FontWeight.w600)),
+            onTap: () {
+              Navigator.pop(ctx);
+              _pickAndSend('file');
+            },
+          ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+  }
+
+  Future<void> _pickAndSend(String type) async {
+    String? path;
+    String? name;
+
     try {
-      final f = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 80);
-      if (f == null) return;
-      showSnack(context, 'Uploading...');
-      final res = await _api.uploadMedia(f.path, onProgress: (v) {
-        if (mounted) {
-          showSnack(context, 'Uploading... ${(v * 100).toInt()}%', seconds: 1);
+      if (type == 'image') {
+        final f = await ImagePicker().pickImage(
+          source: ImageSource.gallery,
+          imageQuality: 85,
+        );
+        path = f?.path;
+        name = f?.name;
+      } else if (type == 'video') {
+        final f = await ImagePicker().pickVideo(
+          source: ImageSource.gallery,
+          maxDuration: const Duration(minutes: 5),
+        );
+        path = f?.path;
+        name = f?.name;
+      } else if (type == 'audio') {
+        final result = await FilePicker.platform.pickFiles(type: FileType.audio);
+        if (result != null && result.files.isNotEmpty) {
+          path = result.files.first.path;
+          name = result.files.first.name;
         }
-      });
+      } else {
+        final result = await FilePicker.platform.pickFiles(type: FileType.any);
+        if (result != null && result.files.isNotEmpty) {
+          path = result.files.first.path;
+          name = result.files.first.name;
+        }
+      }
+    } catch (_) {}
+
+    if (path == null) return;
+    await _uploadAndSend(path, name);
+  }
+
+  Future<void> _uploadAndSend(String path, String? name) async {
+    if (_convId == null || _attaching) return;
+
+    setState(() {
+      _attaching = true;
+      _attachProgress = 0;
+      _attachName = name ?? path.split('/').last;
+    });
+
+    try {
+      final res = await _api.uploadMedia(
+        path,
+        onProgress: (v) {
+          if (mounted) setState(() => _attachProgress = v);
+        },
+      );
+
       String id = '';
+
       if (res is Map) {
         id = jstr(jpick(res, ['id', 'media_id']));
         if (id.isEmpty) {
@@ -6223,15 +9115,30 @@ class _ChatScreenState extends State<ChatScreen> {
           if (u != null) id = u;
         }
       }
+
       if (id.isEmpty) throw ApiException('Upload failed');
+
       await _api.post('/api/dm/conversations/$_convId/messages', body: {
         'text': _input.text.trim().isEmpty ? ' ' : _input.text.trim(),
         'media_ids': [id],
       });
+
       _input.clear();
       await _load();
+
+      if (mounted) showSnack(context, 'Attachment sent');
     } on ApiException catch (e) {
       if (mounted) showSnack(context, e.message, error: true);
+    } catch (_) {
+      if (mounted) showSnack(context, 'Attachment failed', error: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _attaching = false;
+          _attachProgress = 0;
+          _attachName = null;
+        });
+      }
     }
   }
 
@@ -6239,75 +9146,102 @@ class _ChatScreenState extends State<ChatScreen> {
     final p = _p(context);
     final me = context.read<AppState>().me;
     final mine = m.senderId == me?.id || m.sender?.username == me?.username;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: p.card,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (ctx) => SafeArea(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
             margin: const EdgeInsets.only(top: 10),
             width: 40,
             height: 4,
-            decoration: BoxDecoration(color: p.border, borderRadius: BorderRadius.circular(4))),
-        ListTile(
+            decoration: BoxDecoration(
+              color: p.border,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          ListTile(
             leading: Icon(Icons.reply_rounded, color: p.accent),
             title: const Text('Reply', style: TextStyle(fontWeight: FontWeight.w600)),
             onTap: () {
               Navigator.pop(ctx);
               setState(() => _replyTo = m);
-            }),
-        if (mine)
-          ListTile(
+            },
+          ),
+          if (mine)
+            ListTile(
               leading: Icon(Icons.edit_outlined, color: p.gold),
               title: const Text('Edit', style: TextStyle(fontWeight: FontWeight.w600)),
               onTap: () {
                 Navigator.pop(ctx);
                 _editMessage(m);
-              }),
-        if (mine)
-          ListTile(
+              },
+            ),
+          if (mine)
+            ListTile(
               leading: Icon(Icons.delete_outline_rounded, color: p.red),
-              title: Text('Delete',
-                  style: TextStyle(color: p.red, fontWeight: FontWeight.w600)),
+              title: Text(
+                'Delete',
+                style: TextStyle(color: p.red, fontWeight: FontWeight.w600),
+              ),
               onTap: () {
                 Navigator.pop(ctx);
                 _deleteMessage(m);
-              }),
-        const SizedBox(height: 8),
-      ])),
+              },
+            ),
+          const SizedBox(height: 8),
+        ]),
+      ),
     );
   }
 
   Future<void> _editMessage(DM m) async {
     final p = _p(context);
     final c = TextEditingController(text: m.text);
+
     final newText = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: p.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        title: const Text('Edit message',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        title: const Text(
+          'Edit message',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+        ),
         content: TextField(
-            controller: c,
-            autofocus: true,
-            style: TextStyle(color: p.text),
-            decoration: InputDecoration(
-                filled: true,
-                fillColor: p.surface,
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none))),
+          controller: c,
+          autofocus: true,
+          style: TextStyle(color: p.text),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: p.surface,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text('Cancel', style: TextStyle(color: p.sub))),
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: TextStyle(color: p.sub)),
+          ),
           GradientButton(
-              text: 'Save', width: 90, height: 38, onPressed: () => Navigator.pop(ctx, c.text)),
+            text: 'Save',
+            width: 90,
+            height: 38,
+            onPressed: () => Navigator.pop(ctx, c.text),
+          ),
         ],
       ),
     );
+
     if (newText == null || newText.trim().isEmpty || m.id == null) return;
+
     try {
       await _api.put('/api/dm/messages/${m.id}', body: {'text': newText.trim()});
       setState(() => _load());
@@ -6318,6 +9252,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _deleteMessage(DM m) async {
     if (m.id == null) return;
+
     try {
       await _api.delete('/api/dm/messages/${m.id}');
       setState(() => _messages.removeWhere((x) => x.id == m.id));
@@ -6329,11 +9264,15 @@ class _ChatScreenState extends State<ChatScreen> {
 
   String _title() {
     final c = widget.conversation;
+
     if (c.name != null && c.name!.isNotEmpty) return c.name!;
+
     final me = context.read<AppState>().me;
+
     for (final m in c.members) {
       if (m.username != me?.username) return m.displayName;
     }
+
     return c.members.isNotEmpty ? c.members.first.displayName : 'Chat';
   }
 
@@ -6347,273 +9286,408 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     _applyBars(context);
+
     final p = _p(context);
     final me = context.watch<AppState>().me;
     final conv = widget.conversation;
-    final other = conv.members.firstWhere((m) => m.username != me?.username,
-        orElse: () => conv.members.isNotEmpty ? conv.members.first : User(username: ''));
+
+    final other = conv.members.firstWhere(
+      (m) => m.username != me?.username,
+      orElse: () => conv.members.isNotEmpty
+          ? conv.members.first
+          : User(username: ''),
+    );
+
     final isOnlineOther = other.isOnline;
 
     return Scaffold(
       backgroundColor: p.bg,
       appBar: AppBar(
         titleSpacing: 0,
-        leading:
-            IconButton(icon: const Icon(Icons.arrow_back_rounded), onPressed: () => Navigator.pop(context)),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: GestureDetector(
           onTap: other.username.isNotEmpty
-              ? () => Navigator.push(context, FadeRoute(ProfileScreen(username: other.username)))
+              ? () => Navigator.push(
+                    context,
+                    FadeRoute(ProfileScreen(username: other.username)),
+                  )
               : null,
           child: Row(children: [
-            Stack(children: [
-              Avatar(url: other.avatarUrl, size: 36, fallback: _title()),
-              if (!conv.isGroup && isOnlineOther)
-                Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                          color: p.green, shape: BoxShape.circle, border: Border.all(color: p.bg, width: 2)),
-                    )),
-            ]),
+            Avatar(
+              url: other.avatarUrl,
+              size: 36,
+              ring: other.hasUnseenStory,
+              online: !conv.isGroup && isOnlineOther,
+              fallback: _title(),
+            ),
             const SizedBox(width: 10),
             Flexible(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(_title(),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(
+                  _title(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5, color: p.text)),
-              Text(
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15.5,
+                    color: p.text,
+                  ),
+                ),
+                Text(
                   conv.isGroup
                       ? '${conv.members.length} members'
                       : (isOnlineOther
                           ? 'Online'
                           : 'Last seen ${timeAgo(context, other.lastSeen)}'),
-                  style: TextStyle(fontSize: 11, color: isOnlineOther ? p.green : p.sub)),
-            ])),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isOnlineOther ? p.green : p.sub,
+                  ),
+                ),
+              ]),
+            ),
           ]),
         ),
+        actions: [
+          if (conv.isGroup && conv.id != null)
+            IconButton(
+              icon: Icon(Icons.person_add_alt_1_rounded, color: p.sub),
+              onPressed: () => Navigator.push(
+                context,
+                FadeRoute(AddMemberScreen(conversationId: conv.id!)),
+              ).then((v) {
+                if (v == true) _load();
+              }),
+            ),
+        ],
       ),
       body: Column(children: [
         Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator(strokeWidth: 2.4))
-                : _messages.isEmpty
-                    ? const EmptyState(
-                        icon: Icons.waving_hand_rounded,
-                        title: 'No messages yet',
-                        subtitle: 'Say hello!')
-                    : ListView.builder(
-                        controller: _scroll,
-                        reverse: true,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        itemCount: _messages.length + (_loadingOlder ? 1 : 0),
-                        itemBuilder: (context, i) {
-                          if (i == _messages.length) {
-                            return const Padding(
-                                padding: EdgeInsets.all(14),
-                                child: Center(child: CircularProgressIndicator(strokeWidth: 2.2)));
-                          }
-                          final m = _messages[i];
-                          final mine = m.senderId == me?.id || m.sender?.username == me?.username;
-                          return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4),
-                              child: Row(
-                                mainAxisAlignment:
-                                    mine ? MainAxisAlignment.end : MainAxisAlignment.start,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  if (!mine) ...[
-                                    GestureDetector(
-                                        onTap: m.sender?.username != null && m.sender!.username.isNotEmpty
-                                            ? () => Navigator.push(context,
-                                                FadeRoute(ProfileScreen(username: m.sender!.username)))
-                                            : null,
-                                        child: Avatar(url: m.sender?.avatarUrl, size: 28)),
-                                    const SizedBox(width: 6),
-                                  ],
-                                  Flexible(
-                                      child: GestureDetector(
-                                    onLongPress: () => _messageMenu(m),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                      decoration: BoxDecoration(
-                                        gradient: mine ? p.brand : null,
-                                        color: mine ? null : p.card,
-                                        borderRadius: BorderRadius.only(
-                                          topLeft: const Radius.circular(18),
-                                          topRight: const Radius.circular(18),
-                                          bottomLeft: Radius.circular(mine ? 18 : 4),
-                                          bottomRight: Radius.circular(mine ? 4 : 18),
-                                        ),
-                                      ),
-                                      child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            if (!mine && conv.isGroup && m.sender != null)
-                                              Padding(
-                                                  padding: const EdgeInsets.only(bottom: 3),
-                                                  child: GestureDetector(
-                                                      onTap: () => Navigator.push(
-                                                          context,
-                                                          FadeRoute(ProfileScreen(
-                                                              username: m.sender!.username))),
-                                                      child: Text(
-                                                          m.sender?.displayName ?? m.sender!.username,
-                                                          style: TextStyle(
-                                                              fontSize: 11,
-                                                              fontWeight: FontWeight.w800,
-                                                              color: hashColor(m.sender!.username))))),
-                                            if (m.replyToId != null &&
-                                                m.replyParent != null &&
-                                                m.replyParent!.text.isNotEmpty)
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.fromLTRB(8, 6, 8, 6),
-                                                margin: const EdgeInsets.only(bottom: 6),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white.withOpacity(mine ? .15 : .08),
-                                                  borderRadius: BorderRadius.circular(10),
-                                                  border: Border(
-                                                      left: BorderSide(
-                                                          color: mine ? Colors.white : p.accent,
-                                                          width: 3)),
-                                                ),
-                                                child: Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    children: [
-                                                      Text('↩ Reply',
-                                                          style: TextStyle(
-                                                              fontSize: 10,
-                                                              color: mine
-                                                                  ? Colors.white.withOpacity(.7)
-                                                                  : p.accent,
-                                                              fontWeight: FontWeight.w700)),
-                                                      Text(m.replyParent!.text,
-                                                          maxLines: 2,
-                                                          overflow: TextOverflow.ellipsis,
-                                                          style: TextStyle(
-                                                              fontSize: 12,
-                                                              color: mine
-                                                                  ? Colors.white.withOpacity(.85)
-                                                                  : p.text)),
-                                                    ]),
-                                              ),
-                                            if (m.media.isNotEmpty)
-                                              for (final mm in m.media)
-                                                if (mm.type == 'file')
-                                                  Padding(
-                                                      padding: const EdgeInsets.only(bottom: 6),
-                                                      child: FileCard(media: mm))
-                                                else if (mm.type == 'audio')
-                                                  Padding(
-                                                      padding: const EdgeInsets.only(bottom: 6),
-                                                      child: AudioChip(media: mm))
-                                                else
-                                                  Padding(
-                                                      padding: const EdgeInsets.only(bottom: 6),
-                                                      child: ClipRRect(
-                                                          borderRadius: BorderRadius.circular(12),
-                                                          child: GestureDetector(
-                                                            onTap: () {
-                                                              if (mm.type == 'video' ||
-                                                                  mm.type == 'gif') {
-                                                                Navigator.push(
-                                                                    context,
-                                                                    FadeRoute(FullScreenVideoScreen(
-                                                                        url: mm.url,
-                                                                        thumbnail: mm.thumbnail)));
-                                                              } else {
-                                                                Navigator.push(
-                                                                    context,
-                                                                    FadeRoute(MediaViewerScreen(
-                                                                        media: mm,
-                                                                        heroTag:
-                                                                            'dm_${m.id}_${mm.id}')));
-                                                              }
-                                                            },
-                                                            child: Stack(children: [
-                                                              CachedNetworkImage(
-                                                                  imageUrl: mm.thumbnail ?? mm.url,
-                                                                  fit: BoxFit.cover,
-                                                                  width: 200,
-                                                                  height: 150,
-                                                                  errorWidget: (_, __, ___) => Container(
-                                                                      width: 200,
-                                                                      height: 150,
-                                                                      color: p.card2)),
-                                                              if (mm.type == 'video' || mm.type == 'gif')
-                                                                Positioned.fill(
-                                                                    child: Container(
-                                                                        color: Colors.black
-                                                                            .withOpacity(.25),
-                                                                        child: const Center(
-                                                                            child: Icon(
-                                                                                Icons
-                                                                                    .play_circle_fill_rounded,
-                                                                                color: Colors.white70,
-                                                                                size: 44)))),
-                                                            ]),
-                                                          ))),
-                                            if (m.deleted)
-                                              Text('This message was deleted',
-                                                  style: TextStyle(
-                                                      fontSize: 13,
-                                                      fontStyle: FontStyle.italic,
-                                                      color: mine
-                                                          ? Colors.white.withOpacity(.7)
-                                                          : p.sub))
-                                            else if (m.text.trim().isNotEmpty)
-                                              Padding(
-                                                  padding: EdgeInsets.only(
-                                                      top: m.media.isNotEmpty ? 6 : 0),
-                                                  child: Text(m.text,
-                                                      style: TextStyle(
-                                                          fontSize: 14,
-                                                          height: 1.3,
-                                                          color: mine ? Colors.white : p.text))),
-                                            Padding(
-                                                padding: const EdgeInsets.only(top: 3),
-                                                child: Text(timeAgo(context, m.createdAt),
-                                                    style: TextStyle(
-                                                        fontSize: 9.5,
-                                                        color: mine
-                                                            ? Colors.white.withOpacity(.7)
-                                                            : p.sub))),
-                                          ]),
+          child: _loading
+              ? const Center(child: CircularProgressIndicator(strokeWidth: 2.4))
+              : _messages.isEmpty
+                  ? const EmptyState(
+                      icon: Icons.waving_hand_rounded,
+                      title: 'No messages yet',
+                      subtitle: 'Say hello!',
+                    )
+                  : ListView.builder(
+                      controller: _scroll,
+                      reverse: true,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      itemCount: _messages.length + (_loadingOlder ? 1 : 0),
+                      itemBuilder: (context, i) {
+                        if (i == _messages.length) {
+                          return const Padding(
+                            padding: EdgeInsets.all(14),
+                            child: Center(
+                              child: CircularProgressIndicator(strokeWidth: 2.2),
+                            ),
+                          );
+                        }
+
+                        final m = _messages[i];
+                        final mine =
+                            m.senderId == me?.id || m.sender?.username == me?.username;
+
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            mainAxisAlignment:
+                                mine ? MainAxisAlignment.end : MainAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              if (!mine) ...[
+                                GestureDetector(
+                                  onTap: m.sender?.username != null &&
+                                          m.sender!.username.isNotEmpty
+                                      ? () => Navigator.push(
+                                            context,
+                                            FadeRoute(
+                                              ProfileScreen(username: m.sender!.username),
+                                            ),
+                                          )
+                                      : null,
+                                  child: Avatar(
+                                    url: m.sender?.avatarUrl,
+                                    size: 28,
+                                    ring: m.sender?.hasUnseenStory ?? false,
+                                    fallback: m.sender?.username,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                              ],
+                              Flexible(
+                                child: GestureDetector(
+                                  onLongPress: () => _messageMenu(m),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 10,
                                     ),
-                                  )),
-                                ],
-                              ));
-                        })),
-        if (_replyTo != null)
+                                    decoration: BoxDecoration(
+                                      gradient: mine ? p.brand : null,
+                                      color: mine ? null : p.card,
+                                      borderRadius: BorderRadius.only(
+                                        topLeft: const Radius.circular(18),
+                                        topRight: const Radius.circular(18),
+                                        bottomLeft:
+                                            Radius.circular(mine ? 18 : 4),
+                                        bottomRight:
+                                            Radius.circular(mine ? 4 : 18),
+                                      ),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        if (!mine && conv.isGroup && m.sender != null)
+                                          Padding(
+                                            padding: const EdgeInsets.only(bottom: 3),
+                                            child: GestureDetector(
+                                              onTap: () => Navigator.push(
+                                                context,
+                                                FadeRoute(
+                                                  ProfileScreen(
+                                                    username: m.sender!.username,
+                                                  ),
+                                                ),
+                                              ),
+                                              child: Text(
+                                                m.sender?.displayName ?? m.sender!.username,
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: hashColor(m.sender!.username),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        if (m.replyToId != null &&
+                                            m.replyParent != null &&
+                                            m.replyParent!.text.isNotEmpty)
+                                          Container(
+                                            padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                                            margin: const EdgeInsets.only(bottom: 6),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white
+                                                  .withOpacity(mine ? .15 : .08),
+                                              borderRadius: BorderRadius.circular(10),
+                                              border: Border(
+                                                left: BorderSide(
+                                                  color: mine ? Colors.white : p.accent,
+                                                  width: 3,
+                                                ),
+                                              ),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  '↩ Reply',
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    color: mine
+                                                        ? Colors.white.withOpacity(.7)
+                                                        : p.accent,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  m.replyParent!.text,
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: mine
+                                                        ? Colors.white.withOpacity(.85)
+                                                        : p.text,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        if (m.media.isNotEmpty)
+                                          for (final mm in m.media)
+                                            if (mm.type == 'file')
+                                              Padding(
+                                                padding: const EdgeInsets.only(bottom: 6),
+                                                child: FileCard(media: mm),
+                                              )
+                                            else if (mm.type == 'audio')
+                                              Padding(
+                                                padding: const EdgeInsets.only(bottom: 6),
+                                                child: AudioChip(media: mm),
+                                              )
+                                            else
+                                              Padding(
+                                                padding: const EdgeInsets.only(bottom: 6),
+                                                child: ClipRRect(
+                                                  borderRadius: BorderRadius.circular(12),
+                                                  child: GestureDetector(
+                                                    onTap: () {
+                                                      if (mm.type == 'video' ||
+                                                          mm.type == 'gif') {
+                                                        Navigator.push(
+                                                          context,
+                                                          FadeRoute(FullScreenVideoScreen(
+                                                            url: mm.url,
+                                                            thumbnail: mm.thumbnail,
+                                                          )),
+                                                        );
+                                                      } else {
+                                                        Navigator.push(
+                                                          context,
+                                                          FadeRoute(MediaViewerScreen(
+                                                            media: mm,
+                                                            heroTag: 'dm_${m.id}_${mm.id}',
+                                                          )),
+                                                        );
+                                                      }
+                                                    },
+                                                    child: Stack(children: [
+                                                      CachedFileImage(
+                                                        url: mm.thumbnail ?? mm.url,
+                                                        width: 200,
+                                                        height: 150,
+                                                        fit: BoxFit.cover,
+                                                      ),
+                                                      if (mm.type == 'video' ||
+                                                          mm.type == 'gif')
+                                                        Positioned.fill(
+                                                          child: Container(
+                                                            color: Colors.black
+                                                                .withOpacity(.25),
+                                                            child: const Center(
+                                                              child: Icon(
+                                                                Icons
+                                                                    .play_circle_fill_rounded,
+                                                                color: Colors.white70,
+                                                                size: 44,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                    ]),
+                                                  ),
+                                                ),
+                                              ),
+                                        if (m.deleted)
+                                          Text(
+                                            'This message was deleted',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontStyle: FontStyle.italic,
+                                              color: mine
+                                                  ? Colors.white.withOpacity(.7)
+                                                  : p.sub,
+                                            ),
+                                          )
+                                        else if (m.text.trim().isNotEmpty)
+                                          Padding(
+                                            padding: EdgeInsets.only(
+                                              top: m.media.isNotEmpty ? 6 : 0,
+                                            ),
+                                            child: Text(
+                                              m.text,
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                height: 1.3,
+                                                color: mine ? Colors.white : p.text,
+                                              ),
+                                            ),
+                                          ),
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 3),
+                                          child: Text(
+                                            timeAgo(context, m.createdAt),
+                                            style: TextStyle(
+                                              fontSize: 9.5,
+                                              color: mine
+                                                  ? Colors.white.withOpacity(.7)
+                                                  : p.sub,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+        ),
+        if (_attaching)
           Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: p.surface,
-              child: Row(children: [
-                Icon(Icons.reply_rounded, size: 18, color: p.accent),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            color: p.surface,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Icon(Icons.upload_file_rounded, size: 16, color: p.accent),
                 const SizedBox(width: 8),
                 Expanded(
-                    child: Text('Replying to: ${_replyTo!.text}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12.5, color: p.sub))),
-                GestureDetector(
-                    onTap: () => setState(() => _replyTo = null),
-                    child: Icon(Icons.close_rounded, size: 17, color: p.sub)),
-              ])),
+                  child: Text(
+                    'Uploading ${_attachName ?? 'file'}…',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: p.sub),
+                  ),
+                ),
+                Text(
+                  '${(_attachProgress * 100).toInt()}%',
+                  style: TextStyle(fontSize: 12, color: p.accent),
+                ),
+              ]),
+              const SizedBox(height: 6),
+              LinearProgressIndicator(
+                value: _attachProgress,
+                color: p.accent,
+                backgroundColor: p.card2,
+              ),
+            ]),
+          ),
+        if (_replyTo != null)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: p.surface,
+            child: Row(children: [
+              Icon(Icons.reply_rounded, size: 18, color: p.accent),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Replying to: ${_replyTo!.text}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12.5, color: p.sub),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => setState(() => _replyTo = null),
+                child: Icon(Icons.close_rounded, size: 17, color: p.sub),
+              ),
+            ]),
+          ),
         SafeArea(
-            top: false,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
-              decoration: BoxDecoration(color: p.surface, border: Border(top: BorderSide(color: p.border))),
-              child: Row(children: [
-                IconButton(
-                    icon: Icon(Icons.image_rounded, color: p.accent), onPressed: _attachAndSend),
-                Expanded(
-                    child: TextField(
+          top: false,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
+            decoration: BoxDecoration(
+              color: p.surface,
+              border: Border(top: BorderSide(color: p.border)),
+            ),
+            child: Row(children: [
+              IconButton(
+                icon: Icon(Icons.add_circle_rounded, color: p.accent),
+                onPressed: _attaching ? null : _attachMenu,
+              ),
+              Expanded(
+                child: TextField(
                   controller: _input,
                   maxLines: 4,
                   minLines: 1,
@@ -6623,48 +9697,67 @@ class _ChatScreenState extends State<ChatScreen> {
                     hintText: 'Message…',
                     hintStyle: TextStyle(color: p.sub),
                     isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 11,
+                    ),
                     filled: true,
                     fillColor: p.card,
                     border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
-                )),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: _sending ? null : () => _send(),
-                  child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 220),
-                      width: 46,
-                      height: 46,
-                      decoration: BoxDecoration(
-                          gradient: p.brand,
-                          shape: BoxShape.circle,
-                          boxShadow: [BoxShadow(color: p.accent.withOpacity(.4), blurRadius: 14)]),
-                      child: _sending
-                          ? const Padding(
-                              padding: EdgeInsets.all(13),
-                              child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
-                          : const Icon(Icons.send_rounded, color: Colors.white, size: 21)),
                 ),
-              ]),
-            )),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: _sending || _attaching ? null : () => _send(),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    gradient: p.brand,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(color: p.accent.withOpacity(.4), blurRadius: 14)
+                    ],
+                  ),
+                  child: _sending
+                      ? const Padding(
+                          padding: EdgeInsets.all(13),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.send_rounded, color: Colors.white, size: 21),
+                ),
+              ),
+            ]),
+          ),
+        ),
       ]),
     );
   }
 }
 
-// ═══════════════════════════════ PROFILE ═════════════════════════
-
+// ═══════════════════════════════════════════════════════════════
+// PROFILE
+// ═══════════════════════════════════════════════════════════════
 class ProfileScreen extends StatefulWidget {
   final String username;
+
   const ProfileScreen({super.key, required this.username});
+
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final _api = ApiClient.instance;
+
   User? _user;
   bool _loading = true;
   String? _error;
@@ -6687,9 +9780,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _loading = true;
       _error = null;
     });
+
     try {
       final res = await _api.get('/api/users/${widget.username}');
       if (!mounted) return;
+
       setState(() {
         _user = User.fromJson(Map<String, dynamic>.from(res is Map ? res : {}));
         _following = _user?.isFollowing ?? false;
@@ -6712,32 +9807,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<List<Post>> _tabPosts(String kind) async {
-    if (_tabCache.containsKey(kind)) return _tabCache[kind]!;
-    _tabLoading[kind] = true;
+  Future<List<Post>> _basePosts() async {
+    if (_tabCache.containsKey('base')) return _tabCache['base']!;
+
+    _tabLoading['base'] = true;
+
     try {
-      final path = kind == 'posts'
-          ? '/api/users/${widget.username}/posts'
-          : kind == 'replies'
-              ? '/api/users/${widget.username}/replies'
-              : '/api/users/${widget.username}/media';
-      final res = await _api.get(path, query: {'limit': '40'});
+      final res = await _api.get(
+        '/api/users/${widget.username}/posts',
+        query: {'limit': '100'},
+      );
+
       final items = extractItems(res).map(Post.fromJson).toList();
-      _tabCache[kind] = items;
+      _tabCache['base'] = items;
       return items;
     } catch (_) {
-      _tabCache[kind] = [];
+      _tabCache['base'] = [];
       return [];
     } finally {
-      _tabLoading[kind] = false;
+      _tabLoading['base'] = false;
       if (mounted) setState(() {});
     }
   }
 
+  Future<List<Post>> _tabPosts(String kind) async {
+    final base = await _basePosts();
+
+    if (kind == 'media') {
+      return base.where((p) => p.media.isNotEmpty).toList();
+    }
+
+    return base;
+  }
+
   Future<void> _toggleFollow() async {
     if (_user == null) return;
+
     setState(() {
       _following = !_following;
+
       _user = User(
         id: _user!.id,
         username: _user!.username,
@@ -6758,6 +9866,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         followedByFollowings: _user!.followedByFollowings,
       );
     });
+
     try {
       await _api.post('/api/users/${widget.username}/follow');
     } catch (e) {
@@ -6770,63 +9879,98 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   void _profileMenu() {
     final p = _p(context);
+    final me = context.read<AppState>().me;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: p.card,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (ctx) => SafeArea(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
             margin: const EdgeInsets.only(top: 10),
             width: 40,
             height: 4,
-            decoration: BoxDecoration(color: p.border, borderRadius: BorderRadius.circular(4))),
-        ListTile(
+            decoration: BoxDecoration(
+              color: p.border,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          ListTile(
             leading: Icon(Icons.copy_rounded, color: p.text),
-            title: const Text('Copy username',
-                style: TextStyle(fontWeight: FontWeight.w600)),
+            title: const Text(
+              'Copy username',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
             onTap: () {
               Navigator.pop(ctx);
               Clipboard.setData(ClipboardData(text: '@${widget.username}'));
               showSnack(context, 'Copied');
-            }),
-        if (_isMe || context.read<AppState>().me?.isAdmin == true)
-          ListTile(
-              leading: Icon(Icons.verified_rounded, color: p.gold),
-              title: const Text('Verify user (Admin)',
-                  style: TextStyle(fontWeight: FontWeight.w600)),
+            },
+          ),
+          if (_isMe || me?.isAdmin == true)
+            ListTile(
+              leading: Icon(
+                _user?.verified == true
+                    ? Icons.verified_user_rounded
+                    : Icons.verified_rounded,
+                color: p.gold,
+              ),
+              title: Text(
+                _user?.verified == true ? 'Unverify user (Admin)' : 'Verify user (Admin)',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
               onTap: () async {
                 Navigator.pop(ctx);
+
                 try {
-                  await _api.post('/api/admin/users/${widget.username}/verify', body: {'verified': true});
-                  if (mounted) showSnack(context, 'User verified ✅');
+                  await _api.post(
+                    '/api/admin/users/${widget.username}/verify',
+                    body: {'verified': !(_user?.verified ?? false)},
+                  );
+
+                  if (mounted) {
+                    showSnack(
+                      context,
+                      _user?.verified == true ? 'User unverified' : 'User verified ✅',
+                    );
+                  }
+
                   _load();
                 } on ApiException catch (e) {
                   if (mounted) showSnack(context, e.message, error: true);
                 }
-              }),
-        if (_isMe)
-          ListTile(
+              },
+            ),
+          if (_isMe)
+            ListTile(
               leading: Icon(Icons.settings_outlined, color: p.text),
-              title: const Text('Settings',
-                  style: TextStyle(fontWeight: FontWeight.w600)),
+              title: const Text('Settings', style: TextStyle(fontWeight: FontWeight.w600)),
               onTap: () {
                 Navigator.pop(ctx);
                 openSettings(context);
-              }),
-        const SizedBox(height: 8),
-      ])),
+              },
+            ),
+          const SizedBox(height: 8),
+        ]),
+      ),
     );
   }
 
   void _openMusicSheet() {
     if (_user == null || _user!.musicItems.isEmpty) return;
+
     final p = _p(context);
+
     showModalBottomSheet(
       context: context,
       backgroundColor: p.card,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (ctx) => DraggableScrollableSheet(
         initialChildSize: 0.6,
         minChildSize: 0.3,
@@ -6840,10 +9984,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             child: Column(children: [
               Container(
-                  margin: const EdgeInsets.only(top: 10),
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(color: p.border, borderRadius: BorderRadius.circular(4))),
+                margin: const EdgeInsets.only(top: 10),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: p.border,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                 child: Row(children: [
@@ -6854,8 +10002,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: const Icon(Icons.music_note_rounded, color: Colors.white, size: 22),
                   ),
                   const SizedBox(width: 12),
-                  const Text('Profile Music',
-                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+                  const Text(
+                    'Profile Music',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+                  ),
                 ]),
               ),
               Expanded(
@@ -6877,20 +10027,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildTabContent() {
-    final kind = _activeTab == 0 ? 'posts' : _activeTab == 1 ? 'replies' : 'media';
-    final isGrid = _activeTab == 2;
+    final kind = _activeTab == 0 ? 'posts' : 'media';
+    final isGrid = _activeTab == 1;
+
     return _ProfileTab(
       loader: () => _tabPosts(kind),
-      loading: _tabLoading[kind] ?? false,
+      loading: _tabLoading['base'] ?? false,
       grid: isGrid,
     );
   }
 
   Widget _stat(int n, String label) {
     final p = _p(context);
+
     return Column(children: [
-      Text(formatCount(n),
-          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: p.text)),
+      Text(
+        formatCount(n),
+        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: p.text),
+      ),
       const SizedBox(height: 2),
       Text(label, style: TextStyle(color: p.sub, fontSize: 12)),
     ]);
@@ -6900,23 +10054,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     _applyBars(context);
     final p = _p(context);
+
     if (_loading) {
       return Scaffold(
-          backgroundColor: p.bg,
-          appBar: AppBar(
-              leading: IconButton(
-                  icon: const Icon(Icons.arrow_back_rounded),
-                  onPressed: () => Navigator.pop(context))),
-          body: const Center(child: CircularProgressIndicator()));
+        backgroundColor: p.bg,
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
     }
+
     if (_error != null || _user == null) {
       return Scaffold(
-          backgroundColor: p.bg,
-          appBar: AppBar(
-              leading: IconButton(
-                  icon: const Icon(Icons.arrow_back_rounded),
-                  onPressed: () => Navigator.pop(context))),
-          body: ErrorState(message: _error ?? 'Not found', onRetry: _load));
+        backgroundColor: p.bg,
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        body: ErrorState(message: _error ?? 'Not found', onRetry: _load),
+      );
     }
 
     final u = _user!;
@@ -6933,14 +10095,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
         backgroundColor: p.bg,
         elevation: 0,
         leading: IconButton(
-            icon: Icon(Icons.arrow_back_rounded, color: p.text),
-            onPressed: () => Navigator.pop(context)),
-        title: Text('@${u.username}',
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: p.text)),
+          icon: Icon(Icons.arrow_back_rounded, color: p.text),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          '@${u.username}',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: p.text),
+        ),
         actions: [
           IconButton(
-              icon: Icon(Icons.more_horiz_rounded, color: p.text),
-              onPressed: _profileMenu),
+            icon: Icon(Icons.more_horiz_rounded, color: p.text),
+            onPressed: _profileMenu,
+          ),
         ],
       ),
       body: ListView(
@@ -6956,32 +10122,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       _showAvatarsGallery();
                     }
                   },
-                  child: Stack(children: [
-                    Avatar(url: u.avatarUrl, size: 92, ring: true),
-                    if (!_isMe && u.isOnline)
-                      Positioned(
-                          right: 6,
-                          bottom: 6,
-                          child: Container(
-                            width: 18,
-                            height: 18,
-                            decoration: BoxDecoration(
-                                color: p.green,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: p.bg, width: 3)),
-                          )),
-                  ]),
+                  child: Avatar(
+                    url: u.avatarUrl,
+                    size: 92,
+                    ring: u.hasUnseenStory,
+                    online: !_isMe && u.isOnline,
+                    fallback: u.username,
+                  ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Row(children: [
                       Flexible(
-                          child: Text(u.displayName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                  fontSize: 21, fontWeight: FontWeight.w900, color: p.text))),
+                        child: Text(
+                          u.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 21,
+                            fontWeight: FontWeight.w900,
+                            color: p.text,
+                          ),
+                        ),
+                      ),
                       if (u.verified) ...[
                         const SizedBox(width: 6),
                         Icon(Icons.verified_rounded, size: 20, color: p.accent),
@@ -6991,10 +10155,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Text('@${u.username}', style: TextStyle(color: p.sub, fontSize: 13.5)),
                     if (!_isMe && u.isOnline)
                       Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text('Online',
-                              style: TextStyle(
-                                  color: p.green, fontSize: 12, fontWeight: FontWeight.w700))),
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          'Online',
+                          style: TextStyle(
+                            color: p.green,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
                   ]),
                 ),
               ]),
@@ -7003,30 +10173,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ? OutlinePillButton(
                       text: 'Edit profile',
                       icon: Icons.edit_rounded,
-                      onTap: () => Navigator.push(context, SlideUpRoute(const EditProfileScreen()))
-                          .then((_) {
-                            context.read<AppState>().fetchMe();
-                            _load();
-                          }))
+                      onTap: () => Navigator.push(
+                        context,
+                        SlideUpRoute(const EditProfileScreen()),
+                      ).then((_) {
+                        context.read<AppState>().fetchMe();
+                        _load();
+                      }),
+                    )
                   : GradientButton(
                       text: _following ? 'Following ✓' : 'Follow',
                       height: 42,
                       gradient: _following ? null : p.brand,
                       outline: _following,
-                      onPressed: _toggleFollow),
+                      onPressed: _toggleFollow,
+                    ),
               if (u.bio.isNotEmpty) ...[
                 const SizedBox(height: 14),
                 Text(u.bio, style: TextStyle(fontSize: 14, height: 1.4, color: p.text)),
               ],
               if (followedByText != null)
                 Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(followedByText,
-                        style: TextStyle(fontSize: 12, color: p.sub, fontStyle: FontStyle.italic))),
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    followedByText,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: p.sub,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
               if (u.avatarItems.length > 1) ...[
                 const SizedBox(height: 14),
-                Text('Avatars',
-                    style: TextStyle(color: p.sub, fontSize: 12, fontWeight: FontWeight.w700)),
+                Text(
+                  'Avatars',
+                  style: TextStyle(color: p.sub, fontSize: 12, fontWeight: FontWeight.w700),
+                ),
                 const SizedBox(height: 6),
                 SizedBox(
                   height: 70,
@@ -7035,21 +10218,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     itemCount: u.avatarItems.length,
                     separatorBuilder: (_, __) => const SizedBox(width: 8),
                     itemBuilder: (context, i) {
-                      final a = u.avatarItems[i];
+                      final a = u.avatarItems[u.avatarItems.length - 1 - i];
+
                       return GestureDetector(
                         onLongPress: () => _downloadMedia(a, 'avatar_$i.jpg'),
                         onTap: () => Navigator.push(
-                            context,
-                            FadeRoute(MediaViewerScreen(
-                                media: a, heroTag: 'av_${u.id}_$i'))),
+                          context,
+                          FadeRoute(MediaViewerScreen(
+                            media: a,
+                            heroTag: 'av_${u.id}_$i',
+                          )),
+                        ),
                         child: Stack(children: [
                           ClipOval(
-                              child: CachedNetworkImage(
-                                  imageUrl: a.url,
-                                  width: 62,
-                                  height: 62,
-                                  fit: BoxFit.cover,
-                                  errorWidget: (_, __, ___) => Container(color: p.card))),
+                            child: CachedFileImage(
+                              url: a.url,
+                              width: 62,
+                              height: 62,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
                           Positioned(
                             right: 0,
                             bottom: 0,
@@ -7058,9 +10246,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               child: Container(
                                 padding: const EdgeInsets.all(3),
                                 decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(.6), shape: BoxShape.circle),
-                                child: const Icon(Icons.download_rounded,
-                                    color: Colors.white, size: 12),
+                                  color: Colors.black.withOpacity(.6),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.download_rounded,
+                                  color: Colors.white,
+                                  size: 12,
+                                ),
                               ),
                             ),
                           ),
@@ -7086,12 +10279,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         width: 36,
                         height: 36,
                         decoration: BoxDecoration(gradient: p.brand, shape: BoxShape.circle),
-                        child: const Icon(Icons.music_note_rounded, color: Colors.white, size: 20),
+                        child: const Icon(
+                          Icons.music_note_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       const Expanded(
-                        child: Text('Profile Music',
-                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                        child: Text(
+                          'Profile Music',
+                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                        ),
                       ),
                       Icon(Icons.chevron_right_rounded, color: p.sub, size: 22),
                     ]),
@@ -7110,21 +10309,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ]),
           ),
           Container(
-              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.border))),
-              child: Row(children: [
-                _ProfileTabButton(
-                    label: 'Posts',
-                    selected: _activeTab == 0,
-                    onTap: () => setState(() => _activeTab = 0)),
-                _ProfileTabButton(
-                    label: 'Replies',
-                    selected: _activeTab == 1,
-                    onTap: () => setState(() => _activeTab = 1)),
-                _ProfileTabButton(
-                    label: 'Media',
-                    selected: _activeTab == 2,
-                    onTap: () => setState(() => _activeTab = 2)),
-              ])),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: p.border)),
+            ),
+            child: Row(children: [
+              _ProfileTabButton(
+                label: 'Posts',
+                selected: _activeTab == 0,
+                onTap: () => setState(() => _activeTab = 0),
+              ),
+              _ProfileTabButton(
+                label: 'Media',
+                selected: _activeTab == 1,
+                onTap: () => setState(() => _activeTab = 1),
+              ),
+            ]),
+          ),
           _buildTabContent(),
         ],
       ),
@@ -7133,11 +10333,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   void _showAvatarsGallery() {
     if (_user == null || _user!.avatarItems.isEmpty) return;
+
     Navigator.push(
-        context,
-        FadeRoute(MediaViewerScreen(
-            media: _user!.avatarItems.first,
-            heroTag: 'av_${_user!.id}_0')));
+      context,
+      FadeRoute(MediaViewerScreen(
+        media: _user!.avatarItems.last,
+        heroTag: 'av_${_user!.id}_latest',
+      )),
+    );
   }
 
   Future<void> _downloadMedia(MediaItem m, String name) async {
@@ -7153,15 +10356,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (_) {}
 
     final fullUrl = _fullUrl(m.url);
+
     try {
       showSnack(context, 'Downloading...');
+
       await FileCache.instance.downloadWithResume(
         fullUrl,
-        headers: ApiClient.instance.token != null
-            ? {'Authorization': 'Bearer ${ApiClient.instance.token}'}
-            : null,
+        headers: authHeaders(),
       );
-      if (mounted) showSnack(context, 'Saved to gallery ✓');
+
+      if (mounted) showSnack(context, 'Saved ✓');
     } catch (e) {
       if (mounted) showSnack(context, 'Download failed', error: true);
     }
@@ -7170,24 +10374,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
 class _MusicSheetItem extends StatelessWidget {
   final MediaItem media;
+
   const _MusicSheetItem({required this.media});
+
+  Future<void> _play(BuildContext context) async {
+    final audio = AudioController.instance;
+    final fullUrl = _fullUrl(media.url);
+
+    if (audio.currentKey == media.url) {
+      if (audio.playing) {
+        await audio.pause();
+      } else {
+        await audio.resume();
+      }
+      return;
+    }
+
+    try {
+      final path = await FileCache.instance.downloadWithResume(
+        fullUrl,
+        headers: authHeaders(),
+      );
+
+      await audio.play(
+        path,
+        key: media.url,
+        title: media.title?.isNotEmpty == true ? media.title : media.originalName,
+        artist: media.artist,
+        duration: media.duration,
+      );
+    } catch (_) {
+      if (context.mounted) showSnack(context, 'Audio playback failed', error: true);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final p = _p(context);
     final audio = context.watch<AudioController>();
     final cache = context.watch<FileCache>();
-    final isPlaying = audio.currentUrl == media.url && audio.playing;
+
+    final isPlaying = audio.currentKey == media.url && audio.playing;
+    final isCurrent = audio.currentKey == media.url;
+
     final title = media.title?.isNotEmpty == true
         ? media.title!
-        : (media.originalName?.isNotEmpty == true ? media.originalName! : 'Audio track');
-    final progress = audio.currentUrl == media.url && audio.currentDuration != null && audio.currentDuration! > 0
+        : (media.originalName?.isNotEmpty == true
+            ? media.originalName!
+            : 'Audio track');
+
+    final progress = isCurrent &&
+            audio.currentDuration != null &&
+            audio.currentDuration! > 0
         ? (audio.position / audio.currentDuration!).clamp(0.0, 1.0)
         : 0.0;
 
     final fullUrl = _fullUrl(media.url);
     final dlProgress = cache.getProgress(fullUrl);
-    final isDlActive = cache.isDownloading(fullUrl);
+    final isDlActive = cache.isDownloading(fullUrl) && !isCurrent;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -7200,23 +10444,24 @@ class _MusicSheetItem extends StatelessWidget {
       child: Column(children: [
         Row(children: [
           GestureDetector(
-            onTap: () {
-              if (isPlaying) {
-                audio.pause();
-              } else {
-                audio.play(media.url, title: title, artist: media.artist, duration: media.duration);
-              }
-            },
+            onTap: () => _play(context),
             child: Container(
               width: 54,
               height: 54,
               decoration: BoxDecoration(
                 gradient: p.brand,
                 shape: BoxShape.circle,
-                boxShadow: [BoxShadow(color: p.accent.withOpacity(.3), blurRadius: 10)],
+                boxShadow: [
+                  BoxShadow(color: p.accent.withOpacity(.3), blurRadius: 10)
+                ],
               ),
-              child: Icon(isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                  color: Colors.white, size: 28),
+              child: Icon(
+                isDlActive
+                    ? Icons.hourglass_top_rounded
+                    : (isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                color: Colors.white,
+                size: 28,
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -7224,20 +10469,24 @@ class _MusicSheetItem extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                ),
                 const SizedBox(height: 2),
                 if (media.artist?.isNotEmpty == true)
                   Row(children: [
                     Icon(Icons.person_outline_rounded, size: 12, color: p.sub),
                     const SizedBox(width: 4),
                     Expanded(
-                      child: Text(media.artist!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 12, color: p.sub)),
+                      child: Text(
+                        media.artist!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12, color: p.sub),
+                      ),
                     ),
                   ]),
                 if (media.duration != null)
@@ -7246,8 +10495,10 @@ class _MusicSheetItem extends StatelessWidget {
                     child: Row(children: [
                       Icon(Icons.access_time_rounded, size: 12, color: p.sub),
                       const SizedBox(width: 4),
-                      Text(formatDuration(media.duration),
-                          style: TextStyle(fontSize: 12, color: p.sub)),
+                      Text(
+                        formatDuration(media.duration),
+                        style: TextStyle(fontSize: 12, color: p.sub),
+                      ),
                     ]),
                   ),
               ],
@@ -7256,13 +10507,13 @@ class _MusicSheetItem extends StatelessWidget {
           GestureDetector(
             onTap: () async {
               try {
-                showSnack(context, 'Downloading...');
+                if (context.mounted) showSnack(context, 'Downloading...');
+
                 final path = await FileCache.instance.downloadWithResume(
                   fullUrl,
-                  headers: ApiClient.instance.token != null
-                      ? {'Authorization': 'Bearer ${ApiClient.instance.token}'}
-                      : null,
+                  headers: authHeaders(),
                 );
+
                 if (context.mounted) showSnack(context, 'Download complete ✓');
                 OpenFile.open(path);
               } catch (e) {
@@ -7280,7 +10531,11 @@ class _MusicSheetItem extends StatelessWidget {
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, value: dlProgress, color: p.accent))
+                        strokeWidth: 2,
+                        value: dlProgress,
+                        color: p.accent,
+                      ),
+                    )
                   : Icon(Icons.download_rounded, color: p.accent, size: 20),
             ),
           ),
@@ -7291,14 +10546,19 @@ class _MusicSheetItem extends StatelessWidget {
             child: Row(children: [
               Expanded(
                 child: LinearProgressIndicator(
-                    value: dlProgress, color: p.accent, backgroundColor: p.card2),
+                  value: dlProgress,
+                  color: p.accent,
+                  backgroundColor: p.card2,
+                ),
               ),
               const SizedBox(width: 8),
-              Text('${(dlProgress * 100).toInt()}%',
-                  style: TextStyle(fontSize: 10, color: p.sub)),
+              Text(
+                '${(dlProgress * 100).toInt()}%',
+                style: TextStyle(fontSize: 10, color: p.sub),
+              ),
             ]),
           ),
-        if (audio.currentUrl == media.url) ...[
+        if (isCurrent) ...[
           const SizedBox(height: 8),
           SliderTheme(
             data: SliderTheme.of(context).copyWith(
@@ -7318,10 +10578,14 @@ class _MusicSheetItem extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Text(formatDuration(audio.position),
-                  style: TextStyle(fontSize: 10, color: p.sub)),
-              Text(formatDuration(audio.currentDuration),
-                  style: TextStyle(fontSize: 10, color: p.sub)),
+              Text(
+                formatDuration(audio.position),
+                style: TextStyle(fontSize: 10, color: p.sub),
+              ),
+              Text(
+                formatDuration(audio.currentDuration),
+                style: TextStyle(fontSize: 10, color: p.sub),
+              ),
             ]),
           ),
         ],
@@ -7334,26 +10598,43 @@ class _ProfileTabButton extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  const _ProfileTabButton({required this.label, required this.selected, required this.onTap});
+
+  const _ProfileTabButton({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     final p = _p(context);
+
     return Expanded(
-        child: InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: selected ? p.accent : Colors.transparent, width: 3))),
-        child: Center(
-            child: Text(label,
-                style: TextStyle(
-                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                    fontSize: 14,
-                    color: selected ? p.text : p.sub))),
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: selected ? p.accent : Colors.transparent,
+                width: 3,
+              ),
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                fontSize: 14,
+                color: selected ? p.text : p.sub,
+              ),
+            ),
+          ),
+        ),
       ),
-    ));
+    );
   }
 }
 
@@ -7361,13 +10642,21 @@ class _ProfileTab extends StatefulWidget {
   final Future<List<Post>> Function() loader;
   final bool loading;
   final bool grid;
-  const _ProfileTab({required this.loader, required this.loading, required this.grid});
+
+  const _ProfileTab({
+    required this.loader,
+    required this.loading,
+    required this.grid,
+  });
+
   @override
   State<_ProfileTab> createState() => _ProfileTabState();
 }
 
-class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientMixin {
+class _ProfileTabState extends State<_ProfileTab>
+    with AutomaticKeepAliveClientMixin {
   List<Post>? _items;
+
   @override
   void initState() {
     super.initState();
@@ -7385,100 +10674,144 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
   @override
   Widget build(BuildContext context) {
     super.build(context);
+
     final p = _p(context);
+
     if (_items == null || widget.loading) {
       return const Padding(
-          padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator(strokeWidth: 2.4)));
+        padding: EdgeInsets.all(40),
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2.4)),
+      );
     }
+
     if (_items!.isEmpty) {
       return Padding(
-          padding: const EdgeInsets.all(40),
-          child: EmptyState(
-              icon: widget.grid ? Icons.photo_library_outlined : Icons.notes_rounded,
-              title: 'Nothing here yet',
-              subtitle: widget.grid ? 'Media will show up here.' : 'Posts will show up here.'));
+        padding: const EdgeInsets.all(40),
+        child: EmptyState(
+          icon: widget.grid ? Icons.photo_library_outlined : Icons.notes_rounded,
+          title: 'Nothing here yet',
+          subtitle: widget.grid
+              ? 'Media will show up here.'
+              : 'Posts will show up here.',
+        ),
+      );
     }
+
     if (widget.grid) {
       final withMedia = _items!.where((x) => x.media.isNotEmpty).toList();
+
       if (withMedia.isEmpty) {
-        return Padding(
-            padding: const EdgeInsets.all(40),
-            child: const EmptyState(
-                icon: Icons.photo_library_outlined,
-                title: 'No media',
-                subtitle: 'Posts with media will appear here.'));
+        return const Padding(
+          padding: EdgeInsets.all(40),
+          child: EmptyState(
+            icon: Icons.photo_library_outlined,
+            title: 'No media',
+            subtitle: 'Posts with media will appear here.',
+          ),
+        );
       }
+
       return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(3),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3, mainAxisSpacing: 3, crossAxisSpacing: 3, childAspectRatio: .9),
-          itemCount: withMedia.length,
-          itemBuilder: (context, i) {
-            final x = withMedia[i];
-            return GestureDetector(
-                onTap: () =>
-                    Navigator.push(context, FadeRoute(PostDetailScreen(postId: x.id, initial: x))),
-                child: Stack(fit: StackFit.expand, children: [
-                  CachedNetworkImage(
-                      imageUrl: x.media.first.thumbnail ?? x.media.first.url,
-                      fit: BoxFit.cover,
-                      errorWidget: (_, __, ___) => Container(color: p.card)),
-                  if (x.media.first.type == 'video' || x.media.first.type == 'gif')
-                    const Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 20)),
-                ]));
-          });
-    }
-    return ListView.separated(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        padding: const EdgeInsets.only(bottom: 40),
-        itemCount: _items!.length,
-        separatorBuilder: (_, __) => Divider(height: 1, thickness: 1, color: p.border.withOpacity(.4)),
-        itemBuilder: (context, i) => PostCard(post: _items![i]));
+        padding: const EdgeInsets.all(3),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          mainAxisSpacing: 3,
+          crossAxisSpacing: 3,
+          childAspectRatio: .9,
+        ),
+        itemCount: withMedia.length,
+        itemBuilder: (context, i) {
+          final x = withMedia[i];
+
+          return GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              FadeRoute(PostDetailScreen(postId: x.id, initial: x)),
+            ),
+            child: Stack(fit: StackFit.expand, children: [
+              CachedFileImage(
+                url: x.media.first.thumbnail ?? x.media.first.url,
+                fit: BoxFit.cover,
+              ),
+              if (x.media.first.type == 'video' || x.media.first.type == 'gif')
+                const Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Icon(
+                    Icons.play_circle_fill_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+            ]),
+          );
+        },
+      );
+    }
+
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.only(bottom: 40),
+      itemCount: _items!.length,
+      separatorBuilder: (_, __) => Divider(
+        height: 1,
+        thickness: 1,
+        color: p.border.withOpacity(.4),
+      ),
+      itemBuilder: (context, i) => PostCard(post: _items![i]),
+    );
   }
 }
 
-// ═══════════════════════════════ EDIT PROFILE ════════════════════
-
+// ═══════════════════════════════════════════════════════════════
+// EDIT PROFILE
+// ═══════════════════════════════════════════════════════════════
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
+
   @override
   State<EditProfileScreen> createState() => _EditProfileScreenState();
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _api = ApiClient.instance;
+
   final _name = TextEditingController();
   final _bio = TextEditingController();
   final _username = TextEditingController();
   final _email = TextEditingController();
   final _password = TextEditingController();
+
   bool _saving = false;
 
   final List<String> _avatarIds = [];
   final List<String> _musicIds = [];
+
   final Map<String, double> _avatarProgress = {};
   final Map<String, double> _musicProgress = {};
+
   final Set<String> _uploadingAvatars = {};
   final Set<String> _uploadingMusics = {};
 
   @override
   void initState() {
     super.initState();
+
     final me = context.read<AppState>().me;
+
     _name.text = me?.name ?? '';
     _bio.text = me?.bio ?? '';
     _username.text = me?.username ?? '';
     _email.text = me?.email ?? '';
+
     if (me != null) {
       for (final a in me.avatarItems) {
         _avatarIds.add(a.id ?? a.url);
       }
+
       for (final m in me.musicItems) {
         _musicIds.add(m.id ?? m.url);
       }
@@ -7487,33 +10820,48 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _pickAvatar() async {
     try {
-      final f = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
+      final f = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
       if (f == null) return;
+
       final tempId = 'av_${DateTime.now().microsecondsSinceEpoch}';
+
       setState(() {
         _avatarIds.add(tempId);
         _avatarProgress[tempId] = 0;
         _uploadingAvatars.add(tempId);
       });
+
       try {
-        final res = await _api.uploadMedia(f.path, onProgress: (v) {
-          if (mounted) setState(() => _avatarProgress[tempId] = v);
-        });
+        final res = await _api.uploadMedia(
+          f.path,
+          onProgress: (v) {
+            if (mounted) setState(() => _avatarProgress[tempId] = v);
+          },
+        );
+
         String id = '';
         String? url;
+
         if (res is Map) {
           id = jstr(jpick(res, ['id', 'media_id']));
           url = resolveMedia(jpick(res, ['url']));
         }
+
         if (!mounted) return;
+
         setState(() {
           final idx = _avatarIds.indexOf(tempId);
           if (idx != -1) {
             _avatarIds[idx] = id.isNotEmpty ? id : (url ?? tempId);
           }
+
           _avatarProgress.remove(tempId);
           _uploadingAvatars.remove(tempId);
         });
+
         if (id.isEmpty && url == null && mounted) {
           showSnack(context, 'Avatar upload failed', error: true);
         }
@@ -7536,33 +10884,46 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       final result = await FilePicker.platform.pickFiles(type: FileType.audio);
       if (result == null || result.files.isEmpty) return;
+
       final file = result.files.first;
       if (file.path == null) return;
+
       final tempId = 'mu_${DateTime.now().microsecondsSinceEpoch}';
+
       setState(() {
         _musicIds.add(tempId);
         _musicProgress[tempId] = 0;
         _uploadingMusics.add(tempId);
       });
+
       try {
-        final res = await _api.uploadMedia(file.path!, onProgress: (v) {
-          if (mounted) setState(() => _musicProgress[tempId] = v);
-        });
+        final res = await _api.uploadMedia(
+          file.path!,
+          onProgress: (v) {
+            if (mounted) setState(() => _musicProgress[tempId] = v);
+          },
+        );
+
         String id = '';
         String? url;
+
         if (res is Map) {
           id = jstr(jpick(res, ['id', 'media_id']));
           url = resolveMedia(jpick(res, ['url']));
         }
+
         if (!mounted) return;
+
         setState(() {
           final idx = _musicIds.indexOf(tempId);
           if (idx != -1) {
             _musicIds[idx] = id.isNotEmpty ? id : (url ?? tempId);
           }
+
           _musicProgress.remove(tempId);
           _uploadingMusics.remove(tempId);
         });
+
         if (id.isEmpty && url == null && mounted) {
           showSnack(context, 'Music upload failed', error: true);
         }
@@ -7583,11 +10944,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _save() async {
     if (_saving) return;
+
     if (_uploadingAvatars.isNotEmpty || _uploadingMusics.isNotEmpty) {
       showSnack(context, 'Wait for uploads to finish', error: true);
       return;
     }
+
     setState(() => _saving = true);
+
     try {
       final body = <String, dynamic>{
         'name': _name.text.trim(),
@@ -7598,8 +10962,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         if (_avatarIds.isNotEmpty) 'profile_image_ids': _avatarIds,
         if (_musicIds.isNotEmpty) 'profile_music_ids': _musicIds,
       };
+
       await _api.put('/api/users/me', body: body);
       await context.read<AppState>().fetchMe();
+
       if (mounted) {
         showSnack(context, 'Profile updated ✨');
         Navigator.pop(context);
@@ -7624,198 +10990,273 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Widget _field(String label, TextEditingController c,
       {int lines = 1, bool obscure = false, String? hint}) {
     final p = _p(context);
+
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: TextStyle(color: p.sub, fontSize: 12.5, fontWeight: FontWeight.w700)),
+      Text(
+        label,
+        style: TextStyle(color: p.sub, fontSize: 12.5, fontWeight: FontWeight.w700),
+      ),
       const SizedBox(height: 6),
       TextField(
-          controller: c,
-          maxLines: lines,
-          obscureText: obscure,
-          style: TextStyle(fontSize: 14.5, color: p.text),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(color: p.sub, fontSize: 13),
-            filled: true,
-            fillColor: p.card,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: p.border)),
-            enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: p.border)),
-            focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(15),
-                borderSide: BorderSide(color: p.accent, width: 1.3)),
-          )),
+        controller: c,
+        maxLines: lines,
+        obscureText: obscure,
+        style: TextStyle(fontSize: 14.5, color: p.text),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: TextStyle(color: p.sub, fontSize: 13),
+          filled: true,
+          fillColor: p.card,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15),
+            borderSide: BorderSide(color: p.border),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15),
+            borderSide: BorderSide(color: p.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15),
+            borderSide: BorderSide(color: p.accent, width: 1.3),
+          ),
+        ),
+      ),
     ]);
   }
 
   @override
   Widget build(BuildContext context) {
     _applyBars(context);
+
     final p = _p(context);
     final me = context.watch<AppState>().me;
+
     return Scaffold(
       backgroundColor: p.bg,
       appBar: AppBar(
-        title: const Text('Edit profile',
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
-        leading: IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => Navigator.pop(context)),
+        title: const Text(
+          'Edit profile',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.close_rounded),
+          onPressed: () => Navigator.pop(context),
+        ),
         actions: [
           Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: GradientButton(
-                  text: 'Save',
-                  width: 92,
-                  height: 40,
-                  loading: _saving,
-                  onPressed: _saving ? null : _save)),
+            padding: const EdgeInsets.only(right: 12),
+            child: GradientButton(
+              text: 'Save',
+              width: 92,
+              height: 40,
+              loading: _saving,
+              onPressed: _saving ? null : _save,
+            ),
+          ),
         ],
       ),
       body: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(children: [
-            GestureDetector(
-                onTap: _pickAvatar,
-                child: Stack(alignment: Alignment.center, children: [
-                  Avatar(url: me?.avatarUrl, size: 96, ring: true),
-                  Positioned(
-                      right: 2,
-                      bottom: 2,
-                      child: Container(
-                          padding: const EdgeInsets.all(7),
-                          decoration: BoxDecoration(
-                              gradient: p.brand,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: p.bg, width: 2)),
-                          child: const Icon(Icons.photo_camera_rounded, size: 15, color: Colors.white))),
-                ])),
-            const SizedBox(height: 6),
-            Text('Tap to add another avatar', style: TextStyle(color: p.sub, fontSize: 12)),
-            if (_avatarIds.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              SizedBox(
-                  height: 70,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _avatarIds.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 8),
-                    itemBuilder: (context, i) {
-                      final id = _avatarIds[i];
-                      final isUploading = _uploadingAvatars.contains(id);
-                      final progress = _avatarProgress[id] ?? 0;
-                      return Stack(children: [
-                        ClipOval(
-                            child: SizedBox(
+        padding: const EdgeInsets.all(20),
+        child: Column(children: [
+          GestureDetector(
+            onTap: _pickAvatar,
+            child: Stack(alignment: Alignment.center, children: [
+              Avatar(
+                url: me?.avatarUrl,
+                size: 96,
+                ring: me?.hasUnseenStory ?? false,
+                fallback: me?.username,
+              ),
+              Positioned(
+                right: 2,
+                bottom: 2,
+                child: Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    gradient: p.brand,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: p.bg, width: 2),
+                  ),
+                  child: const Icon(
+                    Icons.photo_camera_rounded,
+                    size: 15,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Tap to add another avatar',
+            style: TextStyle(color: p.sub, fontSize: 12),
+          ),
+          if (_avatarIds.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 70,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _avatarIds.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, i) {
+                  final id = _avatarIds[i];
+                  final isUploading = _uploadingAvatars.contains(id);
+                  final progress = _avatarProgress[id] ?? 0;
+
+                  return Stack(children: [
+                    ClipOval(
+                      child: SizedBox(
+                        width: 60,
+                        height: 60,
+                        child: isUploading
+                            ? Container(
+                                color: p.card,
+                                child: Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      SizedBox(
+                                        width: 28,
+                                        height: 28,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.4,
+                                          value: progress,
+                                          color: p.accent,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${(progress * 100).toInt()}%',
+                                        style: TextStyle(fontSize: 9, color: p.sub),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              )
+                            : CachedFileImage(
+                                url: resolveMedia(id) ?? id,
                                 width: 60,
                                 height: 60,
-                                child: isUploading
-                                    ? Container(
-                                        color: p.card,
-                                        child: Center(
-                                            child: Column(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  SizedBox(
-                                                      width: 28,
-                                                      height: 28,
-                                                      child: CircularProgressIndicator(
-                                                          strokeWidth: 2.4,
-                                                          value: progress,
-                                                          color: p.accent)),
-                                                  const SizedBox(height: 2),
-                                                  Text('${(progress * 100).toInt()}%',
-                                                      style: TextStyle(fontSize: 9, color: p.sub)),
-                                                ])))
-                                    : CachedNetworkImage(
-                                        imageUrl: resolveMedia(id) ?? id,
-                                        fit: BoxFit.cover,
-                                        errorWidget: (_, __, ___) => Container(
-                                            color: p.card,
-                                            child: Icon(Icons.person_rounded, color: p.sub))))),
-                        Positioned(
-                            top: 0,
-                            right: 0,
-                            child: GestureDetector(
-                                onTap: () => setState(() {
-                                      _avatarIds.removeAt(i);
-                                      _avatarProgress.remove(id);
-                                      _uploadingAvatars.remove(id);
-                                    }),
-                                child: Container(
-                                    padding: const EdgeInsets.all(2),
-                                    decoration: BoxDecoration(
-                                        color: Colors.black.withOpacity(.7), shape: BoxShape.circle),
-                                    child: const Icon(Icons.close_rounded, size: 12, color: Colors.white)))),
-                      ]);
-                    },
-                  )),
-            ],
-            const SizedBox(height: 14),
-            GradientButton(
-                text: 'Add profile music', icon: Icons.audiotrack_rounded, onPressed: _pickMusic),
-            if (_musicIds.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              ..._musicIds.map((id) {
-                final isUploading = _uploadingMusics.contains(id);
-                final progress = _musicProgress[id] ?? 0;
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                      color: p.card,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: p.border)),
-                  child: Row(children: [
-                    Icon(Icons.audiotrack_rounded, color: p.accent, size: 22),
-                    const SizedBox(width: 10),
-                    Expanded(
-                        child: isUploading
-                            ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                Text('Uploading music…',
-                                    style: TextStyle(fontSize: 12, color: p.text)),
-                                LinearProgressIndicator(value: progress, color: p.accent),
-                              ])
-                            : Text('Music track ${_musicIds.indexOf(id) + 1}',
-                                style: TextStyle(fontSize: 12, color: p.text))),
-                    GestureDetector(
+                                fit: BoxFit.cover,
+                              ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: GestureDetector(
                         onTap: () => setState(() {
-                              _musicIds.remove(id);
-                              _musicProgress.remove(id);
-                              _uploadingMusics.remove(id);
-                            }),
-                        child: Icon(Icons.close_rounded, color: p.sub, size: 18)),
-                  ]),
-                );
-              }),
-            ],
-            const SizedBox(height: 22),
-            _field('Display name', _name),
-            const SizedBox(height: 14),
-            _field('Bio', _bio, lines: 3),
-            const SizedBox(height: 14),
-            _field('Username', _username),
-            const SizedBox(height: 14),
-            _field('Email', _email),
-            const SizedBox(height: 14),
-            _field('New password', _password, obscure: true, hint: 'Leave blank to keep current'),
-            const SizedBox(height: 30),
-          ])),
+                          _avatarIds.removeAt(i);
+                          _avatarProgress.remove(id);
+                          _uploadingAvatars.remove(id);
+                        }),
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(.7),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.close_rounded,
+                            size: 12,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ]);
+                },
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          GradientButton(
+            text: 'Add profile music',
+            icon: Icons.audiotrack_rounded,
+            onPressed: _pickMusic,
+          ),
+          if (_musicIds.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            ..._musicIds.map((id) {
+              final isUploading = _uploadingMusics.contains(id);
+              final progress = _musicProgress[id] ?? 0;
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: p.card,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: p.border),
+                ),
+                child: Row(children: [
+                  Icon(Icons.audiotrack_rounded, color: p.accent, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: isUploading
+                        ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(
+                              'Uploading music…',
+                              style: TextStyle(fontSize: 12, color: p.text),
+                            ),
+                            LinearProgressIndicator(value: progress, color: p.accent),
+                          ])
+                        : Text(
+                            'Music track ${_musicIds.indexOf(id) + 1}',
+                            style: TextStyle(fontSize: 12, color: p.text),
+                          ),
+                  ),
+                  GestureDetector(
+                    onTap: () => setState(() {
+                      _musicIds.remove(id);
+                      _musicProgress.remove(id);
+                      _uploadingMusics.remove(id);
+                    }),
+                    child: Icon(Icons.close_rounded, color: p.sub, size: 18),
+                  ),
+                ]),
+              );
+            }),
+          ],
+          const SizedBox(height: 22),
+          _field('Display name', _name),
+          const SizedBox(height: 14),
+          _field('Bio', _bio, lines: 3),
+          const SizedBox(height: 14),
+          _field('Username', _username),
+          const SizedBox(height: 14),
+          _field('Email', _email),
+          const SizedBox(height: 14),
+          _field(
+            'New password',
+            _password,
+            obscure: true,
+            hint: 'Leave blank to keep current',
+          ),
+          const SizedBox(height: 30),
+        ]),
+      ),
     );
   }
 }
 
-// ═══════════════════════════════ SETTINGS ════════════════════════
-
+// ═══════════════════════════════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════════════════════════════
 void openSettings(BuildContext context) {
   showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => const _SettingsSheet());
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) => const _SettingsSheet(),
+  );
 }
 
 class _SettingsSheet extends StatefulWidget {
   const _SettingsSheet();
+
   @override
   State<_SettingsSheet> createState() => _SettingsSheetState();
 }
@@ -7825,8 +11266,10 @@ class _SettingsSheetState extends State<_SettingsSheet> {
 
   Future<void> _refreshLink() async {
     setState(() => _refreshing = true);
+
     try {
       final url = await ApiClient.instance.fetchBaseUrl(force: true);
+
       if (mounted) {
         setState(() {});
         showSnack(context, 'Link updated: $url');
@@ -7843,126 +11286,274 @@ class _SettingsSheetState extends State<_SettingsSheet> {
     final p = _p(context);
     final base = ApiClient.instance.baseUrl ?? 'unknown';
     final theme = context.watch<ThemeStore>();
+    final accounts = context.watch<AccountManager>().accounts;
+
     return Container(
       decoration: BoxDecoration(
-          color: p.card, borderRadius: const BorderRadius.vertical(top: Radius.circular(28))),
+        color: p.card,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
       child: SafeArea(
-          child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Container(
-                    width: 40,
-                    height: 4,
-                    decoration:
-                        BoxDecoration(color: p.border, borderRadius: BorderRadius.circular(4))),
-                const SizedBox(height: 18),
-                Row(children: [
-                  Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(color: p.accent.withOpacity(.15), shape: BoxShape.circle),
-                      child: Icon(Icons.dns_rounded, color: p.accent)),
-                  const SizedBox(width: 14),
-                  Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('Server link (dynamic)',
-                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5)),
-                    const SizedBox(height: 3),
-                    Text(base,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: p.sub, fontSize: 12)),
-                  ])),
-                ]),
-                const SizedBox(height: 14),
-                GradientButton(
-                    text: 'Refresh server link',
-                    icon: Icons.refresh_rounded,
-                    loading: _refreshing,
-                    onPressed: _refreshing ? null : _refreshLink),
-                const SizedBox(height: 14),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(theme.isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
-                      color: p.accent),
-                  title: const Text('Theme',
-                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5)),
-                  subtitle: Text(theme.isDark ? 'Dark mode' : 'Light mode',
-                      style: TextStyle(color: p.sub, fontSize: 12)),
-                  trailing: Switch(value: theme.isDark, onChanged: (_) => theme.toggle(), activeColor: p.accent),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: p.border,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: p.accent.withOpacity(.15),
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(height: 8),
-                Container(height: 1, color: p.border),
-                const SizedBox(height: 8),
-                ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.logout_rounded, color: p.red),
-                    title: Text('Log out',
-                        style: TextStyle(color: p.red, fontWeight: FontWeight.w800, fontSize: 14.5)),
-                    onTap: () async {
-                      Navigator.pop(context);
-                      await context.read<AppState>().logout();
-                      if (context.mounted) {
-                        Navigator.of(context)
-                            .pushAndRemoveUntil(FadeRoute(const AuthScreen()), (_) => false);
-                      }
-                    }),
-                Center(
-                    child: Text('NokhodX v4.1.1', style: TextStyle(color: p.sub, fontSize: 11))),
-              ]))),
+                child: Icon(Icons.dns_rounded, color: p.accent),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text(
+                    'Server link (dynamic)',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    base,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: p.sub, fontSize: 12),
+                  ),
+                ]),
+              ),
+            ]),
+            const SizedBox(height: 14),
+            GradientButton(
+              text: 'Refresh server link',
+              icon: Icons.refresh_rounded,
+              loading: _refreshing,
+              onPressed: _refreshing ? null : _refreshLink,
+            ),
+            const SizedBox(height: 10),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.switch_account_rounded, color: p.purple),
+              title: const Text(
+                'Accounts',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5),
+              ),
+              subtitle: Text(
+                '${accounts.length} account(s) on this device',
+                style: TextStyle(color: p.sub, fontSize: 12),
+              ),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context, FadeRoute(const AccountsScreen()));
+              },
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                theme.isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                color: p.accent,
+              ),
+              title: const Text(
+                'Theme',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5),
+              ),
+              subtitle: Text(
+                theme.isDark ? 'Dark mode' : 'Light mode',
+                style: TextStyle(color: p.sub, fontSize: 12),
+              ),
+              trailing: Switch(
+                value: theme.isDark,
+                onChanged: (_) => theme.toggle(),
+                activeColor: p.accent,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(height: 1, color: p.border),
+            const SizedBox(height: 8),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.logout_rounded, color: p.red),
+              title: Text(
+                'Log out current account',
+                style: TextStyle(color: p.red, fontWeight: FontWeight.w800, fontSize: 14.5),
+              ),
+              onTap: () async {
+                Navigator.pop(context);
+
+                final appState = context.read<AppState>();
+                await appState.logout();
+
+                if (!context.mounted) return;
+
+                if (AccountManager.instance.accounts.isNotEmpty) {
+                  await appState.fetchMe();
+
+                  if (!context.mounted) return;
+
+                  showSnack(context, 'Switched to next available account');
+
+                  Navigator.of(context).pushAndRemoveUntil(
+                    FadeRoute(const MainShell()),
+                    (_) => false,
+                  );
+                } else {
+                  Navigator.of(context).pushAndRemoveUntil(
+                    FadeRoute(const AuthScreen()),
+                    (_) => false,
+                  );
+                }
+              },
+            ),
+            Center(
+              child: Text(
+                'NokhodX v5.0.0',
+                style: TextStyle(color: p.sub, fontSize: 11),
+              ),
+            ),
+          ]),
+        ),
+      ),
     );
   }
 }
 
-// ═══════════════════════════════ MEDIA VIEWER ═════════════════════
-
-class MediaViewerScreen extends StatelessWidget {
+// ═══════════════════════════════════════════════════════════════
+// MEDIA VIEWER
+// ═══════════════════════════════════════════════════════════════
+class MediaViewerScreen extends StatefulWidget {
   final MediaItem media;
   final String heroTag;
-  const MediaViewerScreen({super.key, required this.media, required this.heroTag});
+
+  const MediaViewerScreen({
+    super.key,
+    required this.media,
+    required this.heroTag,
+  });
+
+  @override
+  State<MediaViewerScreen> createState() => _MediaViewerScreenState();
+}
+
+class _MediaViewerScreenState extends State<MediaViewerScreen> {
+  String? _path;
+  double _progress = 0;
+  bool _error = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final full = _fullUrl(widget.media.url);
+
+    try {
+      if (await FileCache.instance.hasFile(full)) {
+        if (mounted) {
+          setState(() {
+            _path = FileCache.instance.getLocalPath(full);
+          });
+        }
+        return;
+      }
+
+      final path = await FileCache.instance.downloadWithResume(
+        full,
+        headers: authHeaders(),
+        onProgress: (v) {
+          if (mounted) setState(() => _progress = v);
+        },
+      );
+
+      if (mounted) setState(() => _path = path);
+    } catch (_) {
+      if (mounted) setState(() => _error = true);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        backgroundColor: Colors.black,
-        body: GestureDetector(
-          onTap: () => Navigator.pop(context),
-          child: Stack(fit: StackFit.expand, children: [
+      backgroundColor: Colors.black,
+      body: GestureDetector(
+        onTap: () => Navigator.pop(context),
+        child: Stack(fit: StackFit.expand, children: [
+          if (_path != null)
             Hero(
-                tag: heroTag,
-                child: PhotoView(
-                  imageProvider: CachedNetworkImageProvider(media.url),
-                  minScale: PhotoViewComputedScale.contained,
-                  maxScale: PhotoViewComputedScale.covered * 3,
-                  backgroundDecoration: const BoxDecoration(color: Colors.black),
-                  loadingBuilder: (_, __) => const Center(child: CircularProgressIndicator()),
-                  errorBuilder: (_, __, ___) => const Center(
-                      child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 44)),
-                )),
-            Positioned(
-                top: MediaQuery.of(context).padding.top + 6,
-                right: 12,
-                child: Row(children: [
-                  _DownloadButton(url: media.url, name: media.originalName ?? 'image'),
-                  const SizedBox(width: 10),
-                  _circleBtn(Icons.close_rounded, () => Navigator.pop(context)),
-                ])),
-          ]),
-        ));
+              tag: widget.heroTag,
+              child: PhotoView(
+                imageProvider: FileImage(File(_path!)),
+                minScale: PhotoViewComputedScale.contained,
+                maxScale: PhotoViewComputedScale.covered * 3,
+                backgroundDecoration: const BoxDecoration(color: Colors.black),
+              ),
+            )
+          else if (_error)
+            const Center(
+              child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 44),
+            )
+          else
+            Center(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                SizedBox(
+                  width: 54,
+                  height: 54,
+                  child: CircularProgressIndicator(
+                    value: _progress > 0 ? _progress : null,
+                    color: Colors.white,
+                    strokeWidth: 3,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '${(_progress * 100).toInt()}%',
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ]),
+            ),
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 6,
+            right: 12,
+            child: Row(children: [
+              _DownloadButton(url: widget.media.url, name: widget.media.originalName ?? 'image'),
+              const SizedBox(width: 10),
+              _circleBtn(Icons.close_rounded, () => Navigator.pop(context)),
+            ]),
+          ),
+        ]),
+      ),
+    );
   }
 
   Widget _circleBtn(IconData icon, VoidCallback onTap) => GestureDetector(
         onTap: onTap,
         child: Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(color: Colors.black.withOpacity(.5), shape: BoxShape.circle),
-            child: Icon(icon, color: Colors.white, size: 20)),
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(.5),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: Colors.white, size: 20),
+        ),
       );
 }
 
 class _DownloadButton extends StatefulWidget {
   final String url;
   final String name;
+
   const _DownloadButton({required this.url, required this.name});
 
   @override
@@ -7975,6 +11566,7 @@ class _DownloadButtonState extends State<_DownloadButton> {
 
   Future<void> _download() async {
     if (_downloading) return;
+
     try {
       final status = await Permission.storage.request();
       if (!status.isGranted && Platform.isAndroid) {
@@ -7987,20 +11579,21 @@ class _DownloadButtonState extends State<_DownloadButton> {
     } catch (_) {}
 
     setState(() => _downloading = true);
+
     final fullUrl = _fullUrl(widget.url);
+
     try {
       final path = await FileCache.instance.downloadWithResume(
         fullUrl,
         onProgress: (v) {
           if (mounted) setState(() => _progress = v);
         },
-        headers: ApiClient.instance.token != null
-            ? {'Authorization': 'Bearer ${ApiClient.instance.token}'}
-            : null,
+        headers: authHeaders(),
       );
+
       if (mounted) {
         setState(() => _downloading = false);
-        showSnack(context, 'Saved to gallery ✓');
+        showSnack(context, 'Saved ✓');
         OpenFile.open(path);
       }
     } catch (e) {
@@ -8015,6 +11608,7 @@ class _DownloadButtonState extends State<_DownloadButton> {
   Widget build(BuildContext context) {
     final cache = context.watch<FileCache>();
     final fullUrl = _fullUrl(widget.url);
+
     final cacheProgress = cache.getProgress(fullUrl);
     final isCacheActive = cache.isDownloading(fullUrl);
     final displayProgress = _progress > 0 ? _progress : cacheProgress;
@@ -8024,14 +11618,20 @@ class _DownloadButtonState extends State<_DownloadButton> {
       child: Container(
         width: 42,
         height: 42,
-        decoration: BoxDecoration(color: Colors.black.withOpacity(.5), shape: BoxShape.circle),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(.5),
+          shape: BoxShape.circle,
+        ),
         child: (_downloading || isCacheActive)
             ? Center(
                 child: SizedBox(
                   width: 22,
                   height: 22,
                   child: CircularProgressIndicator(
-                      strokeWidth: 2.5, value: displayProgress, color: Colors.white),
+                    strokeWidth: 2.5,
+                    value: displayProgress,
+                    color: Colors.white,
+                  ),
                 ),
               )
             : const Icon(Icons.download_rounded, color: Colors.white, size: 20),
@@ -8040,34 +11640,42 @@ class _DownloadButtonState extends State<_DownloadButton> {
   }
 }
 
-// ═══════════════════════════════ FULL SCREEN VIDEO ════════════════
-
+// ═══════════════════════════════════════════════════════════════
+// FULL SCREEN VIDEO
+// ═══════════════════════════════════════════════════════════════
 class FullScreenVideoScreen extends StatefulWidget {
   final String url;
   final String? thumbnail;
+
   const FullScreenVideoScreen({super.key, required this.url, this.thumbnail});
+
   @override
   State<FullScreenVideoScreen> createState() => _FullScreenVideoScreenState();
 }
 
 class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
   VideoPlayerController? _c;
+
   bool _ready = false;
   bool _error = false;
   bool _showControls = true;
   bool _caching = false;
   double _cacheProgress = 0;
+
   Timer? _hideTimer;
 
   @override
   void initState() {
     super.initState();
+
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     AudioController.instance.muteTemporarily();
+
     _init();
   }
 
@@ -8082,44 +11690,52 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
         onProgress: (v) {
           if (mounted) setState(() => _cacheProgress = v);
         },
-        headers: ApiClient.instance.token != null
-            ? {'Authorization': 'Bearer ${ApiClient.instance.token}'}
-            : null,
+        headers: authHeaders(),
       );
 
       if (!mounted) return;
 
       final file = File(localPath);
+
       if (await file.exists()) {
         final c = VideoPlayerController.file(file);
         _c = c;
+
         await c.initialize();
         c.setLooping(true);
         await c.play();
-        if (mounted) setState(() {
-          _ready = true;
-          _caching = false;
-        });
+
+        if (mounted) {
+          setState(() {
+            _ready = true;
+            _caching = false;
+          });
+        }
       } else {
         throw Exception('File not found');
       }
     } catch (_) {
-      // Fallback to network
       try {
         final c = VideoPlayerController.networkUrl(Uri.parse(fullUrl));
         _c = c;
+
         await c.initialize();
         c.setLooping(true);
         await c.play();
-        if (mounted) setState(() {
-          _ready = true;
-          _caching = false;
-        });
+
+        if (mounted) {
+          setState(() {
+            _ready = true;
+            _caching = false;
+          });
+        }
       } catch (__) {
-        if (mounted) setState(() {
-          _error = true;
-          _caching = false;
-        });
+        if (mounted) {
+          setState(() {
+            _error = true;
+            _caching = false;
+          });
+        }
       }
     }
   }
@@ -8127,6 +11743,7 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
   void _toggleControls() {
     setState(() => _showControls = !_showControls);
     _hideTimer?.cancel();
+
     if (_showControls) {
       _hideTimer = Timer(const Duration(seconds: 3), () {
         if (mounted) setState(() => _showControls = false);
@@ -8139,23 +11756,29 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
     AudioController.instance.unmute();
     _hideTimer?.cancel();
     _c?.dispose();
+
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
+
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final isDark = ThemeStore.instance.isDark;
+
       SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
         statusBarColor: isDark ? Colors.white : Colors.black,
         statusBarIconBrightness: isDark ? Brightness.dark : Brightness.light,
         statusBarBrightness: isDark ? Brightness.light : Brightness.dark,
         systemNavigationBarColor: isDark ? Colors.black : Colors.white,
-        systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        systemNavigationBarIconBrightness:
+            isDark ? Brightness.light : Brightness.dark,
       ));
     });
+
     super.dispose();
   }
 
@@ -8163,174 +11786,182 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
   Widget build(BuildContext context) {
     if (_error) {
       return Scaffold(
-          backgroundColor: Colors.black,
-          body: GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: const Center(
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
+        backgroundColor: Colors.black,
+        body: GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: const Center(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
               Icon(Icons.videocam_off_rounded, color: Colors.white54, size: 60),
               SizedBox(height: 12),
-              Text('Video unavailable',
-                  style: TextStyle(color: Colors.white54, fontSize: 16)),
-            ])),
-          ));
+              Text(
+                'Video unavailable',
+                style: TextStyle(color: Colors.white54, fontSize: 16),
+              ),
+            ]),
+          ),
+        ),
+      );
     }
+
     if (_caching) {
       return Scaffold(
-          backgroundColor: Colors.black,
-          body: Center(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
             if (widget.thumbnail != null && widget.thumbnail!.isNotEmpty)
               SizedBox(
                 width: 200,
                 height: 120,
-                child: CachedNetworkImage(imageUrl: widget.thumbnail!, fit: BoxFit.cover),
+                child: CachedFileImage(url: widget.thumbnail!, fit: BoxFit.cover),
               ),
             const SizedBox(height: 16),
             SizedBox(
               width: 50,
               height: 50,
               child: CircularProgressIndicator(
-                  value: _cacheProgress > 0 ? _cacheProgress : null,
-                  color: Colors.white,
-                  strokeWidth: 3),
+                value: _cacheProgress > 0 ? _cacheProgress : null,
+                color: Colors.white,
+                strokeWidth: 3,
+              ),
             ),
             const SizedBox(height: 10),
-            Text('Loading video... ${(_cacheProgress * 100).toInt()}%',
-                style: const TextStyle(color: Colors.white, fontSize: 12)),
-          ])));
+            Text(
+              'Loading video... ${(_cacheProgress * 100).toInt()}%',
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+            ),
+          ]),
+        ),
+      );
     }
+
     if (!_ready || _c == null) {
-      return Scaffold(
-          backgroundColor: Colors.black,
-          body: const Center(child: CircularProgressIndicator(color: Colors.white)));
-    }
-    return Scaffold(
+      return const Scaffold(
         backgroundColor: Colors.black,
-        body: GestureDetector(
-          onTap: _toggleControls,
-          child: Stack(fit: StackFit.expand, children: [
-            Center(
-                child: AspectRatio(
+        body: Center(child: CircularProgressIndicator(color: Colors.white)),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: GestureDetector(
+        onTap: _toggleControls,
+        child: Stack(fit: StackFit.expand, children: [
+          Center(
+            child: AspectRatio(
               aspectRatio: _c!.value.aspectRatio,
               child: VideoPlayer(_c!),
-            )),
-            if (_showControls) ...[
-              Positioned.fill(child: Container(color: Colors.black.withOpacity(.3))),
-              Positioned(
-                  top: MediaQuery.of(context).padding.top + 10,
-                  left: 16,
-                  child: GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
+            ),
+          ),
+          if (_showControls) ...[
+            Positioned.fill(child: Container(color: Colors.black.withOpacity(.3))),
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 10,
+              left: 16,
+              child: GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(.6),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.arrow_back_rounded,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 20,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  VideoProgressIndicator(
+                    _c!,
+                    allowScrubbing: true,
+                    colors: VideoProgressColors(
+                      playedColor: const Color(0xFFF91880),
+                      bufferedColor: Colors.white24,
+                      backgroundColor: Colors.white10,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    GestureDetector(
+                      onTap: () {
+                        final cur = _c!.value.position - const Duration(seconds: 10);
+                        _c!.seekTo(cur < Duration.zero ? Duration.zero : cur);
+                      },
+                      child: Container(
                         padding: const EdgeInsets.all(10),
-                        decoration:
-                            BoxDecoration(color: Colors.black.withOpacity(.6), shape: BoxShape.circle),
-                        child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 24)),
-                  )),
-              Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 20,
-                  child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        VideoProgressIndicator(_c!,
-                            allowScrubbing: true,
-                            colors: VideoProgressColors(
-                                playedColor: const Color(0xFFF91880),
-                                bufferedColor: Colors.white24,
-                                backgroundColor: Colors.white10)),
-                        const SizedBox(height: 10),
-                        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                          GestureDetector(
-                              onTap: () {
-                                final cur = _c!.value.position - const Duration(seconds: 10);
-                                _c!.seekTo(cur < Duration.zero ? Duration.zero : cur);
-                              },
-                              child: Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                      color: Colors.black.withOpacity(.5), shape: BoxShape.circle),
-                                  child: const Icon(Icons.replay_10_rounded,
-                                      color: Colors.white, size: 30))),
-                          const SizedBox(width: 24),
-                          GestureDetector(
-                              onTap: () =>
-                                  setState(() => _c!.value.isPlaying ? _c!.pause() : _c!.play()),
-                              child: Container(
-                                  padding: const EdgeInsets.all(14),
-                                  decoration: BoxDecoration(
-                                      color: Colors.black.withOpacity(.6), shape: BoxShape.circle),
-                                  child: Icon(
-                                      _c!.value.isPlaying
-                                          ? Icons.pause_rounded
-                                          : Icons.play_arrow_rounded,
-                                      color: Colors.white,
-                                      size: 40))),
-                          const SizedBox(width: 24),
-                          GestureDetector(
-                              onTap: () {
-                                final cur = _c!.value.position + const Duration(seconds: 10);
-                                _c!.seekTo(cur);
-                              },
-                              child: Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                      color: Colors.black.withOpacity(.5), shape: BoxShape.circle),
-                                  child: const Icon(Icons.forward_10_rounded,
-                                      color: Colors.white, size: 30))),
-                        ]),
-                      ]))),
-            ],
-          ]),
-        ));
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.replay_10_rounded,
+                          color: Colors.white,
+                          size: 30,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 24),
+                    GestureDetector(
+                      onTap: () => setState(
+                        () => _c!.value.isPlaying ? _c!.pause() : _c!.play(),
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(.6),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _c!.value.isPlaying
+                              ? Icons.pause_rounded
+                              : Icons.play_arrow_rounded,
+                          color: Colors.white,
+                          size: 40,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 24),
+                    GestureDetector(
+                      onTap: () {
+                        final cur = _c!.value.position + const Duration(seconds: 10);
+                        _c!.seekTo(cur);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.forward_10_rounded,
+                          color: Colors.white,
+                          size: 30,
+                        ),
+                      ),
+                    ),
+                  ]),
+                ]),
+              ),
+            ),
+          ],
+        ]),
+      ),
+    );
   }
 }
 
-// ═══════════════════════════════ COMMON ══════════════════════════
-
-class Avatar extends StatelessWidget {
-  final String? url;
-  final double size;
-  final bool ring;
-  final String? fallback;
-  const Avatar({super.key, this.url, required this.size, this.ring = false, this.fallback});
-
-  @override
-  Widget build(BuildContext context) {
-    final p = _p(context);
-    final inner = ClipOval(
-        child: (url != null && url!.isNotEmpty)
-            ? CachedNetworkImage(
-                imageUrl: url!,
-                width: size,
-                height: size,
-                fit: BoxFit.cover,
-                placeholder: (_, __) => _placeholder(p),
-                errorWidget: (_, __, ___) => _placeholder(p))
-            : _placeholder(p));
-    if (!ring) return SizedBox(width: size, height: size, child: inner);
-    return Container(
-        width: size + 4,
-        height: size + 4,
-        padding: const EdgeInsets.all(2),
-        decoration: BoxDecoration(shape: BoxShape.circle, gradient: p.brand),
-        child: ClipOval(child: inner));
-  }
-
-  Widget _placeholder(Pal p) {
-    final letter = (fallback != null && fallback!.isNotEmpty) ? fallback![0] : '?';
-    return Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(gradient: p.brand),
-        alignment: Alignment.center,
-        child: Text(letter.toUpperCase(),
-            style: TextStyle(fontWeight: FontWeight.w900, fontSize: size * .42, color: Colors.white)));
-  }
-}
-
+// ═══════════════════════════════════════════════════════════════
+// COMMON UI
+// ═══════════════════════════════════════════════════════════════
 class GradientButton extends StatefulWidget {
   final String text;
   final VoidCallback? onPressed;
@@ -8340,6 +11971,7 @@ class GradientButton extends StatefulWidget {
   final double? width;
   final IconData? icon;
   final bool outline;
+
   const GradientButton({
     super.key,
     required this.text,
@@ -8351,16 +11983,19 @@ class GradientButton extends StatefulWidget {
     this.icon,
     this.outline = false,
   });
+
   @override
   State<GradientButton> createState() => _GradientButtonState();
 }
 
 class _GradientButtonState extends State<GradientButton> {
   bool _pressed = false;
+
   @override
   Widget build(BuildContext context) {
     final p = _p(context);
     final disabled = widget.onPressed == null || widget.loading;
+
     return Listener(
       onPointerDown: (_) => setState(() => _pressed = true),
       onPointerUp: (_) => setState(() => _pressed = false),
@@ -8374,7 +12009,9 @@ class _GradientButtonState extends State<GradientButton> {
             duration: const Duration(milliseconds: 220),
             height: widget.height,
             width: widget.width ?? double.infinity,
-            padding: widget.width != null ? const EdgeInsets.symmetric(horizontal: 14) : null,
+            padding: widget.width != null
+                ? const EdgeInsets.symmetric(horizontal: 14)
+                : null,
             decoration: BoxDecoration(
               gradient: widget.outline ? null : (widget.gradient ?? p.brand),
               color: widget.outline ? Colors.transparent : null,
@@ -8385,24 +12022,35 @@ class _GradientButtonState extends State<GradientButton> {
                   : [BoxShadow(color: p.accent.withOpacity(.35), blurRadius: 18)],
             ),
             child: Center(
-                child: widget.loading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
-                    : Row(mainAxisSize: MainAxisSize.min, children: [
-                        if (widget.icon != null) ...[
-                          Icon(widget.icon,
-                              size: 18, color: widget.outline ? p.text : Colors.white),
-                          const SizedBox(width: 7),
-                        ],
-                        Text(widget.text,
-                            style: TextStyle(
-                                color: widget.outline ? p.text : Colors.white,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 14.5,
-                                letterSpacing: .2)),
-                      ])),
+              child: widget.loading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Row(mainAxisSize: MainAxisSize.min, children: [
+                      if (widget.icon != null) ...[
+                        Icon(
+                          widget.icon,
+                          size: 18,
+                          color: widget.outline ? p.text : Colors.white,
+                        ),
+                        const SizedBox(width: 7),
+                      ],
+                      Text(
+                        widget.text,
+                        style: TextStyle(
+                          color: widget.outline ? p.text : Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14.5,
+                          letterSpacing: .2,
+                        ),
+                      ),
+                    ]),
+            ),
           ),
         ),
       ),
@@ -8414,35 +12062,49 @@ class OutlinePillButton extends StatelessWidget {
   final String text;
   final IconData? icon;
   final VoidCallback onTap;
-  const OutlinePillButton({super.key, required this.text, this.icon, required this.onTap});
+
+  const OutlinePillButton({
+    super.key,
+    required this.text,
+    this.icon,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     final p = _p(context);
+
     return GestureDetector(
-        onTap: onTap,
-        child: Container(
-            height: 42,
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(21),
-                border: Border.all(color: p.border, width: 1.4),
-                color: p.surface),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              if (icon != null) ...[
-                Icon(icon, size: 17, color: p.text),
-                const SizedBox(width: 7),
-              ],
-              Text(text,
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: p.text)),
-            ])));
+      onTap: onTap,
+      child: Container(
+        height: 42,
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(21),
+          border: Border.all(color: p.border, width: 1.4),
+          color: p.surface,
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          if (icon != null) ...[
+            Icon(icon, size: 17, color: p.text),
+            const SizedBox(width: 7),
+          ],
+          Text(
+            text,
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: p.text),
+          ),
+        ]),
+      ),
+    );
   }
 }
 
 class FollowButton extends StatefulWidget {
   final User user;
   final bool compact;
+
   const FollowButton({super.key, required this.user, this.compact = false});
+
   @override
   State<FollowButton> createState() => _FollowButtonState();
 }
@@ -8453,10 +12115,12 @@ class _FollowButtonState extends State<FollowButton> {
 
   Future<void> _toggle() async {
     if (_busy) return;
+
     setState(() {
       _busy = true;
       _following = !_following;
     });
+
     try {
       await ApiClient.instance.post('/api/users/${widget.user.username}/follow');
     } catch (e) {
@@ -8472,40 +12136,55 @@ class _FollowButtonState extends State<FollowButton> {
   @override
   Widget build(BuildContext context) {
     final p = _p(context);
+
     return GestureDetector(
-        onTap: _toggle,
-        child: AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
-            padding: EdgeInsets.symmetric(
-                horizontal: widget.compact ? 14 : 20, vertical: widget.compact ? 5 : 8),
-            decoration: BoxDecoration(
-              gradient: _following ? null : p.brand,
-              color: _following ? Colors.transparent : null,
-              border: _following ? Border.all(color: p.border, width: 1.3) : null,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(_following ? 'Following' : 'Follow',
-                style: TextStyle(
-                    fontSize: widget.compact ? 11.5 : 13,
-                    fontWeight: FontWeight.w800,
-                    color: _following ? p.text : Colors.white))));
+      onTap: _toggle,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        padding: EdgeInsets.symmetric(
+          horizontal: widget.compact ? 14 : 20,
+          vertical: widget.compact ? 5 : 8,
+        ),
+        decoration: BoxDecoration(
+          gradient: _following ? null : p.brand,
+          color: _following ? Colors.transparent : null,
+          border: _following ? Border.all(color: p.border, width: 1.3) : null,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          _following ? 'Following' : 'Follow',
+          style: TextStyle(
+            fontSize: widget.compact ? 11.5 : 13,
+            fontWeight: FontWeight.w800,
+            color: _following ? p.text : Colors.white,
+          ),
+        ),
+      ),
+    );
   }
 }
 
 class SlideFadeIn extends StatefulWidget {
   final Widget child;
   final Duration delay;
+
   const SlideFadeIn({super.key, required this.child, this.delay = Duration.zero});
+
   @override
   State<SlideFadeIn> createState() => _SlideFadeInState();
 }
 
-class _SlideFadeInState extends State<SlideFadeIn> with SingleTickerProviderStateMixin {
-  late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 420));
+class _SlideFadeInState extends State<SlideFadeIn>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 420),
+  );
+
   @override
   void initState() {
     super.initState();
+
     Future.delayed(widget.delay, () {
       if (mounted) _c.forward();
     });
@@ -8520,11 +12199,14 @@ class _SlideFadeInState extends State<SlideFadeIn> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) {
     final curved = CurvedAnimation(parent: _c, curve: Curves.easeOutCubic);
+
     return FadeTransition(
-        opacity: curved,
-        child: SlideTransition(
-            position: Tween(begin: const Offset(0, .05), end: Offset.zero).animate(curved),
-            child: widget.child));
+      opacity: curved,
+      child: SlideTransition(
+        position: Tween(begin: const Offset(0, .05), end: Offset.zero).animate(curved),
+        child: widget.child,
+      ),
+    );
   }
 }
 
@@ -8532,81 +12214,114 @@ class EmptyState extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  const EmptyState({super.key, required this.icon, required this.title, required this.subtitle});
+
+  const EmptyState({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
 
   @override
   Widget build(BuildContext context) {
     final p = _p(context);
+
     return Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Container(
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(
           width: 86,
           height: 86,
-          decoration: BoxDecoration(shape: BoxShape.circle, color: p.accent.withOpacity(.1)),
-          child: Icon(icon, size: 40, color: p.accent)),
-      const SizedBox(height: 18),
-      Text(title,
-          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: p.text)),
-      const SizedBox(height: 6),
-      Text(subtitle, textAlign: TextAlign.center, style: TextStyle(color: p.sub, fontSize: 13)),
-    ]));
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: p.accent.withOpacity(.1),
+          ),
+          child: Icon(icon, size: 40, color: p.accent),
+        ),
+        const SizedBox(height: 18),
+        Text(
+          title,
+          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: p.text),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          subtitle,
+          textAlign: TextAlign.center,
+          style: TextStyle(color: p.sub, fontSize: 13),
+        ),
+      ]),
+    );
   }
 }
 
 class ErrorState extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;
+
   const ErrorState({super.key, required this.message, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
     final p = _p(context);
+
     return Center(
-        child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.cloud_off_rounded, size: 44, color: p.sub),
-              const SizedBox(height: 14),
-              Text(message,
-                  textAlign: TextAlign.center, style: TextStyle(color: p.sub, fontSize: 13.5)),
-              const SizedBox(height: 18),
-              GradientButton(
-                  text: 'Try again',
-                  icon: Icons.refresh_rounded,
-                  width: 180,
-                  height: 44,
-                  onPressed: onRetry),
-            ])));
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.cloud_off_rounded, size: 44, color: p.sub),
+          const SizedBox(height: 14),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: p.sub, fontSize: 13.5),
+          ),
+          const SizedBox(height: 18),
+          GradientButton(
+            text: 'Try again',
+            icon: Icons.refresh_rounded,
+            width: 180,
+            height: 44,
+            onPressed: onRetry,
+          ),
+        ]),
+      ),
+    );
   }
 }
 
 class ShimmerBlock extends StatelessWidget {
   final double height;
+
   const ShimmerBlock({super.key, required this.height});
+
   @override
   Widget build(BuildContext context) {
     final p = _p(context);
+
     return Shimmer.fromColors(
-        baseColor: p.card,
-        highlightColor: p.card2,
-        child: Container(
-            height: height,
-            decoration: BoxDecoration(color: p.card, borderRadius: BorderRadius.circular(16))));
+      baseColor: p.card,
+      highlightColor: p.card2,
+      child: Container(
+        height: height,
+        decoration: BoxDecoration(color: p.card, borderRadius: BorderRadius.circular(16)),
+      ),
+    );
   }
 }
 
 class ShimmerPost extends StatelessWidget {
   const ShimmerPost({super.key});
+
   @override
   Widget build(BuildContext context) {
     final p = _p(context);
+
     return Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          ShimmerCircle(size: 44, p: p),
-          const SizedBox(width: 12),
-          Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      padding: const EdgeInsets.all(16),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        ShimmerCircle(size: 44, p: p),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
               ShimmerCircle(size: 12, p: p),
               const SizedBox(width: 8),
@@ -8616,28 +12331,35 @@ class ShimmerPost extends StatelessWidget {
             const ShimmerBlock(height: 12),
             const SizedBox(height: 6),
             FractionallySizedBox(
-                alignment: Alignment.centerLeft,
-                widthFactor: .6,
-                child: const ShimmerBlock(height: 12)),
+              alignment: Alignment.centerLeft,
+              widthFactor: .6,
+              child: const ShimmerBlock(height: 12),
+            ),
             const SizedBox(height: 12),
             const ShimmerBlock(height: 140),
-          ]))
-        ]));
+          ]),
+        ),
+      ]),
+    );
   }
 }
 
 class ShimmerCircle extends StatelessWidget {
   final double size;
   final Pal p;
+
   const ShimmerCircle({super.key, required this.size, required this.p});
+
   @override
   Widget build(BuildContext context) {
     return Shimmer.fromColors(
-        baseColor: p.card,
-        highlightColor: p.card2,
-        child: Container(
-            width: size,
-            height: size,
-            decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle)));
+      baseColor: p.card,
+      highlightColor: p.card2,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+      ),
+    );
   }
 }
