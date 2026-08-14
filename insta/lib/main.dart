@@ -1,13 +1,20 @@
 // main.dart
-// NokhodX v5.0.0
-// - Status bar: light => black, dark => white, globally
-// - Multi-account management
-// - Advanced one-time caching + progress for downloads
-// - Text-only post fixed
-// - Latest avatar is default avatar
-// - Telegram-like avatars + story ring from has_unseen_story
-// - Direct messages support all file types
-// - Added share, quote, add group member, media-type search, etc.
+// ═══════════════════════════════════════════════════════════════
+//  NOKHODX v4.2.0
+//
+//  - Status bar: Light => BLACK, Dark => WHITE, everywhere
+//  - Home media corners rounded like initial version
+//  - Story row: shows story owners, ring only for unseen
+//  - After viewing story: avatar remains, ring clears
+//  - Reels: fit (contain), not stretched/cropped
+//  - Avatar tap opens unseen story if available
+//  - DM swipe-to-reply: own message left, other message right
+//  - @ mention autocomplete in composer
+//  - Audio download button next to play, hidden after complete
+//  - DM can send image/video/audio/file
+//  - Text-only post fixed
+//  - Latest avatar is default avatar
+// ═══════════════════════════════════════════════════════════════
 
 import 'dart:async';
 import 'dart:convert';
@@ -15,12 +22,14 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:mime/mime.dart';
 import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -30,19 +39,30 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:video_player/video_player.dart';
 
-// ═══════════════════════════════════════════════════════════════
-// MAIN
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ MAIN ═══════════════════════════
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await AccountManager.instance.load();
   await ApiClient.instance.init();
   await ThemeStore.instance.load();
   await FileCache.instance.init();
 
-  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  applySystemUIStyle(ThemeStore.instance.isDark);
+
   runApp(const NokhodXApp());
+}
+
+void applySystemUIStyle(bool isDark) {
+  SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+    statusBarColor: isDark ? Colors.white : Colors.black,
+    statusBarIconBrightness: isDark ? Brightness.dark : Brightness.light,
+    statusBarBrightness: isDark ? Brightness.light : Brightness.dark,
+    systemNavigationBarColor: isDark ? Colors.black : Colors.white,
+    systemNavigationBarIconBrightness:
+        isDark ? Brightness.light : Brightness.dark,
+  ));
+
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 }
 
 class NokhodXApp extends StatelessWidget {
@@ -54,7 +74,6 @@ class NokhodXApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AppState()),
         ChangeNotifierProvider.value(value: ThemeStore.instance),
-        ChangeNotifierProvider.value(value: AccountManager.instance),
         ChangeNotifierProvider.value(value: AudioController.instance),
         ChangeNotifierProvider.value(value: FileCache.instance),
       ],
@@ -78,6 +97,11 @@ class NokhodXApp extends StatelessWidget {
             title: 'NokhodX',
             debugShowCheckedModeBanner: false,
             builder: (context, child) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                SystemChrome.setSystemUIOverlayStyle(overlay);
+                SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+              });
+
               return AnnotatedRegion<SystemUiOverlayStyle>(
                 value: overlay,
                 child: child ?? const SizedBox.shrink(),
@@ -128,27 +152,18 @@ class _BootWrapperState extends State<BootWrapper> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _applySystemUI());
-  }
-
-  void _applySystemUI() {
-    final isDark = ThemeStore.instance.isDark;
-    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-      statusBarColor: isDark ? Colors.white : Colors.black,
-      statusBarIconBrightness: isDark ? Brightness.dark : Brightness.light,
-      statusBarBrightness: isDark ? Brightness.light : Brightness.dark,
-      systemNavigationBarColor: isDark ? Colors.black : Colors.white,
-      systemNavigationBarIconBrightness:
-          isDark ? Brightness.light : Brightness.dark,
-    ));
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      applySystemUIStyle(ThemeStore.instance.isDark);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<ThemeStore>(
       builder: (context, theme, child) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => _applySystemUI());
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          applySystemUIStyle(theme.isDark);
+        });
         return child!;
       },
       child: const SplashScreen(),
@@ -158,20 +173,10 @@ class _BootWrapperState extends State<BootWrapper> {
 
 void _applyBars(BuildContext context) {
   final isDark = context.read<ThemeStore>().isDark;
-  SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-    statusBarColor: isDark ? Colors.white : Colors.black,
-    statusBarIconBrightness: isDark ? Brightness.dark : Brightness.light,
-    statusBarBrightness: isDark ? Brightness.light : Brightness.dark,
-    systemNavigationBarColor: isDark ? Colors.black : Colors.white,
-    systemNavigationBarIconBrightness:
-        isDark ? Brightness.light : Brightness.dark,
-  ));
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  applySystemUIStyle(isDark);
 }
 
-// ═══════════════════════════════════════════════════════════════
-// THEME
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ STORES ═══════════════════════════
 class ThemeStore extends ChangeNotifier {
   ThemeStore._();
   static final ThemeStore instance = ThemeStore._();
@@ -188,14 +193,13 @@ class ThemeStore extends ChangeNotifier {
   Future<void> toggle() async {
     _isDark = !_isDark;
     notifyListeners();
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('nokh_theme_dark', _isDark);
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// PALETTE
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ PALETTE ═══════════════════════════
 class Pal {
   final bool isDark;
   Pal({required this.isDark});
@@ -239,197 +243,7 @@ Pal _p(BuildContext context) {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// MULTI ACCOUNT
-// ═══════════════════════════════════════════════════════════════
-class Account {
-  final String id;
-  String username;
-  String email;
-  String token;
-  String? name;
-  String? avatarUrl;
-
-  Account({
-    required this.id,
-    required this.username,
-    required this.email,
-    required this.token,
-    this.name,
-    this.avatarUrl,
-  });
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'username': username,
-        'email': email,
-        'token': token,
-        'name': name,
-        'avatar_url': avatarUrl,
-      };
-
-  factory Account.fromJson(Map<String, dynamic> j) => Account(
-        id: jstr(j['id']),
-        username: jstr(j['username']),
-        email: jstr(j['email']),
-        token: jstr(j['token']),
-        name: j['name']?.toString(),
-        avatarUrl: j['avatar_url']?.toString(),
-      );
-}
-
-class AccountManager extends ChangeNotifier {
-  AccountManager._();
-  static final AccountManager instance = AccountManager._();
-
-  final List<Account> _accounts = [];
-  String? _activeId;
-
-  List<Account> get accounts => List.unmodifiable(_accounts);
-  String? get activeId => _activeId;
-
-  Account? get active {
-    if (_activeId == null) return null;
-    for (final a in _accounts) {
-      if (a.id == _activeId) return a;
-    }
-    return null;
-  }
-
-  Future<void> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    _accounts.clear();
-
-    final raw = prefs.getString('nx_accounts');
-    if (raw != null && raw.isNotEmpty) {
-      try {
-        final list = jsonDecode(raw);
-        if (list is List) {
-          for (final item in list) {
-            if (item is Map) {
-              _accounts.add(Account.fromJson(Map<String, dynamic>.from(item)));
-            }
-          }
-        }
-      } catch (_) {}
-    }
-
-    _activeId = prefs.getString('nx_active_account');
-    if (_activeId != null &&
-        !_accounts.any((e) => e.id == _activeId)) {
-      _activeId = _accounts.isEmpty ? null : _accounts.first.id;
-    }
-
-    notifyListeners();
-  }
-
-  Future<void> _save() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      'nx_accounts',
-      jsonEncode(_accounts.map((e) => e.toJson()).toList()),
-    );
-    if (_activeId == null) {
-      await prefs.remove('nx_active_account');
-    } else {
-      await prefs.setString('nx_active_account', _activeId!);
-    }
-  }
-
-  int _findIndex(String id) {
-    for (var i = 0; i < _accounts.length; i++) {
-      if (_accounts[i].id == id) return i;
-    }
-    return -1;
-  }
-
-  Future<Account> upsert({
-    required String token,
-    required String username,
-    String email = '',
-    String? name,
-    String? avatarUrl,
-  }) async {
-    final id = username.toLowerCase();
-    final idx = _findIndex(id);
-
-    if (idx >= 0) {
-      final acc = _accounts[idx];
-      acc.username = username;
-      acc.email = email;
-      acc.token = token;
-      acc.name = name ?? acc.name;
-      acc.avatarUrl = avatarUrl ?? acc.avatarUrl;
-      _activeId = id;
-      await _save();
-      notifyListeners();
-      return acc;
-    }
-
-    final acc = Account(
-      id: id,
-      username: username,
-      email: email,
-      token: token,
-      name: name,
-      avatarUrl: avatarUrl,
-    );
-    _accounts.add(acc);
-    _activeId = id;
-    await _save();
-    notifyListeners();
-    return acc;
-  }
-
-  Future<void> updateActive({
-    String? username,
-    String? email,
-    String? name,
-    String? avatarUrl,
-  }) async {
-    final acc = active;
-    if (acc == null) return;
-
-    if (username != null && username.isNotEmpty) acc.username = username;
-    if (email != null) acc.email = email;
-    if (name != null) acc.name = name;
-    if (avatarUrl != null) acc.avatarUrl = avatarUrl;
-
-    await _save();
-    notifyListeners();
-  }
-
-  Future<void> switchTo(String id) async {
-    final idx = _findIndex(id);
-    if (idx < 0) return;
-
-    _activeId = id;
-    await ApiClient.instance.setToken(_accounts[idx].token);
-    await _save();
-    notifyListeners();
-  }
-
-  Future<void> remove(String id) async {
-    _accounts.removeWhere((e) => e.id == id);
-
-    if (_activeId == id) {
-      if (_accounts.isNotEmpty) {
-        _activeId = _accounts.first.id;
-        await ApiClient.instance.setToken(_accounts.first.token);
-      } else {
-        _activeId = null;
-        await ApiClient.instance.setToken(null);
-      }
-    }
-
-    await _save();
-    notifyListeners();
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// AUDIO
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ AUDIO CONTROLLER ══════════════════
 class AudioController extends ChangeNotifier {
   AudioController._();
   static final AudioController instance = AudioController._();
@@ -499,11 +313,13 @@ class AudioController extends ChangeNotifier {
     _posTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
       if (_playing && !_muted) {
         _position += 0.5;
+
         if (_currentDuration != null && _position >= _currentDuration!) {
           _position = 0;
           _playing = false;
           _posTimer?.cancel();
         }
+
         notifyListeners();
       }
     });
@@ -519,6 +335,7 @@ class AudioController extends ChangeNotifier {
 
   Future<void> resume() async {
     if (_currentKey == null) return;
+
     await _player.resume();
     _playing = true;
     notifyListeners();
@@ -534,12 +351,14 @@ class AudioController extends ChangeNotifier {
     await _player.stop();
     _playing = false;
     _posTimer?.cancel();
+
     _currentSource = null;
     _currentKey = null;
     _currentTitle = null;
     _currentArtist = null;
     _currentDuration = null;
     _position = 0;
+
     notifyListeners();
   }
 
@@ -567,14 +386,13 @@ class AudioController extends ChangeNotifier {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// FILE CACHE
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ FILE CACHE ═══════════════════════
 class FileCache extends ChangeNotifier {
   FileCache._();
   static final FileCache instance = FileCache._();
 
   Directory? _cacheDir;
+
   final Map<String, double> _downloadProgress = {};
   final Map<String, bool> _activeDownloads = {};
   final http.Client _client = http.Client();
@@ -582,6 +400,7 @@ class FileCache extends ChangeNotifier {
   Future<void> init() async {
     final dir = await getApplicationDocumentsDirectory();
     _cacheDir = Directory('${dir.path}/NokhodXCache');
+
     if (!await _cacheDir!.exists()) {
       await _cacheDir!.create(recursive: true);
     }
@@ -590,11 +409,14 @@ class FileCache extends ChangeNotifier {
   String _hashUrl(String url) {
     final bytes = utf8.encode(url);
     int hash = 0;
+
     for (final b in bytes) {
       hash = (hash * 31 + b) & 0x7fffffff;
     }
+
     final clean = url.split('?').first;
     final ext = clean.contains('.') ? '.${clean.split('.').last}' : '';
+
     return '${hash.toRadixString(16)}$ext';
   }
 
@@ -620,8 +442,11 @@ class FileCache extends ChangeNotifier {
       try {
         final headReq = http.Request('HEAD', Uri.parse(url));
         if (headers != null) headReq.headers.addAll(headers);
-        final headRes =
-            await _client.send(headReq).timeout(const Duration(seconds: 10));
+
+        final headRes = await _client
+            .send(headReq)
+            .timeout(const Duration(seconds: 10));
+
         final remoteSize =
             int.tryParse(headRes.headers['content-length'] ?? '') ?? 0;
         final localSize = await file.length();
@@ -652,6 +477,7 @@ class FileCache extends ChangeNotifier {
         await Future.delayed(const Duration(milliseconds: 100));
         onProgress?.call(_downloadProgress[url] ?? 0);
       }
+
       onProgress?.call(_downloadProgress[url] ?? 1.0);
       return localPath;
     }
@@ -662,18 +488,20 @@ class FileCache extends ChangeNotifier {
 
     try {
       int existingBytes = 0;
+
       if (await file.exists()) {
         existingBytes = await file.length();
       }
 
       final req = http.Request('GET', Uri.parse(url));
       if (headers != null) req.headers.addAll(headers);
+
       if (existingBytes > 0) {
         req.headers['Range'] = 'bytes=$existingBytes-';
       }
 
       final streamed =
-          await _client.send(req).timeout(const Duration(minutes: 15));
+          await _client.send(req).timeout(const Duration(minutes: 10));
 
       if (streamed.statusCode == 416) {
         _activeDownloads[url] = false;
@@ -688,6 +516,7 @@ class FileCache extends ChangeNotifier {
       }
 
       int totalSize = streamed.contentLength ?? 0;
+
       if (streamed.statusCode == 206) {
         totalSize += existingBytes;
       } else {
@@ -695,6 +524,7 @@ class FileCache extends ChangeNotifier {
       }
 
       int received = existingBytes;
+
       final sink = existingBytes > 0
           ? file.openWrite(mode: FileMode.append)
           : file.openWrite();
@@ -702,18 +532,22 @@ class FileCache extends ChangeNotifier {
       await for (final chunk in streamed.stream) {
         sink.add(chunk);
         received += chunk.length;
+
         final progress =
             totalSize > 0 ? (received / totalSize).clamp(0.0, 1.0) : 0.0;
+
         _downloadProgress[url] = progress;
         onProgress?.call(progress);
         notifyListeners();
       }
 
       await sink.close();
+
       _downloadProgress[url] = 1.0;
       _activeDownloads[url] = false;
       notifyListeners();
       onProgress?.call(1.0);
+
       return localPath;
     } catch (e) {
       _activeDownloads[url] = false;
@@ -723,9 +557,13 @@ class FileCache extends ChangeNotifier {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// UTILS
-// ═══════════════════════════════════════════════════════════════
+Map<String, String>? authHeaders() {
+  final t = ApiClient.instance.token;
+  if (t == null || t.isEmpty) return null;
+  return {'Authorization': 'Bearer $t'};
+}
+
+// ═══════════════════════════════ UTILS ═══════════════════════════
 void showSnack(
   BuildContext context,
   String msg, {
@@ -733,6 +571,7 @@ void showSnack(
   int seconds = 3,
 }) {
   if (!context.mounted) return;
+
   final p = _p(context);
 
   ScaffoldMessenger.of(context)
@@ -740,10 +579,9 @@ void showSnack(
     ..showSnackBar(SnackBar(
       content: Row(children: [
         Icon(
-          error
-              ? Icons.error_outline_rounded
-              : Icons.check_circle_rounded,
-          color: error ? Colors.white : (p.isDark ? Colors.black : Colors.white),
+          error ? Icons.error_outline_rounded : Icons.check_circle_rounded,
+          color:
+              error ? Colors.white : (p.isDark ? Colors.black : Colors.white),
           size: 20,
         ),
         const SizedBox(width: 10),
@@ -752,8 +590,9 @@ void showSnack(
             msg,
             style: TextStyle(
               fontSize: 13.5,
-              color:
-                  error ? Colors.white : (p.isDark ? Colors.black : Colors.white),
+              color: error
+                  ? Colors.white
+                  : (p.isDark ? Colors.black : Colors.white),
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -773,38 +612,49 @@ String formatCount(num n) {
   if (n >= 1000000) {
     return '${(n / 1000000).toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '')}M';
   }
+
   if (n >= 1000) {
     return '${(n / 1000).toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '')}K';
   }
+
   return n.toString();
 }
 
 String formatDuration(double? seconds) {
   if (seconds == null || seconds <= 0) return '--:--';
+
   final s = seconds.toInt();
   final m = s ~/ 60;
   final sec = s % 60;
+
   return '${m.toString().padLeft(2, '0')}:${sec.toString().padLeft(2, '0')}';
 }
 
 DateTime? _parseServerTime(dynamic v) {
   if (v == null) return null;
+
   if (v is DateTime) return v.isUtc ? v : v.toUtc();
+
   if (v is num) {
     if (v < 1e12) {
       return DateTime.fromMillisecondsSinceEpoch(v.toInt() * 1000, isUtc: true);
     }
+
     if (v < 1e14) {
       return DateTime.fromMillisecondsSinceEpoch(v.toInt(), isUtc: true);
     }
+
     return DateTime.fromMicrosecondsSinceEpoch(v.toInt(), isUtc: true);
   }
+
   if (v is String && v.isNotEmpty) {
     final s = v.trim();
+
     final n = num.tryParse(s);
     if (n != null) return _parseServerTime(n);
 
     String iso = s;
+
     if (!iso.endsWith('Z') &&
         !iso.contains('+') &&
         !RegExp(r'\d{2}:\d{2}$').hasMatch(iso)) {
@@ -817,6 +667,7 @@ DateTime? _parseServerTime(dynamic v) {
     final dt2 = DateTime.tryParse(s);
     if (dt2 != null) return dt2.isUtc ? dt2 : dt2.toUtc();
   }
+
   return null;
 }
 
@@ -844,6 +695,7 @@ String timeAgo(BuildContext context, dynamic v) {
 bool isOnline(dynamic lastAt) {
   final t = _parseServerTime(lastAt);
   if (t == null) return false;
+
   return DateTime.now().toUtc().difference(t).inMinutes <= 2;
 }
 
@@ -942,6 +794,7 @@ String? extractToken(dynamic json) {
       }
     }
   }
+
   return null;
 }
 
@@ -953,15 +806,18 @@ String? resolveMedia(dynamic value) {
       final v = value[k];
       if (v is String && v.isNotEmpty) return resolveMedia(v);
     }
+
     for (final k in ['id', 'media_id', 'file_id']) {
       final v = value[k];
       if (v != null) return resolveMedia(v.toString());
     }
+
     return null;
   }
 
   final s = value.toString().trim();
   if (s.isEmpty) return null;
+
   if (s.startsWith('http://') || s.startsWith('https://')) return s;
 
   final base = ApiClient.instance.baseUrl ?? '';
@@ -974,12 +830,6 @@ String? resolveMedia(dynamic value) {
 String _fullUrl(String url) {
   if (url.startsWith('http')) return url;
   return '${ApiClient.instance.baseUrl ?? ''}$url';
-}
-
-Map<String, String>? authHeaders() {
-  final t = ApiClient.instance.token;
-  if (t == null || t.isEmpty) return null;
-  return {'Authorization': 'Bearer $t'};
 }
 
 Color hashColor(String s) {
@@ -996,11 +846,13 @@ Color hashColor(String s) {
   for (final c in s.codeUnits) {
     h = (h * 31 + c) % 997;
   }
+
   return cs[h % cs.length];
 }
 
 class FadeRoute extends PageRouteBuilder {
   final Widget page;
+
   FadeRoute(this.page)
       : super(
           pageBuilder: (_, __, ___) => page,
@@ -1015,6 +867,7 @@ class FadeRoute extends PageRouteBuilder {
 
 class SlideUpRoute extends PageRouteBuilder {
   final Widget page;
+
   SlideUpRoute(this.page)
       : super(
           pageBuilder: (_, __, ___) => page,
@@ -1028,9 +881,7 @@ class SlideUpRoute extends PageRouteBuilder {
         );
 }
 
-// ═══════════════════════════════════════════════════════════════
-// API CLIENT
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ API CLIENT ══════════════════════
 class ApiException implements Exception {
   final String message;
   final int? statusCode;
@@ -1047,6 +898,7 @@ class ApiClient {
 
   static const String linkSource =
       'https://raw.githubusercontent.com/sksjjsiii/MyFiles/main/link.txt';
+
   static const Duration _timeout = Duration(seconds: 30);
 
   String? _baseUrl;
@@ -1060,14 +912,16 @@ class ApiClient {
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
+
+    _token = prefs.getString('pulse_token');
     _baseUrl = prefs.getString('pulse_base_url');
-    _token = AccountManager.instance.active?.token ??
-        prefs.getString('pulse_token');
   }
 
-  Future<void> setToken(String? t) async {
+  Future<void> saveToken(String? t) async {
     _token = t;
+
     final prefs = await SharedPreferences.getInstance();
+
     if (t == null) {
       await prefs.remove('pulse_token');
     } else {
@@ -1075,23 +929,24 @@ class ApiClient {
     }
   }
 
-  Future<void> saveToken(String? t) => setToken(t);
-
   Future<String> fetchBaseUrl({bool force = false}) async {
     if (_baseUrl != null && _baseUrl!.isNotEmpty && !force) return _baseUrl!;
 
     try {
-      final res =
-          await http.get(Uri.parse(linkSource)).timeout(const Duration(seconds: 12));
+      final res = await http
+          .get(Uri.parse(linkSource))
+          .timeout(const Duration(seconds: 12));
 
       if (res.statusCode == 200) {
         var url = res.body.trim();
+
         if (url.isNotEmpty && url.startsWith('http')) {
           url = url.replaceAll(RegExp(r'/+$'), '');
           _baseUrl = url;
 
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('pulse_base_url', url);
+
           return url;
         }
       }
@@ -1106,12 +961,19 @@ class ApiClient {
   String _extractError(http.Response res) {
     try {
       final j = jsonDecode(res.body);
+
       if (j is Map) {
         final d = j['detail'] ?? j['message'] ?? j['error'] ?? j['msg'];
+
         if (d is String) return d;
+
         if (d is List && d.isNotEmpty) {
           final first = d.first;
-          if (first is Map && first['msg'] != null) return first['msg'].toString();
+
+          if (first is Map && first['msg'] != null) {
+            return first['msg'].toString();
+          }
+
           return first.toString();
         }
       }
@@ -1134,6 +996,7 @@ class ApiClient {
 
       try {
         Uri uri = Uri.parse('$base$path');
+
         if (query != null && query.isNotEmpty) {
           uri = uri.replace(queryParameters: {...uri.queryParameters, ...query});
         }
@@ -1142,11 +1005,14 @@ class ApiClient {
         if (auth && _token != null) headers['Authorization'] = 'Bearer $_token';
 
         String? encoded;
+
         if (body != null) {
           final clean = <String, dynamic>{};
+
           body.forEach((k, v) {
             if (v != null) clean[k] = v;
           });
+
           encoded = jsonEncode(clean);
           headers['Content-Type'] = 'application/json';
         }
@@ -1173,6 +1039,7 @@ class ApiClient {
 
         if (res.statusCode >= 200 && res.statusCode < 300) {
           if (res.body.trim().isEmpty) return <String, dynamic>{};
+
           try {
             return jsonDecode(res.body);
           } catch (_) {
@@ -1249,6 +1116,7 @@ class ApiClient {
         if (_token != null) req.headers['Authorization'] = 'Bearer $_token';
 
         final stream = http.ByteStream(file.openRead());
+
         req.files.add(http.MultipartFile(
           fieldName,
           stream,
@@ -1265,9 +1133,10 @@ class ApiClient {
         });
 
         final streamed =
-            await trackedRequest.send().timeout(const Duration(minutes: 10));
+            await trackedRequest.send().timeout(const Duration(minutes: 5));
 
         final bytes = BytesBuilder();
+
         await for (final chunk in streamed.stream) {
           bytes.add(chunk);
         }
@@ -1275,6 +1144,7 @@ class ApiClient {
         if (onProgress != null) onProgress(1.0);
 
         final bodyBytes = bytes.toBytes();
+
         final res = http.Response.bytes(
           bodyBytes,
           streamed.statusCode,
@@ -1284,6 +1154,7 @@ class ApiClient {
 
         if (res.statusCode >= 200 && res.statusCode < 300) {
           if (res.body.trim().isEmpty) return <String, dynamic>{};
+
           try {
             return jsonDecode(res.body);
           } catch (_) {
@@ -1324,6 +1195,7 @@ class _TrackedMultipartRequest extends http.MultipartRequest {
   @override
   http.ByteStream finalize() {
     final byteStream = _inner.finalize();
+
     int sent = 0;
     final controller = StreamController<List<int>>();
 
@@ -1342,9 +1214,7 @@ class _TrackedMultipartRequest extends http.MultipartRequest {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// MODELS
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ MODELS ══════════════════════════
 class User {
   final int? id;
   final String username;
@@ -1384,10 +1254,33 @@ class User {
     this.followedByFollowings = const [],
   });
 
+  // آخرین آواتار = آواتار پیش‌فرض
   String? get avatarUrl =>
       avatarItems.isNotEmpty ? avatarItems.last.url : null;
 
   String get displayName => (name.isNotEmpty ? name : username);
+
+  User copyWithUnseenStory(bool value) {
+    return User(
+      id: id,
+      username: username,
+      name: name,
+      bio: bio,
+      email: email,
+      avatarItems: avatarItems,
+      musicItems: musicItems,
+      verified: verified,
+      isAdmin: isAdmin,
+      isFollowing: isFollowing,
+      isOnline: isOnline,
+      followers: followers,
+      following: following,
+      posts: posts,
+      lastSeen: lastSeen,
+      hasUnseenStory: value,
+      followedByFollowings: followedByFollowings,
+    );
+  }
 
   factory User.fromJson(Map<String, dynamic> raw) {
     Map<String, dynamic> j = raw;
@@ -1400,6 +1293,7 @@ class User {
     }
 
     List<MediaItem> avatars = [];
+
     final avList = jpick(
       j,
       ['profile_images', 'profile_image_ids', 'avatar_ids', 'avatars'],
@@ -1417,13 +1311,16 @@ class User {
         j,
         ['avatar', 'avatar_url', 'profile_image', 'profile_picture'],
       );
+
       final u = resolveMedia(single);
+
       if (u != null && u.isNotEmpty) {
         avatars = [MediaItem(url: u, type: 'image')];
       }
     }
 
     List<MediaItem> musics = [];
+
     final muList = jpick(
       j,
       ['profile_music', 'profile_music_ids', 'music_ids', 'musics'],
@@ -1439,12 +1336,14 @@ class User {
     if (musics.isEmpty) {
       final single = jpick(j, ['music', 'music_url']);
       final u = resolveMedia(single);
+
       if (u != null && u.isNotEmpty) {
         musics = [MediaItem(url: u, type: 'audio')];
       }
     }
 
     final followedByRaw = jpick(j, ['followed_by_followings']);
+
     final followedBy = followedByRaw is List
         ? followedByRaw.map((e) => e.toString()).toList()
         : <String>[];
@@ -1532,6 +1431,7 @@ class MediaItem {
 
     if (url != null && type == 'image') {
       final lower = url.split('?').first.toLowerCase();
+
       if (['.mp4', '.mov', '.webm'].any(lower.endsWith)) type = 'video';
       if (['.mp3', '.wav', '.ogg', '.m4a'].any(lower.endsWith)) type = 'audio';
       if (lower.endsWith('.gif')) type = 'gif';
@@ -1617,7 +1517,9 @@ class Post {
     }
 
     List<MediaItem> media = [];
+
     final mraw = jpick(j, ['media', 'media_items', 'attachments', 'files']);
+
     if (mraw is List) {
       media = mraw
           .map(MediaItem.fromDynamic)
@@ -1626,23 +1528,37 @@ class Post {
     }
 
     User? author;
+
     final araw = jpick(j, ['user', 'author', 'owner', 'profile']);
-    if (araw is Map) author = User.fromJson(Map<String, dynamic>.from(araw));
+
+    if (araw is Map) {
+      author = User.fromJson(Map<String, dynamic>.from(araw));
+    }
 
     Post? quoted;
+
     final qraw = jpick(j, ['quoted_post', 'quoted', 'quote']);
-    if (qraw is Map) quoted = Post.fromJson(Map<String, dynamic>.from(qraw));
+
+    if (qraw is Map) {
+      quoted = Post.fromJson(Map<String, dynamic>.from(qraw));
+    }
 
     Post? repostOf;
+
     final rraw = jpick(j, ['repost_of', 'reposted_post']);
-    if (rraw is Map) repostOf = Post.fromJson(Map<String, dynamic>.from(rraw));
+
+    if (rraw is Map) {
+      repostOf = Post.fromJson(Map<String, dynamic>.from(rraw));
+    }
 
     final likedByRaw = jpick(j, ['liked_by_followings']);
+
     final likedBy = likedByRaw is List
         ? likedByRaw.map((e) => e.toString()).toList()
         : <String>[];
 
     final repostedByRaw = jpick(j, ['reposted_by_followings']);
+
     final repostedBy = repostedByRaw is List
         ? repostedByRaw.map((e) => e.toString()).toList()
         : <String>[];
@@ -1704,7 +1620,9 @@ class Conversation {
     }
 
     List<User> members = [];
+
     final mraw = jpick(j, ['members', 'participants', 'users']);
+
     if (mraw is List) {
       members = mraw
           .whereType<Map>()
@@ -1713,8 +1631,12 @@ class Conversation {
     }
 
     DM? lastMessage;
+
     final lm = jpick(j, ['last_message', 'latest_message']);
-    if (lm is Map) lastMessage = DM.fromJson(Map<String, dynamic>.from(lm));
+
+    if (lm is Map) {
+      lastMessage = DM.fromJson(Map<String, dynamic>.from(lm));
+    }
 
     final idRaw = jpick(j, ['id', 'conversation_id']);
 
@@ -1767,11 +1689,17 @@ class DM {
     }
 
     User? sender;
+
     final sraw = jpick(j, ['sender', 'user', 'author']);
-    if (sraw is Map) sender = User.fromJson(Map<String, dynamic>.from(sraw));
+
+    if (sraw is Map) {
+      sender = User.fromJson(Map<String, dynamic>.from(sraw));
+    }
 
     List<MediaItem> media = [];
+
     final mraw = jpick(j, ['media', 'attachments', 'media_ids']);
+
     if (mraw is List) {
       media = mraw
           .map(MediaItem.fromDynamic)
@@ -1780,8 +1708,12 @@ class DM {
     }
 
     DM? replyParent;
+
     final rp = jpick(j, ['reply_to', 'reply_parent', 'reply_to_message']);
-    if (rp is Map) replyParent = DM.fromJson(Map<String, dynamic>.from(rp));
+
+    if (rp is Map) {
+      replyParent = DM.fromJson(Map<String, dynamic>.from(rp));
+    }
 
     final idRaw = jpick(j, ['id', 'message_id']);
 
@@ -1832,8 +1764,12 @@ class Noti {
     }
 
     User? actor;
+
     final araw = jpick(j, ['actor', 'user', 'from_user']);
-    if (araw is Map) actor = User.fromJson(Map<String, dynamic>.from(araw));
+
+    if (araw is Map) {
+      actor = User.fromJson(Map<String, dynamic>.from(araw));
+    }
 
     final idRaw = jpick(j, ['id', 'notification_id']);
 
@@ -1886,11 +1822,15 @@ class Story {
     }
 
     MediaItem? media;
+
     final mraw = jpick(j, ['media']);
+
     if (mraw is Map) media = MediaItem.fromDynamic(mraw);
 
     User? user;
+
     final uraw = jpick(j, ['user']);
+
     if (uraw is Map) user = User.fromJson(Map<String, dynamic>.from(uraw));
 
     return Story(
@@ -1907,9 +1847,7 @@ class Story {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// APP STATE
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ APP STATE ═══════════════════════
 class AppState extends ChangeNotifier {
   User? me;
 
@@ -1919,18 +1857,9 @@ class AppState extends ChangeNotifier {
   Future<void> fetchMe() async {
     try {
       final res = await ApiClient.instance.get('/api/auth/me');
+
       if (res is Map) {
         me = User.fromJson(Map<String, dynamic>.from(res));
-
-        if (me != null) {
-          await AccountManager.instance.updateActive(
-            username: me!.username,
-            email: me!.email,
-            name: me!.name,
-            avatarUrl: me!.avatarUrl,
-          );
-        }
-
         notifyListeners();
       }
     } catch (e) {
@@ -1939,15 +1868,9 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    final activeId = AccountManager.instance.activeId;
-
-    if (activeId != null) {
-      await AccountManager.instance.remove(activeId);
-    } else {
-      await ApiClient.instance.saveToken(null);
-    }
-
+    await ApiClient.instance.saveToken(null);
     await AudioController.instance.stop();
+
     me = null;
     notifyListeners();
   }
@@ -1960,253 +1883,23 @@ class AppState extends ChangeNotifier {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// CACHED FILE IMAGE
-// ═══════════════════════════════════════════════════════════════
-class CachedFileImage extends StatefulWidget {
-  final String url;
-  final double? width;
-  final double? height;
-  final BoxFit fit;
-  final bool showProgress;
-  final bool circle;
-  final Widget? errorWidget;
+Future<void> openUserOrStory(BuildContext context, User? user) async {
+  if (user == null) return;
 
-  const CachedFileImage({
-    super.key,
-    required this.url,
-    this.width,
-    this.height,
-    this.fit = BoxFit.cover,
-    this.showProgress = true,
-    this.circle = false,
-    this.errorWidget,
-  });
-
-  @override
-  State<CachedFileImage> createState() => _CachedFileImageState();
-}
-
-class _CachedFileImageState extends State<CachedFileImage> {
-  String? _path;
-  double _progress = 0;
-  bool _error = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  @override
-  void didUpdateWidget(covariant CachedFileImage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.url != widget.url) {
-      _path = null;
-      _error = false;
-      _progress = 0;
-      _load();
-    }
-  }
-
-  Future<void> _load() async {
-    final full = _fullUrl(widget.url);
-
-    if (full.isEmpty) {
-      if (mounted) setState(() => _error = true);
-      return;
-    }
-
-    try {
-      if (await FileCache.instance.hasFile(full)) {
-        if (!mounted) return;
-        setState(() {
-          _path = FileCache.instance.getLocalPath(full);
-        });
-        return;
-      }
-
-      final path = await FileCache.instance.downloadWithResume(
-        full,
-        headers: authHeaders(),
-        onProgress: (v) {
-          if (mounted) setState(() => _progress = v);
-        },
-      );
-
-      if (!mounted) return;
-      setState(() {
-        _path = path;
-        _progress = 1.0;
-      });
-    } catch (_) {
-      if (mounted) setState(() => _error = true);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final p = _p(context);
-
-    if (_path != null) {
-      final img = Image.file(
-        File(_path!),
-        width: widget.width,
-        height: widget.height,
-        fit: widget.fit,
-        gaplessPlayback: true,
-      );
-
-      return widget.circle ? ClipOval(child: img) : img;
-    }
-
-    if (_error) {
-      return widget.errorWidget ??
-          Container(
-            width: widget.width,
-            height: widget.height,
-            color: p.card,
-            child: Icon(
-              Icons.broken_image_rounded,
-              color: p.sub,
-              size: 24,
-            ),
-          );
-    }
-
-    return Container(
-      width: widget.width,
-      height: widget.height,
-      color: p.card,
-      child: widget.showProgress
-          ? Center(
-              child: SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.2,
-                  value: _progress > 0 ? _progress : null,
-                  color: p.accent,
-                ),
-              ),
-            )
-          : null,
+  if (user.id != null && user.hasUnseenStory) {
+    await Navigator.push(
+      context,
+      FadeRoute(StoryViewerScreen(userId: user.id!, user: user)),
+    );
+  } else {
+    Navigator.push(
+      context,
+      FadeRoute(ProfileScreen(username: user.username)),
     );
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// AVATAR
-// ═══════════════════════════════════════════════════════════════
-class Avatar extends StatelessWidget {
-  final String? url;
-  final double size;
-  final bool ring;
-  final bool online;
-  final String? fallback;
-
-  const Avatar({
-    super.key,
-    this.url,
-    required this.size,
-    this.ring = false,
-    this.online = false,
-    this.fallback,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final p = _p(context);
-
-    final inner = ClipOval(
-      child: (url != null && url!.isNotEmpty)
-          ? CachedFileImage(
-              url: url!,
-              width: size,
-              height: size,
-              fit: BoxFit.cover,
-              showProgress: size >= 36,
-              errorWidget: _placeholder(p),
-            )
-          : _placeholder(p),
-    );
-
-    Widget child;
-
-    if (ring) {
-      child = Container(
-        width: size + 6,
-        height: size + 6,
-        padding: const EdgeInsets.all(2.5),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: p.reel,
-        ),
-        child: inner,
-      );
-    } else {
-      child = SizedBox(width: size, height: size, child: inner);
-    }
-
-    if (!online) return child;
-
-    return SizedBox(
-      width: ring ? size + 6 : size,
-      height: ring ? size + 6 : size,
-      child: Stack(
-        children: [
-          child,
-          Positioned(
-            right: 0,
-            bottom: 0,
-            child: Container(
-              width: size * 0.28,
-              height: size * 0.28,
-              decoration: BoxDecoration(
-                color: p.green,
-                shape: BoxShape.circle,
-                border: Border.all(color: p.bg, width: 2),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _placeholder(Pal p) {
-    final letter =
-        (fallback != null && fallback!.isNotEmpty) ? fallback![0] : '?';
-
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            hashColor(letter),
-            hashColor(letter).withOpacity(.65),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        letter.toUpperCase(),
-        style: TextStyle(
-          fontWeight: FontWeight.w900,
-          fontSize: size * .42,
-          color: Colors.white,
-        ),
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// SPLASH
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ SPLASH ══════════════════════════
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -2230,6 +1923,7 @@ class _SplashScreenState extends State<SplashScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1100),
     );
+
     _spin = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
@@ -2268,6 +1962,7 @@ class _SplashScreenState extends State<SplashScreen>
       );
     } catch (_) {
       if (!mounted) return;
+
       setState(() {
         _failed = true;
         _status = 'Could not reach the server';
@@ -2289,16 +1984,8 @@ class _SplashScreenState extends State<SplashScreen>
     return Scaffold(
       backgroundColor: p.bg,
       body: Stack(fit: StackFit.expand, children: [
-        Positioned(
-          top: -120,
-          left: -100,
-          child: _blob(p.accent, 320),
-        ),
-        Positioned(
-          bottom: -140,
-          right: -100,
-          child: _blob(p.purple, 340),
-        ),
+        Positioned(top: -120, left: -100, child: _blob(p.accent, 320)),
+        Positioned(bottom: -140, right: -100, child: _blob(p.purple, 340)),
         Center(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             ScaleTransition(
@@ -2336,7 +2023,10 @@ class _SplashScreenState extends State<SplashScreen>
               ),
             ),
             const SizedBox(height: 6),
-            Text('Feel every moment', style: TextStyle(color: p.sub, fontSize: 14)),
+            Text(
+              'Feel every moment',
+              style: TextStyle(color: p.sub, fontSize: 14),
+            ),
             const SizedBox(height: 44),
             if (_failed)
               Column(children: [
@@ -2385,13 +2075,9 @@ class _SplashScreenState extends State<SplashScreen>
       );
 }
 
-// ═══════════════════════════════════════════════════════════════
-// AUTH
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ AUTH ════════════════════════════
 class AuthScreen extends StatefulWidget {
-  final bool addAccount;
-
-  const AuthScreen({super.key, this.addAccount = false});
+  const AuthScreen({super.key});
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
@@ -2434,50 +2120,43 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
           throw ApiException('Fill in email, username and password.');
         }
 
-        final signupRes = await _api.post(
-          '/api/auth/signup',
-          auth: false,
-          body: {
-            'email': _email.text.trim(),
-            'username': _username.text.trim(),
-            'password': _password.text,
-            'name': _name.text.trim(),
-          },
-        );
+        await _api.post('/api/auth/signup', auth: false, body: {
+          'email': _email.text.trim(),
+          'username': _username.text.trim(),
+          'password': _password.text,
+          'name': _name.text.trim(),
+        });
 
-        final t = extractToken(signupRes);
-        if (t != null) await _api.saveToken(t);
+        try {
+          final res = await _api.post('/api/auth/login', auth: false, body: {
+            'identifier': _username.text.trim(),
+            'password': _password.text,
+          });
+
+          final t = extractToken(res);
+          if (t != null) await _api.saveToken(t);
+        } catch (_) {}
       }
 
       if (!_api.hasToken) {
-        final res = await _api.post(
-          '/api/auth/login',
-          auth: false,
-          body: {
-            'identifier': _signup
-                ? _username.text.trim()
-                : _identifier.text.trim(),
-            'password': _password.text,
-          },
-        );
+        final res = await _api.post('/api/auth/login', auth: false, body: {
+          'identifier':
+              _signup ? _username.text.trim() : _identifier.text.trim(),
+          'password': _password.text,
+        });
 
         final t = extractToken(res);
         if (t == null) throw ApiException('Login failed — no token received.');
+
         await _api.saveToken(t);
       }
 
       final appState = context.read<AppState>();
       await appState.fetchMe();
 
-      final user = appState.me;
-
-      await AccountManager.instance.upsert(
-        token: _api.token ?? '',
-        username: user?.username ??
-            (_signup ? _username.text.trim() : _identifier.text.trim()),
-        email: user?.email ?? (_signup ? _email.text.trim() : ''),
-        name: user?.name ?? _name.text.trim(),
-        avatarUrl: user?.avatarUrl,
+      appState.me ??= User(
+        username: _signup ? _username.text.trim() : _identifier.text.trim(),
+        name: _name.text.trim(),
       );
 
       if (!mounted) return;
@@ -2537,8 +2216,8 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     _applyBars(context);
+
     final p = _p(context);
-    final accounts = context.watch<AccountManager>().accounts;
 
     return Scaffold(
       backgroundColor: p.bg,
@@ -2604,9 +2283,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    widget.addAccount
-                        ? 'Add another account'
-                        : (_signup ? 'Create your account' : 'Welcome back 👋'),
+                    _signup ? 'Create your account' : 'Welcome back 👋',
                     style: TextStyle(color: p.sub, fontSize: 14),
                   ),
                   const SizedBox(height: 28),
@@ -2639,7 +2316,11 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                       ),
                       child: Column(children: [
                         if (_signup) ...[
-                          _field(c: _name, hint: 'Display name', icon: Icons.badge_outlined),
+                          _field(
+                            c: _name,
+                            hint: 'Display name',
+                            icon: Icons.badge_outlined,
+                          ),
                           const SizedBox(height: 12),
                           _field(
                             c: _email,
@@ -2710,23 +2391,6 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                       ),
                     ),
                   ]),
-                  if (accounts.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    TextButton.icon(
-                      onPressed: () => Navigator.push(
-                        context,
-                        FadeRoute(const AccountsScreen()),
-                      ),
-                      icon: Icon(Icons.switch_account_rounded, color: p.purple),
-                      label: Text(
-                        'Manage accounts',
-                        style: TextStyle(
-                          color: p.purple,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
                 ]),
               ),
             ),
@@ -2737,180 +2401,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// ACCOUNTS SCREEN
-// ═══════════════════════════════════════════════════════════════
-class AccountsScreen extends StatelessWidget {
-  const AccountsScreen({super.key});
-
-  Future<void> _switch(BuildContext context, Account acc) async {
-    final accounts = context.read<AccountManager>();
-    final appState = context.read<AppState>();
-
-    await accounts.switchTo(acc.id);
-    await appState.fetchMe();
-
-    if (!context.mounted) return;
-
-    Navigator.of(context).pushAndRemoveUntil(
-      FadeRoute(const MainShell()),
-      (_) => false,
-    );
-  }
-
-  Future<void> _remove(BuildContext context, Account acc) async {
-    final p = _p(context);
-    final accounts = context.read<AccountManager>();
-    final appState = context.read<AppState>();
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: p.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        title: const Text(
-          'Remove account?',
-          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
-        ),
-        content: Text(
-          '@${acc.username} will be removed from this device.',
-          style: const TextStyle(fontSize: 13.5),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: TextStyle(color: p.sub)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(
-              'Remove',
-              style: TextStyle(color: p.red, fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (ok != true) return;
-
-    await accounts.remove(acc.id);
-
-    if (!context.mounted) return;
-
-    if (accounts.accounts.isEmpty) {
-      appState.me = null;
-      appState.notifyListeners();
-
-      Navigator.of(context).pushAndRemoveUntil(
-        FadeRoute(const AuthScreen()),
-        (_) => false,
-      );
-      return;
-    }
-
-    if (accounts.active != null) {
-      await appState.fetchMe();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    _applyBars(context);
-
-    final p = _p(context);
-    final accounts = context.watch<AccountManager>().accounts;
-    final active = context.watch<AccountManager>().active;
-
-    return Scaffold(
-      backgroundColor: p.bg,
-      appBar: AppBar(
-        title: const Text(
-          'Accounts',
-          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: GradientButton(
-              text: 'Add',
-              icon: Icons.add_rounded,
-              width: 92,
-              height: 40,
-              onPressed: () => Navigator.push(
-                context,
-                FadeRoute(const AuthScreen(addAccount: true)),
-              ),
-            ),
-          ),
-        ],
-      ),
-      body: accounts.isEmpty
-          ? const EmptyState(
-              icon: Icons.people_outline_rounded,
-              title: 'No accounts',
-              subtitle: 'Add an account to continue.',
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: accounts.length,
-              itemBuilder: (context, i) {
-                final acc = accounts[i];
-                final isActive = active?.id == acc.id;
-
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: p.card,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: isActive ? p.accent : p.border,
-                      width: isActive ? 1.5 : 1,
-                    ),
-                  ),
-                  child: ListTile(
-                    onTap: () => _switch(context, acc),
-                    leading: Avatar(
-                      url: acc.avatarUrl,
-                      size: 46,
-                      fallback: acc.username,
-                    ),
-                    title: Text(
-                      acc.name ?? acc.username,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    subtitle: Text(
-                      '@${acc.username}${acc.email.isNotEmpty ? ' · ${acc.email}' : ''}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: p.sub, fontSize: 12.5),
-                    ),
-                    trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                      if (isActive)
-                        Icon(Icons.check_circle_rounded, color: p.green, size: 22),
-                      const SizedBox(width: 6),
-                      GestureDetector(
-                        onTap: () => _remove(context, acc),
-                        child: Icon(Icons.delete_outline_rounded, color: p.red),
-                      ),
-                    ]),
-                  ),
-                );
-              },
-            ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// MAIN SHELL
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ MAIN SHELL ══════════════════════
 class MainShell extends StatefulWidget {
   final int initialTab;
 
@@ -2927,12 +2418,14 @@ class _MainShellState extends State<MainShell> {
   @override
   void initState() {
     super.initState();
+
     ApiClient.instance.unauthorized.addListener(_onUnauth);
     context.read<AppState>().setTab(_tab);
   }
 
   void _onUnauth() {
     if (_handlingUnauth || !mounted) return;
+
     _handlingUnauth = true;
 
     context.read<AppState>().logout();
@@ -3025,10 +2518,13 @@ class _MainShellState extends State<MainShell> {
     final selected = _tab == i;
     final isShorts = _tab == 2;
 
-    final iconColor =
-        isShorts ? (selected ? p.accent : Colors.white54) : (selected ? p.accent : p.sub);
-    final textColor =
-        isShorts ? (selected ? p.accent : Colors.white54) : (selected ? p.accent : p.sub);
+    final iconColor = isShorts
+        ? (selected ? p.accent : Colors.white54)
+        : (selected ? p.accent : p.sub);
+
+    final textColor = isShorts
+        ? (selected ? p.accent : Colors.white54)
+        : (selected ? p.accent : p.sub);
 
     return Expanded(
       child: InkWell(
@@ -3195,9 +2691,7 @@ class _MiniPlayer extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// HOME
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ HOME ════════════════════════════
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -3220,8 +2714,10 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+
     _scroll.addListener(_onScroll);
     context.read<AppState>().feedTick.addListener(_onTick);
+
     _load(reset: true);
     _loadStories();
   }
@@ -3284,6 +2780,7 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     } on ApiException catch (e) {
       if (e.statusCode == 401) return;
+
       if (!mounted) return;
 
       setState(() {
@@ -3354,7 +2851,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 url: me?.avatarUrl,
                 size: 36,
                 ring: me?.hasUnseenStory ?? false,
-                fallback: me?.username,
               ),
             ),
             const SizedBox(width: 12),
@@ -3368,13 +2864,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     letterSpacing: .8,
                   ),
                 ),
-              ),
-            ),
-            IconButton(
-              icon: Icon(Icons.switch_account_outlined, color: p.sub),
-              onPressed: () => Navigator.push(
-                context,
-                FadeRoute(const AccountsScreen()),
               ),
             ),
             IconButton(
@@ -3510,9 +2999,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// STORIES
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ STORIES ═══════════════════════════
 class _StoryRing extends StatelessWidget {
   final User user;
   final VoidCallback? onChanged;
@@ -3521,6 +3008,8 @@ class _StoryRing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = _p(context);
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -3532,11 +3021,16 @@ class _StoryRing extends StatelessWidget {
         width: 74,
         margin: const EdgeInsets.only(right: 4),
         child: Column(children: [
-          Avatar(
-            url: user.avatarUrl,
-            size: 58,
-            ring: user.hasUnseenStory,
-            fallback: user.username,
+          Container(
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: user.hasUnseenStory ? p.reel : null,
+              border: user.hasUnseenStory
+                  ? null
+                  : Border.all(color: p.border, width: 2),
+            ),
+            child: Avatar(url: user.avatarUrl, size: 58, ring: false),
           ),
           const SizedBox(height: 4),
           Text(
@@ -3576,7 +3070,7 @@ class _StoryAddButton extends StatelessWidget {
         margin: const EdgeInsets.only(right: 4),
         child: Column(children: [
           Stack(children: [
-            Avatar(url: me.avatarUrl, size: 62, fallback: me.username),
+            Avatar(url: me.avatarUrl, size: 62, ring: false),
             Positioned(
               right: 0,
               bottom: 0,
@@ -3617,50 +3111,28 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
 
   String? _mediaId;
   String? _mediaPreview;
-  String _mediaKind = 'image';
 
   double _uploadProgress = 0;
   bool _uploading = false;
   bool _posting = false;
 
-  Future<void> _pickImage() async {
+  Future<void> _pickMedia() async {
     final f = await ImagePicker().pickImage(
       source: ImageSource.gallery,
       imageQuality: 85,
     );
+
     if (f == null) return;
 
     setState(() {
       _mediaPreview = f.path;
-      _mediaKind = 'image';
       _uploading = true;
       _uploadProgress = 0;
     });
 
-    await _upload(f.path);
-  }
-
-  Future<void> _pickVideo() async {
-    final f = await ImagePicker().pickVideo(
-      source: ImageSource.gallery,
-      maxDuration: const Duration(minutes: 2),
-    );
-    if (f == null) return;
-
-    setState(() {
-      _mediaPreview = f.path;
-      _mediaKind = 'video';
-      _uploading = true;
-      _uploadProgress = 0;
-    });
-
-    await _upload(f.path);
-  }
-
-  Future<void> _upload(String path) async {
     try {
       final res = await ApiClient.instance.uploadMedia(
-        path,
+        f.path,
         onProgress: (v) {
           if (mounted) setState(() => _uploadProgress = v);
         },
@@ -3745,7 +3217,7 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
         padding: const EdgeInsets.all(20),
         child: Column(children: [
           GestureDetector(
-            onTap: _uploading ? null : _pickImage,
+            onTap: _uploading ? null : _pickMedia,
             child: Container(
               width: double.infinity,
               height: 280,
@@ -3758,18 +3230,7 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
                   ? Stack(fit: StackFit.expand, children: [
                       ClipRRect(
                         borderRadius: BorderRadius.circular(20),
-                        child: _mediaKind == 'image'
-                            ? Image.file(File(_mediaPreview!), fit: BoxFit.cover)
-                            : Container(
-                                color: Colors.black,
-                                child: const Center(
-                                  child: Icon(
-                                    Icons.videocam_rounded,
-                                    color: Colors.white,
-                                    size: 56,
-                                  ),
-                                ),
-                              ),
+                        child: Image.file(File(_mediaPreview!), fit: BoxFit.cover),
                       ),
                       if (_uploading)
                         Positioned.fill(
@@ -3808,13 +3269,7 @@ class _CreateStoryScreenState extends State<CreateStoryScreen> {
                       children: [
                         Icon(Icons.add_photo_alternate_outlined, color: p.sub, size: 50),
                         const SizedBox(height: 8),
-                        Text('Add image', style: TextStyle(color: p.sub, fontSize: 13)),
-                        const SizedBox(height: 14),
-                        OutlinePillButton(
-                          text: 'Add video',
-                          icon: Icons.videocam_rounded,
-                          onTap: _pickVideo,
-                        ),
+                        Text('Add story', style: TextStyle(color: p.sub, fontSize: 13)),
                       ],
                     ),
             ),
@@ -3861,7 +3316,6 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
   List<Story> _stories = [];
   int _current = 0;
   bool _loading = true;
-  Timer? _auto;
 
   @override
   void initState() {
@@ -3883,43 +3337,14 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
 
       for (final s in items) {
         if (!s.viewedByMe) {
-          ApiClient.instance.post('/api/stories/${s.id}/view').catchError((_) {});
+          ApiClient.instance
+              .post('/api/stories/${s.id}/view')
+              .catchError((_) {});
         }
       }
-
-      _startTimer();
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
-  }
-
-  void _startTimer() {
-    _auto?.cancel();
-    _auto = Timer(const Duration(seconds: 6), _next);
-  }
-
-  void _next() {
-    if (!mounted) return;
-
-    if (_current < _stories.length - 1) {
-      setState(() => _current++);
-      _startTimer();
-    } else {
-      Navigator.pop(context);
-    }
-  }
-
-  void _prev() {
-    if (_current > 0) {
-      setState(() => _current--);
-      _startTimer();
-    }
-  }
-
-  @override
-  void dispose() {
-    _auto?.cancel();
-    super.dispose();
   }
 
   @override
@@ -3927,9 +3352,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
     if (_loading) {
       return Scaffold(
         backgroundColor: Colors.black,
-        body: Center(
-          child: CircularProgressIndicator(color: Colors.white),
-        ),
+        body: Center(child: CircularProgressIndicator(color: Colors.white)),
       );
     }
 
@@ -3939,7 +3362,10 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
         body: GestureDetector(
           onTap: () => Navigator.pop(context),
           child: const Center(
-            child: Text('No stories', style: TextStyle(color: Colors.white, fontSize: 18)),
+            child: Text(
+              'No stories',
+              style: TextStyle(color: Colors.white, fontSize: 18),
+            ),
           ),
         ),
       );
@@ -3952,15 +3378,23 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
       body: GestureDetector(
         onTapUp: (details) {
           final w = MediaQuery.of(context).size.width;
+
           if (details.globalPosition.dx < w / 3) {
-            _prev();
+            if (_current > 0) setState(() => _current--);
           } else {
-            _next();
+            if (_current < _stories.length - 1) {
+              setState(() => _current++);
+            } else {
+              Navigator.pop(context);
+            }
           }
         },
         child: Stack(fit: StackFit.expand, children: [
           if (story.media != null && story.media!.type == 'image')
-            CachedFileImage(url: story.media!.url, fit: BoxFit.cover)
+            CachedNetworkImage(
+              imageUrl: story.media!.url,
+              fit: BoxFit.contain,
+            )
           else if (story.media != null &&
               (story.media!.type == 'video' || story.media!.type == 'gif'))
             _StoryVideo(url: story.media!.url)
@@ -3999,7 +3433,8 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
                       ),
                       child: FractionallySizedBox(
                         alignment: Alignment.centerLeft,
-                        widthFactor: i < _current ? 1.0 : (i == _current ? 1.0 : 0.0),
+                        widthFactor:
+                            i < _current ? 1.0 : (i == _current ? 1.0 : 0.0),
                         child: Container(
                           decoration: BoxDecoration(
                             color: Colors.white,
@@ -4012,11 +3447,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
               ]),
               const SizedBox(height: 12),
               Row(children: [
-                Avatar(
-                  url: widget.user.avatarUrl,
-                  size: 36,
-                  fallback: widget.user.username,
-                ),
+                Avatar(url: widget.user.avatarUrl, size: 36),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -4069,9 +3500,6 @@ class _StoryVideo extends StatefulWidget {
 
 class _StoryVideoState extends State<_StoryVideo> {
   VideoPlayerController? _c;
-  bool _caching = true;
-  double _progress = 0;
-  bool _error = false;
 
   @override
   void initState() {
@@ -4082,37 +3510,16 @@ class _StoryVideoState extends State<_StoryVideo> {
   Future<void> _init() async {
     AudioController.instance.muteTemporarily();
 
-    final full = _fullUrl(widget.url);
+    final c = VideoPlayerController.networkUrl(Uri.parse(widget.url));
+    _c = c;
 
     try {
-      final local = await FileCache.instance.downloadWithResume(
-        full,
-        headers: authHeaders(),
-        onProgress: (v) {
-          if (mounted) setState(() => _progress = v);
-        },
-      );
-
-      final c = VideoPlayerController.file(File(local));
-      _c = c;
-
       await c.initialize();
       c.setLooping(true);
       await c.play();
 
-      if (mounted) {
-        setState(() {
-          _caching = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _caching = false;
-          _error = true;
-        });
-      }
-    }
+      if (mounted) setState(() {});
+    } catch (_) {}
   }
 
   @override
@@ -4124,47 +3531,20 @@ class _StoryVideoState extends State<_StoryVideo> {
 
   @override
   Widget build(BuildContext context) {
-    if (_caching) {
-      return Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          SizedBox(
-            width: 44,
-            height: 44,
-            child: CircularProgressIndicator(
-              value: _progress > 0 ? _progress : null,
-              color: Colors.white,
-              strokeWidth: 3,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            '${(_progress * 100).toInt()}%',
-            style: const TextStyle(color: Colors.white, fontSize: 12),
-          ),
-        ]),
-      );
+    if (_c == null || !_c!.value.isInitialized) {
+      return const Center(child: CircularProgressIndicator(color: Colors.white));
     }
 
-    if (_error || _c == null || !_c!.value.isInitialized) {
-      return const Center(
-        child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 48),
-      );
-    }
-
-    return FittedBox(
-      fit: BoxFit.cover,
-      child: SizedBox(
-        width: _c!.value.size.width,
-        height: _c!.value.size.height,
+    return Center(
+      child: AspectRatio(
+        aspectRatio: _c!.value.aspectRatio,
         child: VideoPlayer(_c!),
       ),
     );
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// POST ACTION BUTTON
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ POST CARD ═══════════════════════
 class ActionButton extends StatefulWidget {
   final IconData icon;
   final IconData? activeIcon;
@@ -4220,6 +3600,7 @@ class _ActionButtonState extends State<ActionButton>
             builder: (_, child) {
               final t = _c.value;
               final scale = t < .5 ? 1 + t * .5 : 1.25 - (t - .5) * .5;
+
               return Transform.scale(scale: scale, child: child);
             },
             child: Icon(
@@ -4249,9 +3630,6 @@ class _ActionButtonState extends State<ActionButton>
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// MEDIA GRID
-// ═══════════════════════════════════════════════════════════════
 class MediaGrid extends StatelessWidget {
   final Post post;
 
@@ -4259,9 +3637,9 @@ class MediaGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final media = post.media
-        .where((m) => m.type != 'audio' && m.type != 'file')
-        .toList();
+    final media =
+        post.media.where((m) => m.type != 'audio' && m.type != 'file').toList();
+
     final audios = post.media.where((m) => m.type == 'audio').toList();
     final files = post.media.where((m) => m.type == 'file').toList();
 
@@ -4465,6 +3843,7 @@ class _MediaImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = _p(context);
     final imageUrl = media.thumbnail ?? media.url;
 
     return GestureDetector(
@@ -4483,27 +3862,46 @@ class _MediaImage extends StatelessWidget {
       },
       child: Hero(
         tag: heroTag,
-        child: SizedBox(
-          width: double.infinity,
-          height: height,
-          child: Stack(fit: StackFit.expand, children: [
-            CachedFileImage(url: imageUrl, fit: BoxFit.cover),
-            if (media.type == 'video' || media.type == 'gif')
-              Center(
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(.55),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.play_arrow_rounded,
-                    color: Colors.white,
-                    size: 38,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: SizedBox(
+            width: double.infinity,
+            height: height,
+            child: Stack(fit: StackFit.expand, children: [
+              CachedNetworkImage(
+                imageUrl: imageUrl,
+                fit: BoxFit.cover,
+                placeholder: (_, __) => Shimmer.fromColors(
+                  baseColor: p.card,
+                  highlightColor: p.card2,
+                  child: Container(color: p.card),
+                ),
+                errorWidget: (_, __, ___) => Container(
+                  color: p.card,
+                  child: Icon(
+                    Icons.image_not_supported_outlined,
+                    color: p.sub,
+                    size: 30,
                   ),
                 ),
               ),
-          ]),
+              if (media.type == 'video' || media.type == 'gif')
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(.55),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.play_arrow_rounded,
+                      color: Colors.white,
+                      size: 38,
+                    ),
+                  ),
+                ),
+            ]),
+          ),
         ),
       ),
     );
@@ -4548,8 +3946,10 @@ class _FileCardState extends State<FileCard> {
 
     try {
       final status = await Permission.storage.request();
+
       if (!status.isGranted && Platform.isAndroid) {
         final s2 = await Permission.manageExternalStorage.request();
+
         if (!s2.isGranted) {
           if (mounted) showSnack(context, 'Storage permission required', error: true);
           return;
@@ -4599,12 +3999,15 @@ class _FileCardState extends State<FileCard> {
     if (mime.contains('pdf') || name.endsWith('.pdf')) {
       return Icons.picture_as_pdf_rounded;
     }
+
     if (mime.contains('word') || name.endsWith('.doc') || name.endsWith('.docx')) {
       return Icons.description_rounded;
     }
+
     if (mime.contains('zip') || mime.contains('rar') || name.contains('.zip')) {
       return Icons.folder_zip_rounded;
     }
+
     if (mime.contains('text') || name.endsWith('.txt')) return Icons.article_rounded;
 
     return Icons.attach_file_rounded;
@@ -4613,11 +4016,13 @@ class _FileCardState extends State<FileCard> {
   @override
   Widget build(BuildContext context) {
     final p = _p(context);
+
     final name = widget.media.originalName?.isNotEmpty == true
         ? widget.media.originalName!
         : 'File';
 
     final fullUrl = _fullUrl(widget.media.url);
+
     final cacheProgress = FileCache.instance.getProgress(fullUrl);
     final isCacheActive = FileCache.instance.isDownloading(fullUrl);
     final displayProgress = _progress > 0 ? _progress : cacheProgress;
@@ -4724,10 +4129,10 @@ class InlineVideo extends StatefulWidget {
 
 class _InlineVideoState extends State<InlineVideo> {
   VideoPlayerController? _c;
+
   bool _initializing = false;
   bool _error = false;
   bool _started = false;
-  double _cacheProgress = 0;
 
   Future<void> _toggle() async {
     if (_error) return;
@@ -4740,35 +4145,22 @@ class _InlineVideoState extends State<InlineVideo> {
         _started = true;
       });
 
-      try {
-        final full = _fullUrl(widget.url);
-        final local = await FileCache.instance.downloadWithResume(
-          full,
-          headers: authHeaders(),
-          onProgress: (v) {
-            if (mounted) setState(() => _cacheProgress = v);
-          },
-        );
+      final c = VideoPlayerController.networkUrl(Uri.parse(widget.url));
+      _c = c;
 
-        final c = VideoPlayerController.file(File(local));
-        _c = c;
+      await c.initialize().catchError((_) {
+        if (mounted) setState(() => _error = true);
+      });
 
-        await c.initialize();
-        c.setLooping(true);
-        c.setVolume(1);
+      if (!mounted || _error) return;
 
-        AudioController.instance.muteTemporarily();
-        await c.play();
+      c.setLooping(true);
+      c.setVolume(1);
 
-        setState(() => _initializing = false);
-      } catch (_) {
-        if (mounted) {
-          setState(() {
-            _initializing = false;
-            _error = true;
-          });
-        }
-      }
+      AudioController.instance.muteTemporarily();
+      await c.play();
+
+      setState(() => _initializing = false);
     } else if (_c != null) {
       setState(() {
         if (_c!.value.isPlaying) {
@@ -4785,6 +4177,7 @@ class _InlineVideoState extends State<InlineVideo> {
     super.didChangeDependencies();
 
     final tab = context.read<AppState>().currentTab.value;
+
     if (tab != 0 && _c != null && _c!.value.isPlaying) {
       _c!.pause();
     }
@@ -4809,7 +4202,12 @@ class _InlineVideoState extends State<InlineVideo> {
           child: AspectRatio(
             aspectRatio: 16 / 9,
             child: Stack(fit: StackFit.expand, children: [
-              CachedFileImage(url: widget.thumbnail!, fit: BoxFit.cover),
+              CachedNetworkImage(
+                imageUrl: widget.thumbnail!,
+                fit: BoxFit.cover,
+                placeholder: (_, __) => Container(color: p.card),
+                errorWidget: (_, __, ___) => Container(color: p.card),
+              ),
               Container(color: Colors.black.withOpacity(.25)),
               Center(
                 child: Container(
@@ -4885,20 +4283,7 @@ class _InlineVideoState extends State<InlineVideo> {
               ),
             GestureDetector(onTap: _toggle, behavior: HitTestBehavior.opaque),
             if (_initializing)
-              Center(
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  CircularProgressIndicator(
-                    strokeWidth: 2.6,
-                    value: _cacheProgress > 0 ? _cacheProgress : null,
-                    color: p.accent,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${(_cacheProgress * 100).toInt()}%',
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                  ),
-                ]),
-              ),
+              const Center(child: CircularProgressIndicator(strokeWidth: 2.6)),
             if (_error)
               Center(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -4972,9 +4357,6 @@ class _InlineVideoState extends State<InlineVideo> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// POST CARD
-// ═══════════════════════════════════════════════════════════════
 class PostCard extends StatefulWidget {
   final Post post;
   final bool detail;
@@ -5030,29 +4412,6 @@ class _PostCardState extends State<PostCard> {
     _api.post('/api/posts/${displayPost.id}/bookmark').catchError((_) {});
   }
 
-  Future<void> _share() async {
-    try {
-      final res = await _api.post('/api/posts/${displayPost.id}/share');
-
-      final count = jint(jpick(res, ['shares_count']));
-      if (count > 0) {
-        setState(() => displayPost.shareCount = count);
-      } else {
-        setState(() => displayPost.shareCount++);
-      }
-
-      final path = jstr(jpick(res, ['share_url']));
-      final full = path.startsWith('http')
-          ? path
-          : '${ApiClient.instance.baseUrl ?? ''}$path';
-
-      await Clipboard.setData(ClipboardData(text: full));
-      if (mounted) showSnack(context, 'Shared and link copied');
-    } catch (e) {
-      if (mounted) showSnack(context, 'Share failed', error: true);
-    }
-  }
-
   void _openDetail() {
     if (widget.detail) return;
 
@@ -5069,6 +4428,30 @@ class _PostCardState extends State<PostCard> {
     Navigator.push(context, FadeRoute(ProfileScreen(username: u)));
   }
 
+  Future<void> _openAuthorAvatar() async {
+    final author = displayPost.author;
+    if (author == null) return;
+
+    if (author.id != null && author.hasUnseenStory) {
+      await Navigator.push(
+        context,
+        FadeRoute(StoryViewerScreen(userId: author.id!, user: author)),
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        widget.post.author = widget.post.author?.copyWithUnseenStory(false);
+        widget.post.repostOf?.author =
+            widget.post.repostOf?.author?.copyWithUnseenStory(false);
+      });
+
+      widget.onChanged?.call();
+    } else {
+      _openAuthorProfile();
+    }
+  }
+
   Future<void> _delete() async {
     final p = _p(context);
 
@@ -5081,7 +4464,10 @@ class _PostCardState extends State<PostCard> {
           'Delete post?',
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
         ),
-        content: const Text('This cannot be undone.', style: TextStyle(fontSize: 13.5)),
+        content: const Text(
+          'This cannot be undone.',
+          style: TextStyle(fontSize: 13.5),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -5102,6 +4488,7 @@ class _PostCardState extends State<PostCard> {
 
     try {
       await _api.delete('/api/posts/${displayPost.id}');
+
       if (mounted) {
         showSnack(context, 'Post deleted');
         widget.onDeleted?.call();
@@ -5114,6 +4501,7 @@ class _PostCardState extends State<PostCard> {
   void _menu() {
     final p = _p(context);
     final me = context.read<AppState>().me;
+
     final own = me != null &&
         displayPost.author != null &&
         me.username == displayPost.author!.username;
@@ -5138,6 +4526,7 @@ class _PostCardState extends State<PostCard> {
           if (own)
             _mItem(Icons.edit_outlined, 'Edit post', p.accent, () {
               Navigator.pop(ctx);
+
               Navigator.push(
                 context,
                 SlideUpRoute(
@@ -5148,15 +4537,6 @@ class _PostCardState extends State<PostCard> {
                 ),
               ).then((_) => widget.onChanged?.call());
             }),
-          _mItem(Icons.format_quote_rounded, 'Quote post', p.orange, () {
-            Navigator.pop(ctx);
-            Navigator.push(
-              context,
-              SlideUpRoute(ComposeScreen(quotedPost: displayPost)),
-            ).then((v) {
-              if (v == true) widget.onChanged?.call();
-            });
-          }),
           _mItem(Icons.copy_rounded, 'Copy text', p.text, () {
             Navigator.pop(ctx);
             Clipboard.setData(ClipboardData(text: displayPost.text));
@@ -5173,10 +4553,6 @@ class _PostCardState extends State<PostCard> {
               _toggleBookmark();
             },
           ),
-          _mItem(Icons.share_rounded, 'Share', p.purple, () {
-            Navigator.pop(ctx);
-            _share();
-          }),
           if (own)
             _mItem(Icons.delete_outline_rounded, 'Delete post', p.red, () {
               Navigator.pop(ctx);
@@ -5191,23 +4567,23 @@ class _PostCardState extends State<PostCard> {
   Widget _mItem(IconData icon, String label, Color color, VoidCallback onTap) =>
       ListTile(
         leading: Icon(icon, color: color, size: 22),
-        title: Text(
-          label,
-          style: TextStyle(color: color, fontWeight: FontWeight.w600),
-        ),
+        title: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
         onTap: onTap,
       );
 
   @override
   Widget build(BuildContext context) {
     final p = _p(context);
+
     final post = widget.post;
     final author = post.author;
     final isRepost = post.repostOf != null;
 
     String? likedByText;
+
     if (post.likedByFollowings.isNotEmpty) {
       final names = post.likedByFollowings.take(2).map((e) => '@$e').toList();
+
       likedByText =
           'Liked by ${names.join(', ')}${post.likedByFollowings.length > 2 ? ' and others' : ''}';
     }
@@ -5254,12 +4630,11 @@ class _PostCardState extends State<PostCard> {
           padding: EdgeInsets.fromLTRB(16, 14, 16, widget.detail ? 4 : 10),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             GestureDetector(
-              onTap: _openAuthorProfile,
+              onTap: _openAuthorAvatar,
               child: Avatar(
                 url: displayPost.author?.avatarUrl,
                 size: widget.detail ? 48 : 44,
                 ring: displayPost.author?.hasUnseenStory ?? false,
-                fallback: displayPost.author?.username,
               ),
             ),
             const SizedBox(width: 12),
@@ -5350,16 +4725,9 @@ class _PostCardState extends State<PostCard> {
                   ActionButton(
                     icon: Icons.bookmark_border_rounded,
                     activeIcon: Icons.bookmark_rounded,
-                    color: p.gold,
+                    color: p.accent,
                     active: displayPost.bookmarked,
                     onTap: _toggleBookmark,
-                  ),
-                  const Spacer(),
-                  ActionButton(
-                    icon: Icons.share_rounded,
-                    color: p.purple,
-                    count: displayPost.shareCount,
-                    onTap: _share,
                   ),
                 ]),
                 if (likedByText != null)
@@ -5407,20 +4775,12 @@ class QuoteCard extends StatelessWidget {
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           GestureDetector(
-            onTap: () {
-              if (post.author?.username != null) {
-                Navigator.push(
-                  context,
-                  FadeRoute(ProfileScreen(username: post.author!.username)),
-                );
-              }
-            },
+            onTap: () => openUserOrStory(context, post.author),
             child: Row(children: [
               Avatar(
                 url: post.author?.avatarUrl,
                 size: 22,
                 ring: post.author?.hasUnseenStory ?? false,
-                fallback: post.author?.username,
               ),
               const SizedBox(width: 6),
               Flexible(
@@ -5453,25 +4813,36 @@ class QuoteCard extends StatelessWidget {
                   width: double.infinity,
                   child: (post.media.first.type == 'video' ||
                           post.media.first.type == 'gif')
-                      ? Stack(fit: StackFit.expand, children: [
-                          if (post.media.first.thumbnail != null)
-                            CachedFileImage(
-                              url: post.media.first.thumbnail!,
-                              fit: BoxFit.cover,
-                            )
-                          else
-                            Container(color: Colors.black),
-                          const Center(
-                            child: Icon(
-                              Icons.play_circle_fill_rounded,
-                              color: Colors.white70,
-                              size: 40,
-                            ),
-                          ),
-                        ])
-                      : CachedFileImage(
-                          url: post.media.first.thumbnail ?? post.media.first.url,
+                      ? (post.media.first.thumbnail != null
+                          ? Stack(fit: StackFit.expand, children: [
+                              CachedNetworkImage(
+                                imageUrl: post.media.first.thumbnail!,
+                                fit: BoxFit.cover,
+                                errorWidget: (_, __, ___) => Container(color: p.card),
+                              ),
+                              const Center(
+                                child: Icon(
+                                  Icons.play_circle_fill_rounded,
+                                  color: Colors.white70,
+                                  size: 40,
+                                ),
+                              ),
+                            ])
+                          : Container(
+                              color: Colors.black,
+                              child: const Center(
+                                child: Icon(
+                                  Icons.play_circle_fill_rounded,
+                                  color: Colors.white70,
+                                  size: 40,
+                                ),
+                              ),
+                            ))
+                      : CachedNetworkImage(
+                          imageUrl:
+                              post.media.first.thumbnail ?? post.media.first.url,
                           fit: BoxFit.cover,
+                          errorWidget: (_, __, ___) => Container(color: p.card),
                         ),
                 ),
               ),
@@ -5482,16 +4853,43 @@ class QuoteCard extends StatelessWidget {
   }
 }
 
-class AudioChip extends StatelessWidget {
+class AudioChip extends StatefulWidget {
   final MediaItem media;
 
   const AudioChip({super.key, required this.media});
 
-  Future<void> _play(BuildContext context) async {
-    final audio = AudioController.instance;
-    final fullUrl = _fullUrl(media.url);
+  @override
+  State<AudioChip> createState() => _AudioChipState();
+}
 
-    if (audio.currentKey == media.url) {
+class _AudioChipState extends State<AudioChip> {
+  bool _cached = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkCache();
+  }
+
+  String get _title => widget.media.title?.isNotEmpty == true
+      ? widget.media.title!
+      : (widget.media.originalName?.isNotEmpty == true
+          ? widget.media.originalName!
+          : 'Audio track');
+
+  Future<void> _checkCache() async {
+    final full = _fullUrl(widget.media.url);
+
+    if (await FileCache.instance.hasFile(full)) {
+      if (mounted) setState(() => _cached = true);
+    }
+  }
+
+  Future<void> _play() async {
+    final audio = AudioController.instance;
+    final full = _fullUrl(widget.media.url);
+
+    if (audio.currentKey == widget.media.url) {
       if (audio.playing) {
         await audio.pause();
       } else {
@@ -5501,51 +4899,56 @@ class AudioChip extends StatelessWidget {
     }
 
     try {
-      final path = await FileCache.instance.downloadWithResume(
-        fullUrl,
-        headers: authHeaders(),
-      );
+      String path;
+
+      if (await FileCache.instance.hasFile(full)) {
+        path = FileCache.instance.getLocalPath(full);
+
+        if (!_cached && mounted) {
+          setState(() => _cached = true);
+        }
+      } else {
+        path = await FileCache.instance.downloadWithResume(
+          full,
+          headers: authHeaders(),
+          onProgress: (_) {
+            if (mounted) setState(() {});
+          },
+        );
+
+        if (mounted) setState(() => _cached = true);
+      }
 
       await audio.play(
         path,
-        key: media.url,
-        title: media.title?.isNotEmpty == true ? media.title : media.originalName,
-        artist: media.artist,
-        duration: media.duration,
+        key: widget.media.url,
+        title: _title,
+        artist: widget.media.artist,
+        duration: widget.media.duration,
       );
     } catch (_) {
-      if (context.mounted) showSnack(context, 'Audio playback failed', error: true);
+      if (mounted) showSnack(context, 'Audio playback failed', error: true);
     }
   }
 
-  Future<void> _downloadAudio(BuildContext context) async {
-    try {
-      final status = await Permission.storage.request();
-      if (!status.isGranted && Platform.isAndroid) {
-        final s2 = await Permission.manageExternalStorage.request();
-        if (!s2.isGranted) {
-          if (context.mounted) {
-            showSnack(context, 'Storage permission required', error: true);
-          }
-          return;
-        }
-      }
-    } catch (_) {}
-
-    final fullUrl = _fullUrl(media.url);
+  Future<void> _downloadOnly() async {
+    final full = _fullUrl(widget.media.url);
 
     try {
-      if (context.mounted) showSnack(context, 'Downloading...');
-
-      final path = await FileCache.instance.downloadWithResume(
-        fullUrl,
+      await FileCache.instance.downloadWithResume(
+        full,
         headers: authHeaders(),
+        onProgress: (_) {
+          if (mounted) setState(() {});
+        },
       );
 
-      if (context.mounted) showSnack(context, 'Download complete ✓');
-      OpenFile.open(path);
-    } catch (e) {
-      if (context.mounted) showSnack(context, 'Download failed', error: true);
+      if (mounted) {
+        setState(() => _cached = true);
+        showSnack(context, 'Download complete ✓');
+      }
+    } catch (_) {
+      if (mounted) showSnack(context, 'Download failed', error: true);
     }
   }
 
@@ -5555,24 +4958,12 @@ class AudioChip extends StatelessWidget {
     final audio = context.watch<AudioController>();
     final cache = context.watch<FileCache>();
 
-    final isPlaying = audio.currentKey == media.url && audio.playing;
-    final isCurrent = audio.currentKey == media.url;
+    final isCurrent = audio.currentKey == widget.media.url;
+    final isPlaying = isCurrent && audio.playing;
 
-    final title = media.title?.isNotEmpty == true
-        ? media.title!
-        : (media.originalName?.isNotEmpty == true
-            ? media.originalName!
-            : 'Audio track');
-
-    final progress = isCurrent &&
-            audio.currentDuration != null &&
-            audio.currentDuration! > 0
-        ? (audio.position / audio.currentDuration!).clamp(0.0, 1.0)
-        : 0.0;
-
-    final fullUrl = _fullUrl(media.url);
+    final fullUrl = _fullUrl(widget.media.url);
     final dlProgress = cache.getProgress(fullUrl);
-    final isDlActive = cache.isDownloading(fullUrl) && !isCurrent;
+    final isDlActive = cache.isDownloading(fullUrl);
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -5584,7 +4975,7 @@ class AudioChip extends StatelessWidget {
       child: Column(children: [
         Row(children: [
           GestureDetector(
-            onTap: () => _play(context),
+            onTap: _play,
             child: Container(
               width: 44,
               height: 44,
@@ -5596,40 +4987,63 @@ class AudioChip extends StatelessWidget {
                 ],
               ),
               child: Icon(
-                isDlActive
-                    ? Icons.hourglass_top_rounded
-                    : (isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
                 color: Colors.white,
                 size: 24,
               ),
             ),
           ),
+          if (!_cached) ...[
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: isDlActive ? null : _downloadOnly,
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: p.accent.withOpacity(.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: isDlActive
+                    ? SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          value: dlProgress,
+                          color: p.accent,
+                        ),
+                      )
+                    : Icon(Icons.download_rounded, color: p.accent, size: 18),
+              ),
+            ),
+          ],
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
+                  _title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 2),
                 Row(children: [
-                  if (media.artist?.isNotEmpty == true)
+                  if (widget.media.artist?.isNotEmpty == true)
                     Expanded(
                       child: Text(
-                        media.artist!,
+                        widget.media.artist!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 11, color: p.sub),
                       ),
                     ),
-                  if (media.duration != null) ...[
-                    if (media.artist?.isNotEmpty == true) const SizedBox(width: 6),
+                  if (widget.media.duration != null) ...[
+                    if (widget.media.artist?.isNotEmpty == true)
+                      const SizedBox(width: 6),
                     Text(
-                      formatDuration(media.duration),
+                      formatDuration(widget.media.duration),
                       style: TextStyle(fontSize: 11, color: p.sub),
                     ),
                   ],
@@ -5637,29 +5051,8 @@ class AudioChip extends StatelessWidget {
               ],
             ),
           ),
-          GestureDetector(
-            onTap: () => _downloadAudio(context),
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: p.accent.withOpacity(.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: isDlActive
-                  ? SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        value: dlProgress,
-                        color: p.accent,
-                      ),
-                    )
-                  : Icon(Icons.download_rounded, color: p.accent, size: 18),
-            ),
-          ),
         ]),
-        if (isDlActive)
+        if (isDlActive && !_cached)
           Padding(
             padding: const EdgeInsets.only(top: 6),
             child: Row(children: [
@@ -5713,9 +5106,7 @@ class AudioChip extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// COMPOSE
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ COMPOSE ══════════════════════════
 class _PendingMedia {
   final String path;
   final String? name;
@@ -5760,13 +5151,17 @@ class _ComposeScreenState extends State<ComposeScreen> {
   bool _posting = false;
   static const int _limit = 500;
 
+  List<User> _mentions = [];
+  bool _mentionLoading = false;
+  int _mentionStart = -1;
+  String _mentionToken = '';
+  Timer? _mentionTimer;
+
   @override
   void initState() {
     super.initState();
 
-    _text.addListener(() {
-      if (mounted) setState(() {});
-    });
+    _text.addListener(_onTextChanged);
 
     if (widget.editPost != null) {
       _text.text = widget.editPost!.text;
@@ -5784,9 +5179,91 @@ class _ComposeScreenState extends State<ComposeScreen> {
 
   @override
   void dispose() {
-    _text.removeListener(() {});
+    _text.removeListener(_onTextChanged);
+    _mentionTimer?.cancel();
     _text.dispose();
     super.dispose();
+  }
+
+  void _onTextChanged() {
+    if (mounted) setState(() {});
+    _updateMentionState();
+  }
+
+  void _updateMentionState() {
+    final text = _text.text;
+
+    int pos = _text.selection.baseOffset;
+    if (pos < 0 || pos > text.length) pos = text.length;
+
+    final before = text.substring(0, pos);
+    final at = before.lastIndexOf('@');
+
+    if (at >= 0) {
+      final token = before.substring(at + 1);
+
+      if (!token.contains(' ') && !token.contains('\n')) {
+        _mentionStart = at;
+        _mentionToken = token;
+        _fetchMentions(token);
+        return;
+      }
+    }
+
+    _mentionStart = -1;
+    _mentionToken = '';
+    _mentions = [];
+  }
+
+  void _fetchMentions(String q) {
+    _mentionTimer?.cancel();
+
+    _mentionTimer = Timer(const Duration(milliseconds: 250), () async {
+      if (!mounted) return;
+
+      setState(() => _mentionLoading = true);
+
+      try {
+        final res = await _api.get('/api/users', query: {
+          if (q.isNotEmpty) 'q': q,
+          'limit': '20',
+        });
+
+        if (!mounted) return;
+
+        setState(() {
+          _mentions = extractItems(res).map(User.fromJson).toList();
+          _mentionLoading = false;
+        });
+      } catch (_) {
+        if (mounted) setState(() => _mentionLoading = false);
+      }
+    });
+  }
+
+  void _insertMention(User u) {
+    final text = _text.text;
+
+    int end = _text.selection.baseOffset;
+    if (end < 0 || end > text.length) end = text.length;
+
+    if (_mentionStart < 0 || _mentionStart > end) return;
+
+    final insert = '@${u.username} ';
+    final newText = text.replaceRange(_mentionStart, end, insert);
+
+    _text.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(
+        offset: _mentionStart + insert.length,
+      ),
+    );
+
+    setState(() {
+      _mentionStart = -1;
+      _mentionToken = '';
+      _mentions = [];
+    });
   }
 
   Future<void> _pickImage({bool camera = false}) async {
@@ -5794,6 +5271,7 @@ class _ComposeScreenState extends State<ComposeScreen> {
       source: camera ? ImageSource.camera : ImageSource.gallery,
       imageQuality: 85,
     );
+
     if (f == null) return;
 
     _addAndUpload(f.path, 'image', name: f.name);
@@ -5804,6 +5282,7 @@ class _ComposeScreenState extends State<ComposeScreen> {
       source: camera ? ImageSource.camera : ImageSource.gallery,
       maxDuration: const Duration(minutes: 3),
     );
+
     if (f == null) return;
 
     _addAndUpload(f.path, 'video', name: f.name);
@@ -5811,6 +5290,7 @@ class _ComposeScreenState extends State<ComposeScreen> {
 
   Future<void> _pickAudio() async {
     final result = await FilePicker.platform.pickFiles(type: FileType.audio);
+
     if (result == null || result.files.isEmpty) return;
 
     final file = result.files.first;
@@ -5821,28 +5301,21 @@ class _ComposeScreenState extends State<ComposeScreen> {
 
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(type: FileType.any);
+
     if (result == null || result.files.isEmpty) return;
 
     final file = result.files.first;
     if (file.path == null) return;
 
-    final name = file.name.toLowerCase();
+    final mime = lookupMimeType(file.path!) ?? '';
 
-    String kind = 'file';
-    if (name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.mkv')) {
-      kind = 'video';
-    } else if (name.endsWith('.mp3') ||
-        name.endsWith('.wav') ||
-        name.endsWith('.ogg') ||
-        name.endsWith('.m4a')) {
-      kind = 'audio';
-    } else if (name.endsWith('.jpg') ||
-        name.endsWith('.jpeg') ||
-        name.endsWith('.png') ||
-        name.endsWith('.webp') ||
-        name.endsWith('.gif')) {
-      kind = 'image';
-    }
+    final kind = mime.startsWith('video/')
+        ? 'video'
+        : mime.startsWith('audio/')
+            ? 'audio'
+            : mime.startsWith('image/')
+                ? 'image'
+                : 'file';
 
     _addAndUpload(file.path!, kind, name: file.name);
   }
@@ -5891,6 +5364,7 @@ class _ComposeScreenState extends State<ComposeScreen> {
           pm.uploading = false;
           pm.error = true;
         });
+
         showSnack(context, 'Upload error: $e', error: true);
       }
     }
@@ -5940,6 +5414,7 @@ class _ComposeScreenState extends State<ComposeScreen> {
           context,
           widget.editPost != null ? 'Post updated ✨' : 'Posted! 🎉',
         );
+
         Navigator.pop(context, true);
       }
     } catch (e) {
@@ -5967,6 +5442,7 @@ class _ComposeScreenState extends State<ComposeScreen> {
     final remaining = _limit - _text.text.length;
     final hasText = _text.text.trim().isNotEmpty;
     final validMediaCount = _media.where((m) => !m.error && m.id != null).length;
+
     final canPost = !_posting && remaining >= 0 && (hasText || validMediaCount > 0);
 
     return Scaffold(
@@ -6005,7 +5481,6 @@ class _ComposeScreenState extends State<ComposeScreen> {
                 url: me?.avatarUrl,
                 size: 44,
                 ring: me?.hasUnseenStory ?? false,
-                fallback: me?.username,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -6025,6 +5500,54 @@ class _ComposeScreenState extends State<ComposeScreen> {
                 ),
               ),
             ]),
+            if (_mentionStart >= 0)
+              Container(
+                margin: const EdgeInsets.only(top: 8),
+                height: 180,
+                decoration: BoxDecoration(
+                  color: p.card,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: p.border),
+                ),
+                child: _mentionLoading
+                    ? const Center(
+                        child: SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2.2),
+                        ),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        itemCount: _mentions.length,
+                        separatorBuilder: (_, __) => Divider(
+                          height: 1,
+                          color: p.border.withOpacity(.5),
+                        ),
+                        itemBuilder: (context, i) {
+                          final u = _mentions[i];
+
+                          return ListTile(
+                            dense: true,
+                            onTap: () => _insertMention(u),
+                            leading: Avatar(url: u.avatarUrl, size: 32),
+                            title: Text(
+                              u.displayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13.5,
+                              ),
+                            ),
+                            subtitle: Text(
+                              '@${u.username}',
+                              style: TextStyle(color: p.sub, fontSize: 12),
+                            ),
+                          );
+                        },
+                      ),
+              ),
             if (widget.quotedPost != null) QuoteCard(post: widget.quotedPost!),
             if (_media.isNotEmpty) ...[
               const SizedBox(height: 10),
@@ -6070,9 +5593,17 @@ class _ComposeScreenState extends State<ComposeScreen> {
                                       ),
                                     )
                                   : (m.thumbnail != null && m.thumbnail!.isNotEmpty
-                                      ? CachedFileImage(
-                                          url: m.thumbnail!,
+                                      ? CachedNetworkImage(
+                                          imageUrl: m.thumbnail!,
                                           fit: BoxFit.cover,
+                                          errorWidget: (_, __, ___) => Container(
+                                            color: p.card,
+                                            child: Icon(
+                                              _iconFor(m.mediaKind),
+                                              color: p.sub,
+                                              size: 34,
+                                            ),
+                                          ),
                                         )
                                       : (m.mediaKind == 'image' && m.path.isNotEmpty
                                           ? Image.file(File(m.path), fit: BoxFit.cover)
@@ -6138,6 +5669,7 @@ class _ComposeScreenState extends State<ComposeScreen> {
                                 m.error = false;
                                 m.progress = 0;
                               });
+
                               _upload(m);
                             },
                             child: Container(
@@ -6241,20 +5773,14 @@ class _ComposeScreenState extends State<ComposeScreen> {
         const SizedBox(width: 8),
         Text(
           label,
-          style: TextStyle(
-            color: p.accent,
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-          ),
+          style: TextStyle(color: p.accent, fontWeight: FontWeight.w600, fontSize: 13),
         ),
       ]),
     );
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// POST DETAIL
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ POST DETAIL ═════════════════════
 class PostDetailScreen extends StatefulWidget {
   final int? postId;
   final Post? initial;
@@ -6278,6 +5804,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   @override
   void initState() {
     super.initState();
+
     _post = widget.initial;
     _load();
   }
@@ -6352,7 +5879,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     return Scaffold(
       backgroundColor: p.bg,
       appBar: AppBar(
-        title: const Text('Post', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+        title: const Text(
+          'Post',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => Navigator.pop(context),
@@ -6375,7 +5905,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     if (_loading)
                       const Padding(
                         padding: EdgeInsets.all(24),
-                        child: Center(child: CircularProgressIndicator(strokeWidth: 2.4)),
+                        child: Center(
+                          child: CircularProgressIndicator(strokeWidth: 2.4),
+                        ),
                       ),
                     if (!_loading && _replies.isEmpty)
                       const Padding(
@@ -6406,7 +5938,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     border: Border(top: BorderSide(color: p.border)),
                   ),
                   child: Row(children: [
-                    Avatar(url: me?.avatarUrl, size: 36, fallback: me?.username),
+                    Avatar(url: me?.avatarUrl, size: 36),
                     const SizedBox(width: 10),
                     Expanded(
                       child: TextField(
@@ -6447,9 +5979,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// BOOKMARKS
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ BOOKMARKS ═══════════════════════
 class BookmarksScreen extends StatefulWidget {
   const BookmarksScreen({super.key});
 
@@ -6509,7 +6039,10 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     return Scaffold(
       backgroundColor: p.bg,
       appBar: AppBar(
-        title: const Text('Bookmarks', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+        title: const Text(
+          'Bookmarks',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => Navigator.pop(context),
@@ -6548,9 +6081,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// SHORTS
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ SHORTS ══════════════════════════
 class ShortsScreen extends StatefulWidget {
   const ShortsScreen({super.key});
 
@@ -6572,7 +6103,6 @@ class _ShortsScreenState extends State<ShortsScreen> {
   @override
   void initState() {
     super.initState();
-    _applyBars(context);
     _load();
   }
 
@@ -6584,6 +6114,7 @@ class _ShortsScreenState extends State<ShortsScreen> {
 
     try {
       final res = await _api.get('/api/shorts', query: {'limit': '20'});
+
       final items = extractItems(res)
           .map(Post.fromJson)
           .where((x) => x.media.isNotEmpty)
@@ -6734,6 +6265,7 @@ class _ReelItemState extends State<ReelItem> with TickerProviderStateMixin {
     super.initState();
 
     _disc = AnimationController(vsync: this, duration: const Duration(seconds: 5));
+
     _heartAnim = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 750),
@@ -6775,6 +6307,7 @@ class _ReelItemState extends State<ReelItem> with TickerProviderStateMixin {
       if (!mounted) return;
 
       final file = File(localPath);
+
       if (await file.exists()) {
         final c = VideoPlayerController.file(file);
         _vc = c;
@@ -6841,9 +6374,11 @@ class _ReelItemState extends State<ReelItem> with TickerProviderStateMixin {
   @override
   void dispose() {
     AudioController.instance.unmute();
+
     _vc?.dispose();
     _disc.dispose();
     _heartAnim.dispose();
+
     super.dispose();
   }
 
@@ -6883,8 +6418,10 @@ class _ReelItemState extends State<ReelItem> with TickerProviderStateMixin {
 
     try {
       final status = await Permission.storage.request();
+
       if (!status.isGranted && Platform.isAndroid) {
         final s2 = await Permission.manageExternalStorage.request();
+
         if (!s2.isGranted) {
           if (mounted) showSnack(context, 'Storage permission required', error: true);
           return;
@@ -6915,6 +6452,7 @@ class _ReelItemState extends State<ReelItem> with TickerProviderStateMixin {
     if (!widget.post.liked) {
       _toggleLike();
     }
+
     _heartAnim.forward(from: 0);
   }
 
@@ -6936,6 +6474,28 @@ class _ReelItemState extends State<ReelItem> with TickerProviderStateMixin {
     }
   }
 
+  Future<void> _openAuthor() async {
+    final author = widget.post.author;
+    if (author == null) return;
+
+    if (author.id != null && author.hasUnseenStory) {
+      await Navigator.push(
+        context,
+        FadeRoute(StoryViewerScreen(userId: author.id!, user: author)),
+      );
+
+      if (mounted) {
+        setState(() {
+          widget.post.author = widget.post.author?.copyWithUnseenStory(false);
+        });
+      }
+    } else {
+      if (author.username.isNotEmpty) {
+        Navigator.push(context, FadeRoute(ProfileScreen(username: author.username)));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final post = widget.post;
@@ -6943,6 +6503,7 @@ class _ReelItemState extends State<ReelItem> with TickerProviderStateMixin {
     final author = post.author;
 
     String? likedByText;
+
     if (post.likedByFollowings.isNotEmpty) {
       final names = post.likedByFollowings.take(2).map((e) => '@$e').toList();
       likedByText = 'Liked by ${names.join(', ')}';
@@ -6958,19 +6519,22 @@ class _ReelItemState extends State<ReelItem> with TickerProviderStateMixin {
           onLongPressCancel: () => setState(() => _holding = false),
           child: Stack(fit: StackFit.expand, children: [
             if (_isVideo && !_videoError && _vc != null && _vc!.value.isInitialized)
-              FittedBox(
-                fit: BoxFit.cover,
-                child: SizedBox(
-                  width: _vc!.value.size.width,
-                  height: _vc!.value.size.height,
+              Center(
+                child: AspectRatio(
+                  aspectRatio: _vc!.value.aspectRatio,
                   child: VideoPlayer(_vc!),
                 ),
               )
             else if (!_isVideo || _videoError)
-              CachedFileImage(
-                url: m.thumbnail ?? m.url,
-                fit: BoxFit.cover,
-                errorWidget: Container(color: Colors.black12),
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black,
+                  child: CachedNetworkImage(
+                    imageUrl: m.thumbnail ?? m.url,
+                    fit: BoxFit.contain,
+                    errorWidget: (_, __, ___) => Container(color: Colors.black12),
+                  ),
+                ),
               ),
             if (_heartAnim.isAnimating || _heartAnim.value > 0)
               Positioned.fill(
@@ -6979,6 +6543,7 @@ class _ReelItemState extends State<ReelItem> with TickerProviderStateMixin {
                     animation: _heartAnim,
                     builder: (_, __) {
                       final t = _heartAnim.value;
+
                       final scale = t < .3 ? t / .3 * 1.5 : 1.5 - (t - .3) * .28;
                       final opacity = t > .7 ? (1 - t) / .3 : 1.0;
 
@@ -7128,20 +6693,12 @@ class _ReelItemState extends State<ReelItem> with TickerProviderStateMixin {
           bottom: 34,
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             GestureDetector(
-              onTap: () {
-                if (author?.username != null && author!.username.isNotEmpty) {
-                  Navigator.push(
-                    context,
-                    FadeRoute(ProfileScreen(username: author.username)),
-                  );
-                }
-              },
+              onTap: _openAuthor,
               child: Row(children: [
                 Avatar(
                   url: author?.avatarUrl,
                   size: 32,
                   ring: author?.hasUnseenStory ?? false,
-                  fallback: author?.username,
                 ),
                 const SizedBox(width: 10),
                 Flexible(
@@ -7289,9 +6846,7 @@ class _ReelItemState extends State<ReelItem> with TickerProviderStateMixin {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// EXPLORE
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ EXPLORE ══════════════════════════
 class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key});
 
@@ -7313,7 +6868,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
   bool _loading = true;
   bool _searching = false;
   String _query = '';
-  String? _mediaType;
 
   @override
   void initState() {
@@ -7368,10 +6922,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
   Future<void> _doSearch(String q) async {
     setState(() {
       _query = q.trim();
-      if (_query.isNotEmpty || _mediaType != null) _searching = true;
+      if (_query.isNotEmpty) _searching = true;
     });
 
-    if (_query.isEmpty && _mediaType == null) {
+    if (_query.isEmpty) {
       setState(() {
         _searching = false;
         _users = [];
@@ -7381,11 +6935,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
     }
 
     try {
-      final res = await _api.get('/api/search', query: {
-        if (_query.isNotEmpty) 'q': _query,
-        if (_mediaType != null) 'media_type': _mediaType!,
-      });
-
+      final res = await _api.get('/api/search', query: {'q': _query});
       if (!mounted) return;
 
       List<User> users = [];
@@ -7424,35 +6974,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
     super.dispose();
   }
 
-  Widget _typeChip(String? value, String label) {
-    final p = _p(context);
-    final selected = _mediaType == value;
-
-    return GestureDetector(
-      onTap: () {
-        setState(() => _mediaType = value);
-        _doSearch(_search.text);
-      },
-      child: Container(
-        margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          color: selected ? p.accent : p.card,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: selected ? p.accent : p.border),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? Colors.white : p.sub,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     _applyBars(context);
@@ -7488,23 +7009,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
           ),
         ),
       ),
-      SizedBox(
-        height: 40,
-        child: ListView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          children: [
-            _typeChip(null, 'All'),
-            _typeChip('image', 'Images'),
-            _typeChip('video', 'Videos'),
-            _typeChip('audio', 'Audio'),
-            _typeChip('file', 'Files'),
-          ],
-        ),
-      ),
-      const SizedBox(height: 6),
       Expanded(
-        child: (_query.isEmpty && _mediaType == null)
+        child: _query.isEmpty
             ? _buildExplore()
             : _searching
                 ? const Center(child: CircularProgressIndicator(strokeWidth: 2.4))
@@ -7609,10 +7115,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   final u = _users[i];
 
                   return GestureDetector(
-                    onTap: () => Navigator.push(
-                      context,
-                      FadeRoute(ProfileScreen(username: u.username)),
-                    ),
+                    onTap: () => openUserOrStory(context, u),
                     child: Container(
                       width: 130,
                       padding: const EdgeInsets.all(12),
@@ -7626,7 +7129,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
                           url: u.avatarUrl,
                           size: 44,
                           ring: u.hasUnseenStory,
-                          fallback: u.username,
                         ),
                         const SizedBox(height: 6),
                         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -7696,9 +7198,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       clipBehavior: Clip.antiAlias,
                       child: Stack(fit: StackFit.expand, children: [
                         if (post.media.isNotEmpty)
-                          CachedFileImage(
-                            url: post.media.first.thumbnail ?? post.media.first.url,
+                          CachedNetworkImage(
+                            imageUrl:
+                                post.media.first.thumbnail ?? post.media.first.url,
                             fit: BoxFit.cover,
+                            errorWidget: (_, __, ___) => Container(color: p.card2),
                           )
                         else
                           Container(
@@ -7733,14 +7237,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                           right: 0,
                           bottom: 0,
                           child: GestureDetector(
-                            onTap: () {
-                              if (post.author?.username != null) {
-                                Navigator.push(
-                                  context,
-                                  FadeRoute(ProfileScreen(username: post.author!.username)),
-                                );
-                              }
-                            },
+                            onTap: () => openUserOrStory(context, post.author),
                             child: Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
@@ -7754,11 +7251,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                                 ),
                               ),
                               child: Row(children: [
-                                Avatar(
-                                  url: post.author?.avatarUrl,
-                                  size: 22,
-                                  fallback: post.author?.username,
-                                ),
+                                Avatar(url: post.author?.avatarUrl, size: 22),
                                 const SizedBox(width: 6),
                                 Expanded(
                                   child: Text(
@@ -7828,10 +7321,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
               final u = _users[i];
 
               return GestureDetector(
-                onTap: () => Navigator.push(
-                  context,
-                  FadeRoute(ProfileScreen(username: u.username)),
-                ),
+                onTap: () => openUserOrStory(context, u),
                 child: Container(
                   width: 130,
                   padding: const EdgeInsets.all(12),
@@ -7845,7 +7335,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       url: u.avatarUrl,
                       size: 44,
                       ring: u.hasUnseenStory,
-                      fallback: u.username,
                     ),
                     const SizedBox(height: 6),
                     Row(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -7892,9 +7381,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// NOTIFICATIONS
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ NOTIFICATIONS ═══════════════════
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
 
@@ -8059,12 +7546,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               child: InkWell(
                                 onTap: () {
                                   if (n.actor != null && n.type.contains('follow')) {
-                                    Navigator.push(
-                                      context,
-                                      FadeRoute(
-                                        ProfileScreen(username: n.actor!.username),
-                                      ),
-                                    );
+                                    openUserOrStory(context, n.actor);
                                   } else if (n.postId != null && n.postId! > 0) {
                                     Navigator.push(
                                       context,
@@ -8085,14 +7567,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                     children: [
                                       GestureDetector(
                                         onTap: n.actor != null
-                                            ? () => Navigator.push(
-                                                  context,
-                                                  FadeRoute(
-                                                    ProfileScreen(
-                                                      username: n.actor!.username,
-                                                    ),
-                                                  ),
-                                                )
+                                            ? () => openUserOrStory(context, n.actor)
                                             : null,
                                         child: Container(
                                           width: 42,
@@ -8112,14 +7587,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                           children: [
                                             GestureDetector(
                                               onTap: n.actor != null
-                                                  ? () => Navigator.push(
+                                                  ? () => openUserOrStory(
                                                         context,
-                                                        FadeRoute(
-                                                          ProfileScreen(
-                                                            username:
-                                                                n.actor!.username,
-                                                          ),
-                                                        ),
+                                                        n.actor,
                                                       )
                                                   : null,
                                               child: Text.rich(
@@ -8134,7 +7604,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                                         ),
                                                       ),
                                                     TextSpan(
-                                                      text: ' ${n.text ?? _verbFor(n.type)}',
+                                                      text:
+                                                          ' ${n.text ?? _verbFor(n.type)}',
                                                     ),
                                                   ],
                                                 ),
@@ -8171,9 +7642,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// MESSAGES
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ MESSAGES ═════════════════════════
 class MessagesScreen extends StatefulWidget {
   const MessagesScreen({super.key});
 
@@ -8302,6 +7771,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                             final isOnlineOther = other?.isOnline ?? false;
 
                             final lastMsg = c.lastMessage;
+
                             final lastText = lastMsg?.deleted == true
                                 ? 'Message deleted'
                                 : (lastMsg?.text.isNotEmpty == true
@@ -8325,12 +7795,48 @@ class _MessagesScreenState extends State<MessagesScreen> {
                                     vertical: 10,
                                   ),
                                   child: Row(children: [
-                                    Avatar(
-                                      url: other?.avatarUrl,
-                                      size: 52,
-                                      ring: other?.hasUnseenStory ?? false,
-                                      online: isOnlineOther,
-                                      fallback: _title(c),
+                                    GestureDetector(
+                                      onTap: () => openUserOrStory(context, other),
+                                      child: Stack(children: [
+                                        Avatar(
+                                          url: other?.avatarUrl,
+                                          size: 52,
+                                          ring: other?.hasUnseenStory ?? false,
+                                          fallback: _title(c),
+                                        ),
+                                        if (c.isGroup)
+                                          Positioned(
+                                            right: 0,
+                                            bottom: 0,
+                                            child: Container(
+                                              padding: const EdgeInsets.all(3),
+                                              decoration: BoxDecoration(
+                                                color: p.purple,
+                                                shape: BoxShape.circle,
+                                                border: Border.all(color: p.bg, width: 2),
+                                              ),
+                                              child: const Icon(
+                                                Icons.group_rounded,
+                                                size: 11,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                        if (!c.isGroup && isOnlineOther)
+                                          Positioned(
+                                            right: 2,
+                                            bottom: 2,
+                                            child: Container(
+                                              width: 12,
+                                              height: 12,
+                                              decoration: BoxDecoration(
+                                                color: p.green,
+                                                shape: BoxShape.circle,
+                                                border: Border.all(color: p.bg, width: 2),
+                                              ),
+                                            ),
+                                          ),
+                                      ]),
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(
@@ -8359,9 +7865,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                                                 timeAgo(context, lastTime),
                                                 style: TextStyle(
                                                   fontSize: 11.5,
-                                                  color: c.unread > 0
-                                                      ? p.accent
-                                                      : p.sub,
+                                                  color: c.unread > 0 ? p.accent : p.sub,
                                                 ),
                                               ),
                                           ]),
@@ -8426,6 +7930,7 @@ class NewConversationScreen extends StatefulWidget {
 
 class _NewConversationScreenState extends State<NewConversationScreen> {
   final _api = ApiClient.instance;
+
   final _search = TextEditingController();
   final _groupName = TextEditingController();
 
@@ -8459,6 +7964,7 @@ class _NewConversationScreenState extends State<NewConversationScreen> {
             .map(User.fromJson)
             .where((u) => u.username != me?.username)
             .toList();
+
         _loading = false;
       });
     } catch (_) {
@@ -8603,12 +8109,7 @@ class _NewConversationScreenState extends State<NewConversationScreen> {
                                 }
                               }),
                       leading: Stack(children: [
-                        Avatar(
-                          url: u.avatarUrl,
-                          size: 46,
-                          ring: u.hasUnseenStory,
-                          fallback: u.username,
-                        ),
+                        Avatar(url: u.avatarUrl, size: 46),
                         if (selected)
                           Positioned(
                             right: 0,
@@ -8671,161 +8172,6 @@ class _NewConversationScreenState extends State<NewConversationScreen> {
   }
 }
 
-class AddMemberScreen extends StatefulWidget {
-  final int conversationId;
-
-  const AddMemberScreen({super.key, required this.conversationId});
-
-  @override
-  State<AddMemberScreen> createState() => _AddMemberScreenState();
-}
-
-class _AddMemberScreenState extends State<AddMemberScreen> {
-  final _api = ApiClient.instance;
-  final _search = TextEditingController();
-
-  List<User> _users = [];
-  bool _loading = false;
-  bool _adding = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _doSearch('');
-  }
-
-  Future<void> _doSearch(String q) async {
-    setState(() => _loading = true);
-
-    try {
-      final res = await _api.get('/api/users', query: {
-        if (q.isNotEmpty) 'q': q,
-        'limit': '50'
-      });
-
-      if (!mounted) return;
-
-      final me = context.read<AppState>().me;
-
-      setState(() {
-        _users = extractItems(res)
-            .map(User.fromJson)
-            .where((u) => u.username != me?.username)
-            .toList();
-        _loading = false;
-      });
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _add(User u) async {
-    if (_adding || u.id == null) return;
-
-    setState(() => _adding = true);
-
-    try {
-      await _api.post(
-        '/api/dm/conversations/${widget.conversationId}/members',
-        body: {'user_id': u.id},
-      );
-
-      if (mounted) {
-        showSnack(context, '@${u.username} added');
-        Navigator.pop(context, true);
-      }
-    } on ApiException catch (e) {
-      if (mounted) showSnack(context, e.message, error: true);
-    } finally {
-      if (mounted) setState(() => _adding = false);
-    }
-  }
-
-  @override
-  void dispose() {
-    _search.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final p = _p(context);
-
-    return Scaffold(
-      backgroundColor: p.bg,
-      appBar: AppBar(
-        title: const Text(
-          'Add member',
-          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.close_rounded),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: Column(children: [
-        Padding(
-          padding: const EdgeInsets.all(14),
-          child: TextField(
-            controller: _search,
-            onChanged: (q) => _doSearch(q.trim()),
-            style: TextStyle(color: p.text),
-            decoration: InputDecoration(
-              hintText: 'Search people…',
-              hintStyle: TextStyle(color: p.sub),
-              prefixIcon: Icon(Icons.search_rounded, color: p.sub),
-              filled: true,
-              fillColor: p.card,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(22),
-                borderSide: BorderSide.none,
-              ),
-              contentPadding: const EdgeInsets.symmetric(vertical: 12),
-            ),
-          ),
-        ),
-        Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator(strokeWidth: 2.4))
-              : ListView.builder(
-                  itemCount: _users.length,
-                  itemBuilder: (context, i) {
-                    final u = _users[i];
-
-                    return ListTile(
-                      onTap: () => _add(u),
-                      leading: Avatar(
-                        url: u.avatarUrl,
-                        size: 44,
-                        ring: u.hasUnseenStory,
-                        fallback: u.username,
-                      ),
-                      title: Text(
-                        u.displayName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      subtitle: Text(
-                        '@${u.username}',
-                        style: TextStyle(color: p.sub, fontSize: 12.5),
-                      ),
-                      trailing: _adding
-                          ? SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Icon(Icons.person_add_rounded, color: p.accent),
-                    );
-                  },
-                ),
-        ),
-      ]),
-    );
-  }
-}
-
 class ChatScreen extends StatefulWidget {
   final Conversation conversation;
 
@@ -8837,6 +8183,7 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final _api = ApiClient.instance;
+
   final _input = TextEditingController();
   final _scroll = ScrollController();
 
@@ -8852,6 +8199,10 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _attachName;
 
   DM? _replyTo;
+
+  int? _dragId;
+  double _dragDx = 0;
+  bool _dragVibrated = false;
 
   int? get _convId => widget.conversation.id;
 
@@ -8932,20 +8283,19 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _send({String? overrideText}) async {
     final text = (overrideText ?? _input.text).trim();
+
     if (text.isEmpty || _sending || _convId == null) return;
 
     setState(() => _sending = true);
 
     try {
-      final res = await _api.post(
-        '/api/dm/conversations/$_convId/messages',
-        body: {
-          'text': text,
-          if (_replyTo?.id != null) 'reply_to_id': _replyTo!.id,
-        },
-      );
+      final res = await _api.post('/api/dm/conversations/$_convId/messages', body: {
+        'text': text,
+        if (_replyTo?.id != null) 'reply_to_id': _replyTo!.id,
+      });
 
       _input.clear();
+
       final replyTo = _replyTo;
       setState(() => _replyTo = null);
 
@@ -9061,6 +8411,7 @@ class _ChatScreenState extends State<ChatScreen> {
           source: ImageSource.gallery,
           imageQuality: 85,
         );
+
         path = f?.path;
         name = f?.name;
       } else if (type == 'video') {
@@ -9068,16 +8419,19 @@ class _ChatScreenState extends State<ChatScreen> {
           source: ImageSource.gallery,
           maxDuration: const Duration(minutes: 5),
         );
+
         path = f?.path;
         name = f?.name;
       } else if (type == 'audio') {
         final result = await FilePicker.platform.pickFiles(type: FileType.audio);
+
         if (result != null && result.files.isNotEmpty) {
           path = result.files.first.path;
           name = result.files.first.name;
         }
       } else {
         final result = await FilePicker.platform.pickFiles(type: FileType.any);
+
         if (result != null && result.files.isNotEmpty) {
           path = result.files.first.path;
           name = result.files.first.name;
@@ -9086,6 +8440,7 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (_) {}
 
     if (path == null) return;
+
     await _uploadAndSend(path, name);
   }
 
@@ -9110,6 +8465,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
       if (res is Map) {
         id = jstr(jpick(res, ['id', 'media_id']));
+
         if (id.isEmpty) {
           final u = resolveMedia(res);
           if (u != null) id = u;
@@ -9142,9 +8498,61 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Widget _swipeable(DM m, bool mine, Widget child) {
+    if (m.id == null) return child;
+
+    final dx = _dragId == m.id ? _dragDx : 0.0;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragStart: (_) {
+        setState(() {
+          _dragId = m.id;
+          _dragDx = 0;
+          _dragVibrated = false;
+        });
+      },
+      onHorizontalDragUpdate: (d) {
+        double next = _dragDx + d.delta.dx;
+
+        if (mine) {
+          next = next.clamp(-120.0, 0.0);
+        } else {
+          next = next.clamp(0.0, 120.0);
+        }
+
+        if (!_dragVibrated && next.abs() > 70) {
+          _dragVibrated = true;
+          HapticFeedback.selectionClick();
+
+          setState(() => _replyTo = m);
+        }
+
+        setState(() => _dragDx = next);
+      },
+      onHorizontalDragEnd: (_) {
+        setState(() {
+          _dragId = null;
+          _dragDx = 0;
+        });
+      },
+      onHorizontalDragCancel: () {
+        setState(() {
+          _dragId = null;
+          _dragDx = 0;
+        });
+      },
+      child: Transform.translate(
+        offset: Offset(dx, 0),
+        child: child,
+      ),
+    );
+  }
+
   void _messageMenu(DM m) {
     final p = _p(context);
     final me = context.read<AppState>().me;
+
     final mine = m.senderId == me?.id || m.sender?.username == me?.username;
 
     showModalBottomSheet(
@@ -9201,6 +8609,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _editMessage(DM m) async {
     final p = _p(context);
+
     final c = TextEditingController(text: m.text);
 
     final newText = await showDialog<String>(
@@ -9256,6 +8665,7 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       await _api.delete('/api/dm/messages/${m.id}');
       setState(() => _messages.removeWhere((x) => x.id == m.id));
+
       if (mounted) showSnack(context, 'Message deleted');
     } on ApiException catch (e) {
       if (mounted) showSnack(context, e.message, error: true);
@@ -9309,20 +8719,30 @@ class _ChatScreenState extends State<ChatScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: GestureDetector(
-          onTap: other.username.isNotEmpty
-              ? () => Navigator.push(
-                    context,
-                    FadeRoute(ProfileScreen(username: other.username)),
-                  )
-              : null,
+          onTap: () => openUserOrStory(context, other),
           child: Row(children: [
-            Avatar(
-              url: other.avatarUrl,
-              size: 36,
-              ring: other.hasUnseenStory,
-              online: !conv.isGroup && isOnlineOther,
-              fallback: _title(),
-            ),
+            Stack(children: [
+              Avatar(
+                url: other.avatarUrl,
+                size: 36,
+                ring: other.hasUnseenStory,
+                fallback: _title(),
+              ),
+              if (!conv.isGroup && isOnlineOther)
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: p.green,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: p.bg, width: 2),
+                    ),
+                  ),
+                ),
+            ]),
             const SizedBox(width: 10),
             Flexible(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -9351,18 +8771,6 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ]),
         ),
-        actions: [
-          if (conv.isGroup && conv.id != null)
-            IconButton(
-              icon: Icon(Icons.person_add_alt_1_rounded, color: p.sub),
-              onPressed: () => Navigator.push(
-                context,
-                FadeRoute(AddMemberScreen(conversationId: conv.id!)),
-              ).then((v) {
-                if (v == true) _load();
-              }),
-            ),
-        ],
       ),
       body: Column(children: [
         Expanded(
@@ -9393,6 +8801,198 @@ class _ChatScreenState extends State<ChatScreen> {
                         final mine =
                             m.senderId == me?.id || m.sender?.username == me?.username;
 
+                        final bubble = GestureDetector(
+                          onLongPress: () => _messageMenu(m),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              gradient: mine ? p.brand : null,
+                              color: mine ? null : p.card,
+                              borderRadius: BorderRadius.only(
+                                topLeft: const Radius.circular(18),
+                                topRight: const Radius.circular(18),
+                                bottomLeft: Radius.circular(mine ? 18 : 4),
+                                bottomRight: Radius.circular(mine ? 4 : 18),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (!mine && conv.isGroup && m.sender != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 3),
+                                    child: GestureDetector(
+                                      onTap: () => openUserOrStory(context, m.sender),
+                                      child: Text(
+                                        m.sender?.displayName ?? m.sender!.username,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w800,
+                                          color: hashColor(m.sender!.username),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                if (m.replyToId != null &&
+                                    m.replyParent != null &&
+                                    m.replyParent!.text.isNotEmpty)
+                                  Container(
+                                    padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                                    margin: const EdgeInsets.only(bottom: 6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white
+                                          .withOpacity(mine ? .15 : .08),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border(
+                                        left: BorderSide(
+                                          color: mine ? Colors.white : p.accent,
+                                          width: 3,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '↩ Reply',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: mine
+                                                ? Colors.white.withOpacity(.7)
+                                                : p.accent,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        Text(
+                                          m.replyParent!.text,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: mine
+                                                ? Colors.white.withOpacity(.85)
+                                                : p.text,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                if (m.media.isNotEmpty)
+                                  for (final mm in m.media)
+                                    if (mm.type == 'file')
+                                      Padding(
+                                        padding: const EdgeInsets.only(bottom: 6),
+                                        child: FileCard(media: mm),
+                                      )
+                                    else if (mm.type == 'audio')
+                                      Padding(
+                                        padding: const EdgeInsets.only(bottom: 6),
+                                        child: AudioChip(media: mm),
+                                      )
+                                    else
+                                      Padding(
+                                        padding: const EdgeInsets.only(bottom: 6),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: GestureDetector(
+                                            onTap: () {
+                                              if (mm.type == 'video' ||
+                                                  mm.type == 'gif') {
+                                                Navigator.push(
+                                                  context,
+                                                  FadeRoute(FullScreenVideoScreen(
+                                                    url: mm.url,
+                                                    thumbnail: mm.thumbnail,
+                                                  )),
+                                                );
+                                              } else {
+                                                Navigator.push(
+                                                  context,
+                                                  FadeRoute(MediaViewerScreen(
+                                                    media: mm,
+                                                    heroTag: 'dm_${m.id}_${mm.id}',
+                                                  )),
+                                                );
+                                              }
+                                            },
+                                            child: Stack(children: [
+                                              CachedNetworkImage(
+                                                imageUrl: mm.thumbnail ?? mm.url,
+                                                fit: BoxFit.cover,
+                                                width: 200,
+                                                height: 150,
+                                                errorWidget: (_, __, ___) => Container(
+                                                  width: 200,
+                                                  height: 150,
+                                                  color: p.card2,
+                                                ),
+                                              ),
+                                              if (mm.type == 'video' ||
+                                                  mm.type == 'gif')
+                                                Positioned.fill(
+                                                  child: Container(
+                                                    color:
+                                                        Colors.black.withOpacity(.25),
+                                                    child: const Center(
+                                                      child: Icon(
+                                                        Icons
+                                                            .play_circle_fill_rounded,
+                                                        color: Colors.white70,
+                                                        size: 44,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                            ]),
+                                          ),
+                                        ),
+                                      ),
+                                if (m.deleted)
+                                  Text(
+                                    'This message was deleted',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontStyle: FontStyle.italic,
+                                      color: mine
+                                          ? Colors.white.withOpacity(.7)
+                                          : p.sub,
+                                    ),
+                                  )
+                                else if (m.text.trim().isNotEmpty)
+                                  Padding(
+                                    padding: EdgeInsets.only(
+                                      top: m.media.isNotEmpty ? 6 : 0,
+                                    ),
+                                    child: Text(
+                                      m.text,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        height: 1.3,
+                                        color: mine ? Colors.white : p.text,
+                                      ),
+                                    ),
+                                  ),
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 3),
+                                  child: Text(
+                                    timeAgo(context, m.createdAt),
+                                    style: TextStyle(
+                                      fontSize: 9.5,
+                                      color: mine
+                                          ? Colors.white.withOpacity(.7)
+                                          : p.sub,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 4),
                           child: Row(
@@ -9402,220 +9002,17 @@ class _ChatScreenState extends State<ChatScreen> {
                             children: [
                               if (!mine) ...[
                                 GestureDetector(
-                                  onTap: m.sender?.username != null &&
-                                          m.sender!.username.isNotEmpty
-                                      ? () => Navigator.push(
-                                            context,
-                                            FadeRoute(
-                                              ProfileScreen(username: m.sender!.username),
-                                            ),
-                                          )
-                                      : null,
+                                  onTap: () => openUserOrStory(context, m.sender),
                                   child: Avatar(
                                     url: m.sender?.avatarUrl,
                                     size: 28,
                                     ring: m.sender?.hasUnseenStory ?? false,
-                                    fallback: m.sender?.username,
                                   ),
                                 ),
                                 const SizedBox(width: 6),
                               ],
                               Flexible(
-                                child: GestureDetector(
-                                  onLongPress: () => _messageMenu(m),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 14,
-                                      vertical: 10,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      gradient: mine ? p.brand : null,
-                                      color: mine ? null : p.card,
-                                      borderRadius: BorderRadius.only(
-                                        topLeft: const Radius.circular(18),
-                                        topRight: const Radius.circular(18),
-                                        bottomLeft:
-                                            Radius.circular(mine ? 18 : 4),
-                                        bottomRight:
-                                            Radius.circular(mine ? 4 : 18),
-                                      ),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        if (!mine && conv.isGroup && m.sender != null)
-                                          Padding(
-                                            padding: const EdgeInsets.only(bottom: 3),
-                                            child: GestureDetector(
-                                              onTap: () => Navigator.push(
-                                                context,
-                                                FadeRoute(
-                                                  ProfileScreen(
-                                                    username: m.sender!.username,
-                                                  ),
-                                                ),
-                                              ),
-                                              child: Text(
-                                                m.sender?.displayName ?? m.sender!.username,
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w800,
-                                                  color: hashColor(m.sender!.username),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        if (m.replyToId != null &&
-                                            m.replyParent != null &&
-                                            m.replyParent!.text.isNotEmpty)
-                                          Container(
-                                            padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-                                            margin: const EdgeInsets.only(bottom: 6),
-                                            decoration: BoxDecoration(
-                                              color: Colors.white
-                                                  .withOpacity(mine ? .15 : .08),
-                                              borderRadius: BorderRadius.circular(10),
-                                              border: Border(
-                                                left: BorderSide(
-                                                  color: mine ? Colors.white : p.accent,
-                                                  width: 3,
-                                                ),
-                                              ),
-                                            ),
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  '↩ Reply',
-                                                  style: TextStyle(
-                                                    fontSize: 10,
-                                                    color: mine
-                                                        ? Colors.white.withOpacity(.7)
-                                                        : p.accent,
-                                                    fontWeight: FontWeight.w700,
-                                                  ),
-                                                ),
-                                                Text(
-                                                  m.replyParent!.text,
-                                                  maxLines: 2,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    color: mine
-                                                        ? Colors.white.withOpacity(.85)
-                                                        : p.text,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        if (m.media.isNotEmpty)
-                                          for (final mm in m.media)
-                                            if (mm.type == 'file')
-                                              Padding(
-                                                padding: const EdgeInsets.only(bottom: 6),
-                                                child: FileCard(media: mm),
-                                              )
-                                            else if (mm.type == 'audio')
-                                              Padding(
-                                                padding: const EdgeInsets.only(bottom: 6),
-                                                child: AudioChip(media: mm),
-                                              )
-                                            else
-                                              Padding(
-                                                padding: const EdgeInsets.only(bottom: 6),
-                                                child: ClipRRect(
-                                                  borderRadius: BorderRadius.circular(12),
-                                                  child: GestureDetector(
-                                                    onTap: () {
-                                                      if (mm.type == 'video' ||
-                                                          mm.type == 'gif') {
-                                                        Navigator.push(
-                                                          context,
-                                                          FadeRoute(FullScreenVideoScreen(
-                                                            url: mm.url,
-                                                            thumbnail: mm.thumbnail,
-                                                          )),
-                                                        );
-                                                      } else {
-                                                        Navigator.push(
-                                                          context,
-                                                          FadeRoute(MediaViewerScreen(
-                                                            media: mm,
-                                                            heroTag: 'dm_${m.id}_${mm.id}',
-                                                          )),
-                                                        );
-                                                      }
-                                                    },
-                                                    child: Stack(children: [
-                                                      CachedFileImage(
-                                                        url: mm.thumbnail ?? mm.url,
-                                                        width: 200,
-                                                        height: 150,
-                                                        fit: BoxFit.cover,
-                                                      ),
-                                                      if (mm.type == 'video' ||
-                                                          mm.type == 'gif')
-                                                        Positioned.fill(
-                                                          child: Container(
-                                                            color: Colors.black
-                                                                .withOpacity(.25),
-                                                            child: const Center(
-                                                              child: Icon(
-                                                                Icons
-                                                                    .play_circle_fill_rounded,
-                                                                color: Colors.white70,
-                                                                size: 44,
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        ),
-                                                    ]),
-                                                  ),
-                                                ),
-                                              ),
-                                        if (m.deleted)
-                                          Text(
-                                            'This message was deleted',
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              fontStyle: FontStyle.italic,
-                                              color: mine
-                                                  ? Colors.white.withOpacity(.7)
-                                                  : p.sub,
-                                            ),
-                                          )
-                                        else if (m.text.trim().isNotEmpty)
-                                          Padding(
-                                            padding: EdgeInsets.only(
-                                              top: m.media.isNotEmpty ? 6 : 0,
-                                            ),
-                                            child: Text(
-                                              m.text,
-                                              style: TextStyle(
-                                                fontSize: 14,
-                                                height: 1.3,
-                                                color: mine ? Colors.white : p.text,
-                                              ),
-                                            ),
-                                          ),
-                                        Padding(
-                                          padding: const EdgeInsets.only(top: 3),
-                                          child: Text(
-                                            timeAgo(context, m.createdAt),
-                                            style: TextStyle(
-                                              fontSize: 9.5,
-                                              color: mine
-                                                  ? Colors.white.withOpacity(.7)
-                                                  : p.sub,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
+                                child: _swipeable(m, mine, bubble),
                               ),
                             ],
                           ),
@@ -9743,9 +9140,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// PROFILE
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ PROFILE ═════════════════════════
 class ProfileScreen extends StatefulWidget {
   final String username;
 
@@ -9807,37 +9202,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<List<Post>> _basePosts() async {
-    if (_tabCache.containsKey('base')) return _tabCache['base']!;
+  Future<List<Post>> _tabPosts(String kind) async {
+    if (_tabCache.containsKey(kind)) return _tabCache[kind]!;
 
-    _tabLoading['base'] = true;
+    _tabLoading[kind] = true;
 
     try {
-      final res = await _api.get(
-        '/api/users/${widget.username}/posts',
-        query: {'limit': '100'},
-      );
+      final path = kind == 'posts'
+          ? '/api/users/${widget.username}/posts'
+          : '/api/users/${widget.username}/media';
 
-      final items = extractItems(res).map(Post.fromJson).toList();
-      _tabCache['base'] = items;
+      final res = await _api.get(path, query: {'limit': '40'});
+
+      var items = extractItems(res).map(Post.fromJson).toList();
+
+      if (kind == 'media') {
+        items = items.where((x) => x.media.isNotEmpty).toList();
+      }
+
+      _tabCache[kind] = items;
       return items;
     } catch (_) {
-      _tabCache['base'] = [];
+      _tabCache[kind] = [];
       return [];
     } finally {
-      _tabLoading['base'] = false;
+      _tabLoading[kind] = false;
       if (mounted) setState(() {});
     }
-  }
-
-  Future<List<Post>> _tabPosts(String kind) async {
-    final base = await _basePosts();
-
-    if (kind == 'media') {
-      return base.where((p) => p.media.isNotEmpty).toList();
-    }
-
-    return base;
   }
 
   Future<void> _toggleFollow() async {
@@ -9879,7 +9270,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   void _profileMenu() {
     final p = _p(context);
-    final me = context.read<AppState>().me;
 
     showModalBottomSheet(
       context: context,
@@ -9910,17 +9300,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               showSnack(context, 'Copied');
             },
           ),
-          if (_isMe || me?.isAdmin == true)
+          if (_isMe || context.read<AppState>().me?.isAdmin == true)
             ListTile(
-              leading: Icon(
-                _user?.verified == true
-                    ? Icons.verified_user_rounded
-                    : Icons.verified_rounded,
-                color: p.gold,
-              ),
-              title: Text(
-                _user?.verified == true ? 'Unverify user (Admin)' : 'Verify user (Admin)',
-                style: const TextStyle(fontWeight: FontWeight.w600),
+              leading: Icon(Icons.verified_rounded, color: p.gold),
+              title: const Text(
+                'Verify user (Admin)',
+                style: TextStyle(fontWeight: FontWeight.w600),
               ),
               onTap: () async {
                 Navigator.pop(ctx);
@@ -9928,15 +9313,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 try {
                   await _api.post(
                     '/api/admin/users/${widget.username}/verify',
-                    body: {'verified': !(_user?.verified ?? false)},
+                    body: {'verified': true},
                   );
 
-                  if (mounted) {
-                    showSnack(
-                      context,
-                      _user?.verified == true ? 'User unverified' : 'User verified ✅',
-                    );
-                  }
+                  if (mounted) showSnack(context, 'User verified ✅');
 
                   _load();
                 } on ApiException catch (e) {
@@ -10032,7 +9412,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return _ProfileTab(
       loader: () => _tabPosts(kind),
-      loading: _tabLoading['base'] ?? false,
+      loading: _tabLoading[kind] ?? false,
       grid: isGrid,
     );
   }
@@ -10084,6 +9464,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final u = _user!;
 
     String? followedByText;
+
     if (u.followedByFollowings.isNotEmpty && !_isMe) {
       final names = u.followedByFollowings.take(3).map((e) => '@$e').toList();
       followedByText = 'Followed by ${names.join(', ')}';
@@ -10118,17 +9499,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Row(children: [
                 GestureDetector(
                   onTap: () {
-                    if (u.avatarItems.isNotEmpty) {
+                    if (u.id != null && u.hasUnseenStory) {
+                      openUserOrStory(context, u).then((_) => _load());
+                    } else if (u.avatarItems.isNotEmpty) {
                       _showAvatarsGallery();
                     }
                   },
-                  child: Avatar(
-                    url: u.avatarUrl,
-                    size: 92,
-                    ring: u.hasUnseenStory,
-                    online: !_isMe && u.isOnline,
-                    fallback: u.username,
-                  ),
+                  child: Stack(children: [
+                    Avatar(
+                      url: u.avatarUrl,
+                      size: 92,
+                      ring: u.hasUnseenStory,
+                    ),
+                    if (!_isMe && u.isOnline)
+                      Positioned(
+                        right: 6,
+                        bottom: 6,
+                        child: Container(
+                          width: 18,
+                          height: 18,
+                          decoration: BoxDecoration(
+                            color: p.green,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: p.bg, width: 3),
+                          ),
+                        ),
+                      ),
+                  ]),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -10218,31 +9615,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     itemCount: u.avatarItems.length,
                     separatorBuilder: (_, __) => const SizedBox(width: 8),
                     itemBuilder: (context, i) {
-                      final a = u.avatarItems[u.avatarItems.length - 1 - i];
+                      final reversedIndex = u.avatarItems.length - 1 - i;
+                      final a = u.avatarItems[reversedIndex];
 
                       return GestureDetector(
-                        onLongPress: () => _downloadMedia(a, 'avatar_$i.jpg'),
+                        onLongPress: () => _downloadMedia(a, 'avatar_$reversedIndex.jpg'),
                         onTap: () => Navigator.push(
                           context,
                           FadeRoute(MediaViewerScreen(
                             media: a,
-                            heroTag: 'av_${u.id}_$i',
+                            heroTag: 'av_${u.id}_$reversedIndex',
                           )),
                         ),
                         child: Stack(children: [
                           ClipOval(
-                            child: CachedFileImage(
-                              url: a.url,
+                            child: CachedNetworkImage(
+                              imageUrl: a.url,
                               width: 62,
                               height: 62,
                               fit: BoxFit.cover,
+                              errorWidget: (_, __, ___) => Container(color: p.card),
                             ),
                           ),
                           Positioned(
                             right: 0,
                             bottom: 0,
                             child: GestureDetector(
-                              onTap: () => _downloadMedia(a, 'avatar_$i.jpg'),
+                              onTap: () =>
+                                  _downloadMedia(a, 'avatar_$reversedIndex.jpg'),
                               child: Container(
                                 padding: const EdgeInsets.all(3),
                                 decoration: BoxDecoration(
@@ -10346,8 +9746,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _downloadMedia(MediaItem m, String name) async {
     try {
       final status = await Permission.storage.request();
+
       if (!status.isGranted && Platform.isAndroid) {
         final s2 = await Permission.manageExternalStorage.request();
+
         if (!s2.isGranted) {
           if (mounted) showSnack(context, 'Storage permission required', error: true);
           return;
@@ -10372,16 +9774,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-class _MusicSheetItem extends StatelessWidget {
+class _MusicSheetItem extends StatefulWidget {
   final MediaItem media;
 
   const _MusicSheetItem({required this.media});
 
-  Future<void> _play(BuildContext context) async {
-    final audio = AudioController.instance;
-    final fullUrl = _fullUrl(media.url);
+  @override
+  State<_MusicSheetItem> createState() => _MusicSheetItemState();
+}
 
-    if (audio.currentKey == media.url) {
+class _MusicSheetItemState extends State<_MusicSheetItem> {
+  bool _cached = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkCache();
+  }
+
+  String get _title => widget.media.title?.isNotEmpty == true
+      ? widget.media.title!
+      : (widget.media.originalName?.isNotEmpty == true
+          ? widget.media.originalName!
+          : 'Audio track');
+
+  Future<void> _checkCache() async {
+    final full = _fullUrl(widget.media.url);
+
+    if (await FileCache.instance.hasFile(full)) {
+      if (mounted) setState(() => _cached = true);
+    }
+  }
+
+  Future<void> _play() async {
+    final audio = AudioController.instance;
+    final full = _fullUrl(widget.media.url);
+
+    if (audio.currentKey == widget.media.url) {
       if (audio.playing) {
         await audio.pause();
       } else {
@@ -10391,20 +9820,56 @@ class _MusicSheetItem extends StatelessWidget {
     }
 
     try {
-      final path = await FileCache.instance.downloadWithResume(
-        fullUrl,
-        headers: authHeaders(),
-      );
+      String path;
+
+      if (await FileCache.instance.hasFile(full)) {
+        path = FileCache.instance.getLocalPath(full);
+
+        if (!_cached && mounted) {
+          setState(() => _cached = true);
+        }
+      } else {
+        path = await FileCache.instance.downloadWithResume(
+          full,
+          headers: authHeaders(),
+          onProgress: (_) {
+            if (mounted) setState(() {});
+          },
+        );
+
+        if (mounted) setState(() => _cached = true);
+      }
 
       await audio.play(
         path,
-        key: media.url,
-        title: media.title?.isNotEmpty == true ? media.title : media.originalName,
-        artist: media.artist,
-        duration: media.duration,
+        key: widget.media.url,
+        title: _title,
+        artist: widget.media.artist,
+        duration: widget.media.duration,
       );
     } catch (_) {
-      if (context.mounted) showSnack(context, 'Audio playback failed', error: true);
+      if (mounted) showSnack(context, 'Audio playback failed', error: true);
+    }
+  }
+
+  Future<void> _downloadOnly() async {
+    final full = _fullUrl(widget.media.url);
+
+    try {
+      await FileCache.instance.downloadWithResume(
+        full,
+        headers: authHeaders(),
+        onProgress: (_) {
+          if (mounted) setState(() {});
+        },
+      );
+
+      if (mounted) {
+        setState(() => _cached = true);
+        showSnack(context, 'Download complete ✓');
+      }
+    } catch (_) {
+      if (mounted) showSnack(context, 'Download failed', error: true);
     }
   }
 
@@ -10414,24 +9879,12 @@ class _MusicSheetItem extends StatelessWidget {
     final audio = context.watch<AudioController>();
     final cache = context.watch<FileCache>();
 
-    final isPlaying = audio.currentKey == media.url && audio.playing;
-    final isCurrent = audio.currentKey == media.url;
+    final isCurrent = audio.currentKey == widget.media.url;
+    final isPlaying = isCurrent && audio.playing;
 
-    final title = media.title?.isNotEmpty == true
-        ? media.title!
-        : (media.originalName?.isNotEmpty == true
-            ? media.originalName!
-            : 'Audio track');
-
-    final progress = isCurrent &&
-            audio.currentDuration != null &&
-            audio.currentDuration! > 0
-        ? (audio.position / audio.currentDuration!).clamp(0.0, 1.0)
-        : 0.0;
-
-    final fullUrl = _fullUrl(media.url);
+    final fullUrl = _fullUrl(widget.media.url);
     final dlProgress = cache.getProgress(fullUrl);
-    final isDlActive = cache.isDownloading(fullUrl) && !isCurrent;
+    final isDlActive = cache.isDownloading(fullUrl);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -10444,7 +9897,7 @@ class _MusicSheetItem extends StatelessWidget {
       child: Column(children: [
         Row(children: [
           GestureDetector(
-            onTap: () => _play(context),
+            onTap: _play,
             child: Container(
               width: 54,
               height: 54,
@@ -10456,47 +9909,69 @@ class _MusicSheetItem extends StatelessWidget {
                 ],
               ),
               child: Icon(
-                isDlActive
-                    ? Icons.hourglass_top_rounded
-                    : (isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
                 color: Colors.white,
                 size: 28,
               ),
             ),
           ),
+          if (!_cached) ...[
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: isDlActive ? null : _downloadOnly,
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: p.accent.withOpacity(.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: isDlActive
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          value: dlProgress,
+                          color: p.accent,
+                        ),
+                      )
+                    : Icon(Icons.download_rounded, color: p.accent, size: 20),
+              ),
+            ),
+          ],
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
+                  _title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 2),
-                if (media.artist?.isNotEmpty == true)
+                if (widget.media.artist?.isNotEmpty == true)
                   Row(children: [
                     Icon(Icons.person_outline_rounded, size: 12, color: p.sub),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
-                        media.artist!,
+                        widget.media.artist!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 12, color: p.sub),
                       ),
                     ),
                   ]),
-                if (media.duration != null)
+                if (widget.media.duration != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
                     child: Row(children: [
                       Icon(Icons.access_time_rounded, size: 12, color: p.sub),
                       const SizedBox(width: 4),
                       Text(
-                        formatDuration(media.duration),
+                        formatDuration(widget.media.duration),
                         style: TextStyle(fontSize: 12, color: p.sub),
                       ),
                     ]),
@@ -10504,43 +9979,8 @@ class _MusicSheetItem extends StatelessWidget {
               ],
             ),
           ),
-          GestureDetector(
-            onTap: () async {
-              try {
-                if (context.mounted) showSnack(context, 'Downloading...');
-
-                final path = await FileCache.instance.downloadWithResume(
-                  fullUrl,
-                  headers: authHeaders(),
-                );
-
-                if (context.mounted) showSnack(context, 'Download complete ✓');
-                OpenFile.open(path);
-              } catch (e) {
-                if (context.mounted) showSnack(context, 'Download failed', error: true);
-              }
-            },
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: p.accent.withOpacity(.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: isDlActive
-                  ? SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        value: dlProgress,
-                        color: p.accent,
-                      ),
-                    )
-                  : Icon(Icons.download_rounded, color: p.accent, size: 20),
-            ),
-          ),
         ]),
-        if (isDlActive)
+        if (isDlActive && !_cached)
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Row(children: [
@@ -10731,9 +10171,10 @@ class _ProfileTabState extends State<_ProfileTab>
               FadeRoute(PostDetailScreen(postId: x.id, initial: x)),
             ),
             child: Stack(fit: StackFit.expand, children: [
-              CachedFileImage(
-                url: x.media.first.thumbnail ?? x.media.first.url,
+              CachedNetworkImage(
+                imageUrl: x.media.first.thumbnail ?? x.media.first.url,
                 fit: BoxFit.cover,
+                errorWidget: (_, __, ___) => Container(color: p.card),
               ),
               if (x.media.first.type == 'video' || x.media.first.type == 'gif')
                 const Positioned(
@@ -10766,9 +10207,7 @@ class _ProfileTabState extends State<_ProfileTab>
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// EDIT PROFILE
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ EDIT PROFILE ════════════════════
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
 
@@ -10824,6 +10263,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         source: ImageSource.gallery,
         imageQuality: 85,
       );
+
       if (f == null) return;
 
       final tempId = 'av_${DateTime.now().microsecondsSinceEpoch}';
@@ -10854,6 +10294,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
         setState(() {
           final idx = _avatarIds.indexOf(tempId);
+
           if (idx != -1) {
             _avatarIds[idx] = id.isNotEmpty ? id : (url ?? tempId);
           }
@@ -10872,6 +10313,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             _avatarProgress.remove(tempId);
             _uploadingAvatars.remove(tempId);
           });
+
           showSnack(context, 'Avatar upload failed', error: true);
         }
       }
@@ -10883,6 +10325,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _pickMusic() async {
     try {
       final result = await FilePicker.platform.pickFiles(type: FileType.audio);
+
       if (result == null || result.files.isEmpty) return;
 
       final file = result.files.first;
@@ -10916,6 +10359,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
         setState(() {
           final idx = _musicIds.indexOf(tempId);
+
           if (idx != -1) {
             _musicIds[idx] = id.isNotEmpty ? id : (url ?? tempId);
           }
@@ -10934,6 +10378,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             _musicProgress.remove(tempId);
             _uploadingMusics.remove(tempId);
           });
+
           showSnack(context, 'Music upload failed', error: true);
         }
       }
@@ -10987,8 +10432,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
-  Widget _field(String label, TextEditingController c,
-      {int lines = 1, bool obscure = false, String? hint}) {
+  Widget _field(
+    String label,
+    TextEditingController c, {
+    int lines = 1,
+    bool obscure = false,
+    String? hint,
+  }) {
     final p = _p(context);
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -11066,7 +10516,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 url: me?.avatarUrl,
                 size: 96,
                 ring: me?.hasUnseenStory ?? false,
-                fallback: me?.username,
               ),
               Positioned(
                 right: 2,
@@ -11078,11 +10527,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     shape: BoxShape.circle,
                     border: Border.all(color: p.bg, width: 2),
                   ),
-                  child: const Icon(
-                    Icons.photo_camera_rounded,
-                    size: 15,
-                    color: Colors.white,
-                  ),
+                  child: const Icon(Icons.photo_camera_rounded, size: 15, color: Colors.white),
                 ),
               ),
             ]),
@@ -11102,6 +10547,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 separatorBuilder: (_, __) => const SizedBox(width: 8),
                 itemBuilder: (context, i) {
                   final id = _avatarIds[i];
+
                   final isUploading = _uploadingAvatars.contains(id);
                   final progress = _avatarProgress[id] ?? 0;
 
@@ -11135,11 +10581,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   ),
                                 ),
                               )
-                            : CachedFileImage(
-                                url: resolveMedia(id) ?? id,
-                                width: 60,
-                                height: 60,
+                            : CachedNetworkImage(
+                                imageUrl: resolveMedia(id) ?? id,
                                 fit: BoxFit.cover,
+                                errorWidget: (_, __, ___) => Container(
+                                  color: p.card,
+                                  child: Icon(Icons.person_rounded, color: p.sub),
+                                ),
                               ),
                       ),
                     ),
@@ -11242,9 +10690,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// SETTINGS
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ SETTINGS ════════════════════════
 void openSettings(BuildContext context) {
   showModalBottomSheet(
     context: context,
@@ -11284,9 +10730,9 @@ class _SettingsSheetState extends State<_SettingsSheet> {
   @override
   Widget build(BuildContext context) {
     final p = _p(context);
+
     final base = ApiClient.instance.baseUrl ?? 'unknown';
     final theme = context.watch<ThemeStore>();
-    final accounts = context.watch<AccountManager>().accounts;
 
     return Container(
       decoration: BoxDecoration(
@@ -11339,24 +10785,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
               loading: _refreshing,
               onPressed: _refreshing ? null : _refreshLink,
             ),
-            const SizedBox(height: 10),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.switch_account_rounded, color: p.purple),
-              title: const Text(
-                'Accounts',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5),
-              ),
-              subtitle: Text(
-                '${accounts.length} account(s) on this device',
-                style: TextStyle(color: p.sub, fontSize: 12),
-              ),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(context, FadeRoute(const AccountsScreen()));
-              },
-            ),
+            const SizedBox(height: 14),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: Icon(
@@ -11384,29 +10813,15 @@ class _SettingsSheetState extends State<_SettingsSheet> {
               contentPadding: EdgeInsets.zero,
               leading: Icon(Icons.logout_rounded, color: p.red),
               title: Text(
-                'Log out current account',
+                'Log out',
                 style: TextStyle(color: p.red, fontWeight: FontWeight.w800, fontSize: 14.5),
               ),
               onTap: () async {
                 Navigator.pop(context);
 
-                final appState = context.read<AppState>();
-                await appState.logout();
+                await context.read<AppState>().logout();
 
-                if (!context.mounted) return;
-
-                if (AccountManager.instance.accounts.isNotEmpty) {
-                  await appState.fetchMe();
-
-                  if (!context.mounted) return;
-
-                  showSnack(context, 'Switched to next available account');
-
-                  Navigator.of(context).pushAndRemoveUntil(
-                    FadeRoute(const MainShell()),
-                    (_) => false,
-                  );
-                } else {
+                if (context.mounted) {
                   Navigator.of(context).pushAndRemoveUntil(
                     FadeRoute(const AuthScreen()),
                     (_) => false,
@@ -11416,7 +10831,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
             ),
             Center(
               child: Text(
-                'NokhodX v5.0.0',
+                'NokhodX v4.2.0',
                 style: TextStyle(color: p.sub, fontSize: 11),
               ),
             ),
@@ -11427,10 +10842,8 @@ class _SettingsSheetState extends State<_SettingsSheet> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// MEDIA VIEWER
-// ═══════════════════════════════════════════════════════════════
-class MediaViewerScreen extends StatefulWidget {
+// ═══════════════════════════════ MEDIA VIEWER ═════════════════════
+class MediaViewerScreen extends StatelessWidget {
   final MediaItem media;
   final String heroTag;
 
@@ -11441,92 +10854,36 @@ class MediaViewerScreen extends StatefulWidget {
   });
 
   @override
-  State<MediaViewerScreen> createState() => _MediaViewerScreenState();
-}
-
-class _MediaViewerScreenState extends State<MediaViewerScreen> {
-  String? _path;
-  double _progress = 0;
-  bool _error = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    final full = _fullUrl(widget.media.url);
-
-    try {
-      if (await FileCache.instance.hasFile(full)) {
-        if (mounted) {
-          setState(() {
-            _path = FileCache.instance.getLocalPath(full);
-          });
-        }
-        return;
-      }
-
-      final path = await FileCache.instance.downloadWithResume(
-        full,
-        headers: authHeaders(),
-        onProgress: (v) {
-          if (mounted) setState(() => _progress = v);
-        },
-      );
-
-      if (mounted) setState(() => _path = path);
-    } catch (_) {
-      if (mounted) setState(() => _error = true);
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
       body: GestureDetector(
         onTap: () => Navigator.pop(context),
         child: Stack(fit: StackFit.expand, children: [
-          if (_path != null)
-            Hero(
-              tag: widget.heroTag,
-              child: PhotoView(
-                imageProvider: FileImage(File(_path!)),
-                minScale: PhotoViewComputedScale.contained,
-                maxScale: PhotoViewComputedScale.covered * 3,
-                backgroundDecoration: const BoxDecoration(color: Colors.black),
+          Hero(
+            tag: heroTag,
+            child: PhotoView(
+              imageProvider: CachedNetworkImageProvider(media.url),
+              minScale: PhotoViewComputedScale.contained,
+              maxScale: PhotoViewComputedScale.covered * 3,
+              backgroundDecoration: const BoxDecoration(color: Colors.black),
+              loadingBuilder: (_, __) => const Center(
+                child: CircularProgressIndicator(),
               ),
-            )
-          else if (_error)
-            const Center(
-              child: Icon(Icons.broken_image_rounded, color: Colors.white54, size: 44),
-            )
-          else
-            Center(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                SizedBox(
-                  width: 54,
-                  height: 54,
-                  child: CircularProgressIndicator(
-                    value: _progress > 0 ? _progress : null,
-                    color: Colors.white,
-                    strokeWidth: 3,
-                  ),
+              errorBuilder: (_, __, ___) => const Center(
+                child: Icon(
+                  Icons.broken_image_rounded,
+                  color: Colors.white54,
+                  size: 44,
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  '${(_progress * 100).toInt()}%',
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                ),
-              ]),
+              ),
             ),
+          ),
           Positioned(
             top: MediaQuery.of(context).padding.top + 6,
             right: 12,
             child: Row(children: [
-              _DownloadButton(url: widget.media.url, name: widget.media.originalName ?? 'image'),
+              _DownloadButton(url: media.url, name: media.originalName ?? 'image'),
               const SizedBox(width: 10),
               _circleBtn(Icons.close_rounded, () => Navigator.pop(context)),
             ]),
@@ -11569,8 +10926,10 @@ class _DownloadButtonState extends State<_DownloadButton> {
 
     try {
       final status = await Permission.storage.request();
+
       if (!status.isGranted && Platform.isAndroid) {
         final s2 = await Permission.manageExternalStorage.request();
+
         if (!s2.isGranted) {
           if (mounted) showSnack(context, 'Storage permission required', error: true);
           return;
@@ -11611,6 +10970,7 @@ class _DownloadButtonState extends State<_DownloadButton> {
 
     final cacheProgress = cache.getProgress(fullUrl);
     final isCacheActive = cache.isDownloading(fullUrl);
+
     final displayProgress = _progress > 0 ? _progress : cacheProgress;
 
     return GestureDetector(
@@ -11640,9 +11000,7 @@ class _DownloadButtonState extends State<_DownloadButton> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// FULL SCREEN VIDEO
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ FULL SCREEN VIDEO ════════════════
 class FullScreenVideoScreen extends StatefulWidget {
   final String url;
   final String? thumbnail;
@@ -11673,7 +11031,7 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
       DeviceOrientation.landscapeRight,
     ]);
 
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    applySystemUIStyle(ThemeStore.instance.isDark);
     AudioController.instance.muteTemporarily();
 
     _init();
@@ -11754,6 +11112,7 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
   @override
   void dispose() {
     AudioController.instance.unmute();
+
     _hideTimer?.cancel();
     _c?.dispose();
 
@@ -11764,20 +11123,7 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
       DeviceOrientation.landscapeRight,
     ]);
 
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final isDark = ThemeStore.instance.isDark;
-
-      SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-        statusBarColor: isDark ? Colors.white : Colors.black,
-        statusBarIconBrightness: isDark ? Brightness.dark : Brightness.light,
-        statusBarBrightness: isDark ? Brightness.light : Brightness.dark,
-        systemNavigationBarColor: isDark ? Colors.black : Colors.white,
-        systemNavigationBarIconBrightness:
-            isDark ? Brightness.light : Brightness.dark,
-      ));
-    });
+    applySystemUIStyle(ThemeStore.instance.isDark);
 
     super.dispose();
   }
@@ -11812,7 +11158,10 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
               SizedBox(
                 width: 200,
                 height: 120,
-                child: CachedFileImage(url: widget.thumbnail!, fit: BoxFit.cover),
+                child: CachedNetworkImage(
+                  imageUrl: widget.thumbnail!,
+                  fit: BoxFit.cover,
+                ),
               ),
             const SizedBox(height: 16),
             SizedBox(
@@ -11893,7 +11242,9 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
                   Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                     GestureDetector(
                       onTap: () {
-                        final cur = _c!.value.position - const Duration(seconds: 10);
+                        final cur =
+                            _c!.value.position - const Duration(seconds: 10);
+
                         _c!.seekTo(cur < Duration.zero ? Duration.zero : cur);
                       },
                       child: Container(
@@ -11932,7 +11283,9 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
                     const SizedBox(width: 24),
                     GestureDetector(
                       onTap: () {
-                        final cur = _c!.value.position + const Duration(seconds: 10);
+                        final cur =
+                            _c!.value.position + const Duration(seconds: 10);
+
                         _c!.seekTo(cur);
                       },
                       child: Container(
@@ -11959,9 +11312,69 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// COMMON UI
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════ COMMON ══════════════════════════
+class Avatar extends StatelessWidget {
+  final String? url;
+  final double size;
+  final bool ring;
+  final String? fallback;
+
+  const Avatar({
+    super.key,
+    this.url,
+    required this.size,
+    this.ring = false,
+    this.fallback,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = _p(context);
+
+    final inner = ClipOval(
+      child: (url != null && url!.isNotEmpty)
+          ? CachedNetworkImage(
+              imageUrl: url!,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              placeholder: (_, __) => _placeholder(p),
+              errorWidget: (_, __, ___) => _placeholder(p),
+            )
+          : _placeholder(p),
+    );
+
+    if (!ring) return SizedBox(width: size, height: size, child: inner);
+
+    return Container(
+      width: size + 4,
+      height: size + 4,
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(shape: BoxShape.circle, gradient: p.reel),
+      child: ClipOval(child: inner),
+    );
+  }
+
+  Widget _placeholder(Pal p) {
+    final letter = (fallback != null && fallback!.isNotEmpty) ? fallback![0] : '?';
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(gradient: p.brand),
+      alignment: Alignment.center,
+      child: Text(
+        letter.toUpperCase(),
+        style: TextStyle(
+          fontWeight: FontWeight.w900,
+          fontSize: size * .42,
+          color: Colors.white,
+        ),
+      ),
+    );
+  }
+}
+
 class GradientButton extends StatefulWidget {
   final String text;
   final VoidCallback? onPressed;
