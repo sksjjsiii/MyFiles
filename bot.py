@@ -4,7 +4,6 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from datetime import datetime, timezone
 from typing import Optional
 
 from aiogram import Bot, Dispatcher, types, F, Router
@@ -72,7 +71,8 @@ def is_allowed(user) -> bool:
 
 async def download_file_from_tg(file_id: str, dest_dir: Path) -> Path:
     file = await bot.get_file(file_id)
-    file_path = dest_dir / "input" + Path(file.file_path).suffix
+    # اصلاح خطای مسیر: پرانتزگذاری صحیح برای جمع رشته و پسوند
+    file_path = dest_dir / ("input" + Path(file.file_path).suffix)
     await bot.download_file(file.file_path, file_path)
     return file_path
 
@@ -118,11 +118,9 @@ async def download_from_url(url: str, dest_dir: Path) -> Path:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
-            # پس از postprocessor پسوند mp3 می‌شود
             mp3_path = Path(filename).with_suffix('.mp3')
             if mp3_path.exists():
                 return str(mp3_path)
-            # اگر فایل اصلی mp3 نبود، به دنبال هر mp3 در پوشه بگرد
             mp3_files = list(dest_dir.glob('*.mp3'))
             if mp3_files:
                 return str(mp3_files[-1])
@@ -144,7 +142,6 @@ async def process_audio_input(message: types.Message, state: FSMContext, mode: s
 
     temp_dir = Path(tempfile.mkdtemp(prefix="musicbot_"))
     try:
-        # مشخص کردن منبع فایل
         audio_path = None
         if message.text and (message.text.startswith("http://") or message.text.startswith("https://")):
             await message.answer("⬇️ در حال دانلود از لینک...")
@@ -169,7 +166,6 @@ async def process_audio_input(message: types.Message, state: FSMContext, mode: s
             await message.answer("❌ لطفاً یک فایل صوتی/ویدئویی یا لینک معتبر بفرستید.")
             return
 
-        # شروع عملیات
         cancel_event = asyncio.Event()
         cancel_events[chat_id] = cancel_event
 
@@ -198,7 +194,6 @@ async def process_audio_input(message: types.Message, state: FSMContext, mode: s
 async def identify_task(chat_id: int, audio_path: Path, temp_dir: Path, cancel_event: asyncio.Event):
     try:
         async def progress_callback(done, total):
-            # به‌روزرسانی پیام هر ۵ تغییر
             if done % 5 == 0 or done == total:
                 try:
                     await bot.edit_message_text(
@@ -265,7 +260,6 @@ async def versions_task(chat_id: int, audio_path: Path, temp_dir: Path, cancel_e
                 )
                 return
 
-            # به‌روزرسانی پیشرفت
             if idx % 2 == 0 or idx == total_versions:
                 await bot.edit_message_text(
                     f"🔄 در حال تولید نسخه‌ها...\n"
@@ -297,7 +291,6 @@ async def versions_task(chat_id: int, audio_path: Path, temp_dir: Path, cancel_e
             message_id=processing_messages[chat_id]
         )
 
-        # ارسال فایل‌ها
         sent_count = 0
         for idx, (name, _) in enumerate(VERSION_SPECS, 1):
             if cancel_event.is_set():
@@ -389,7 +382,6 @@ async def handle_link(message: types.Message, state: FSMContext):
         await state.clear()
         await process_audio_input(message, state, "versions")
     else:
-        # اگر حالت مشخص نیست، از کاربر بپرس چه کاری انجام دهیم
         builder = InlineKeyboardBuilder()
         builder.button(text="🔍 شناسایی", callback_data="choose_identify")
         builder.button(text="🎚 تولید نسخه", callback_data="choose_versions")
@@ -408,7 +400,6 @@ async def handle_media(message: types.Message, state: FSMContext):
         await state.clear()
         await process_audio_input(message, state, "versions")
     else:
-        # اگر حالت مشخص نیست، از کاربر بپرس
         builder = InlineKeyboardBuilder()
         builder.button(text="🔍 شناسایی", callback_data="choose_identify")
         builder.button(text="🎚 تولید نسخه", callback_data="choose_versions")
@@ -422,7 +413,7 @@ async def choose_mode(callback: types.CallbackQuery, state: FSMContext):
     if not is_allowed(callback.from_user):
         await callback.answer("⛔️ غیرمجاز", show_alert=True)
         return
-    mode = callback.data.split("_")[1]  # identify یا versions
+    mode = callback.data.split("_")[1]
     if mode == "identify":
         await state.set_state(ProcessState.waiting_for_audio_identify)
         await callback.message.edit_text("📤 لطفاً فایل صوتی/ویدئویی یا لینک موسیقی را بفرستید.")
