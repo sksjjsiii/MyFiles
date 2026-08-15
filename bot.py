@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from aiogram import Bot, Dispatcher, types, F, Router
+from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -128,7 +129,7 @@ async def download_from_url(url: str, dest_dir: Path) -> Path:
             raise FileNotFoundError("Downloaded audio not found")
     return Path(await asyncio.to_thread(_sync_download))
 
-async def process_audio_input(message: types.Message, state: ProcessState, mode: str):
+async def process_audio_input(message: types.Message, state: FSMContext, mode: str):
     """پردازش ورودی صوتی/لینک و شروع عملیات مناسب"""
     chat_id = message.chat.id
     user = message.from_user
@@ -324,7 +325,7 @@ async def versions_task(chat_id: int, audio_path: Path, temp_dir: Path, cancel_e
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 # ─── هندلرهای ربات ────────────────────────────────────────
-@router.message(commands=["start"])
+@router.message(CommandStart())
 async def cmd_start(message: types.Message):
     if not is_allowed(message.from_user):
         await message.answer("⛔️ دسترسی غیرمجاز.")
@@ -337,7 +338,7 @@ async def cmd_start(message: types.Message):
         "می‌توانید فایل صوتی، ویدئو یا لینک بفرستید."
     )
 
-@router.message(commands=["identify"])
+@router.message(Command("identify"))
 async def cmd_identify(message: types.Message, state: FSMContext):
     if not is_allowed(message.from_user):
         await message.answer("⛔️ دسترسی غیرمجاز.")
@@ -345,7 +346,7 @@ async def cmd_identify(message: types.Message, state: FSMContext):
     await state.set_state(ProcessState.waiting_for_audio_identify)
     await message.answer("📤 لطفاً فایل صوتی/ویدئویی یا لینک موسیقی را بفرستید.")
 
-@router.message(commands=["versions"])
+@router.message(Command("versions"))
 async def cmd_versions(message: types.Message, state: FSMContext):
     if not is_allowed(message.from_user):
         await message.answer("⛔️ دسترسی غیرمجاز.")
@@ -353,7 +354,7 @@ async def cmd_versions(message: types.Message, state: FSMContext):
     await state.set_state(ProcessState.waiting_for_audio_versions)
     await message.answer("📤 لطفاً فایل صوتی/ویدئویی یا لینک موسیقی را بفرستید.")
 
-@router.message(commands=["cancel"])
+@router.message(Command("cancel"))
 async def cmd_cancel(message: types.Message, state: FSMContext):
     if not is_allowed(message.from_user):
         await message.answer("⛔️ دسترسی غیرمجاز.")
