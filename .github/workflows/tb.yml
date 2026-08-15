@@ -17,7 +17,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install bypass-ouo pyTelegramBotAPI
+          # نصب lxml به همراه پکیج اصلی و کتابخانهٔ تلگرام
+          pip install bypass-ouo pyTelegramBotAPI lxml
 
       - name: Run Telegram bot
         env:
