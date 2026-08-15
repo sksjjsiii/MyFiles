@@ -1,0 +1,2848 @@
+{
+  "generated_at": "2026-08-15T18:25:55.717952+00:00",
+  "audio_file": "hsj.mp3",
+  "duration_seconds": 27.689796,
+  "total_variations": 156,
+  "found_matches": 10,
+  "results": [
+    {
+      "method": "tempo",
+      "factor": 0.5,
+      "start": 0.0,
+      "input_duration": 6.0,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.5,
+      "start": 5.0,
+      "input_duration": 6.0,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.5,
+      "start": 10.0,
+      "input_duration": 6.0,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.5,
+      "start": 15.0,
+      "input_duration": 6.0,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.5,
+      "start": 20.0,
+      "input_duration": 6.0,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.5,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.6,
+      "start": 0.0,
+      "input_duration": 7.199999999999999,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.6,
+      "start": 5.0,
+      "input_duration": 7.199999999999999,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.6,
+      "start": 10.0,
+      "input_duration": 7.199999999999999,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.6,
+      "start": 15.0,
+      "input_duration": 7.199999999999999,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.6,
+      "start": 20.0,
+      "input_duration": 7.199999999999999,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.6,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.7,
+      "start": 0.0,
+      "input_duration": 8.399999999999999,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.7,
+      "start": 5.0,
+      "input_duration": 8.399999999999999,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.7,
+      "start": 10.0,
+      "input_duration": 8.399999999999999,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.7,
+      "start": 15.0,
+      "input_duration": 8.399999999999999,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.7,
+      "start": 20.0,
+      "input_duration": 7.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.7,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.75,
+      "start": 0.0,
+      "input_duration": 9.0,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.75,
+      "start": 5.0,
+      "input_duration": 9.0,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.75,
+      "start": 10.0,
+      "input_duration": 9.0,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.75,
+      "start": 15.0,
+      "input_duration": 9.0,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.75,
+      "start": 20.0,
+      "input_duration": 7.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.75,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.8,
+      "start": 0.0,
+      "input_duration": 9.600000000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.8,
+      "start": 5.0,
+      "input_duration": 9.600000000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.8,
+      "start": 10.0,
+      "input_duration": 9.600000000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.8,
+      "start": 15.0,
+      "input_duration": 9.600000000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.8,
+      "start": 20.0,
+      "input_duration": 7.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.8,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.85,
+      "start": 0.0,
+      "input_duration": 10.2,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.85,
+      "start": 5.0,
+      "input_duration": 10.2,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.85,
+      "start": 10.0,
+      "input_duration": 10.2,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.85,
+      "start": 15.0,
+      "input_duration": 10.2,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.85,
+      "start": 20.0,
+      "input_duration": 7.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.85,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.9,
+      "start": 0.0,
+      "input_duration": 10.8,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.9,
+      "start": 5.0,
+      "input_duration": 10.8,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.9,
+      "start": 10.0,
+      "input_duration": 10.8,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.9,
+      "start": 15.0,
+      "input_duration": 10.8,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.9,
+      "start": 20.0,
+      "input_duration": 7.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.9,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.95,
+      "start": 0.0,
+      "input_duration": 11.399999999999999,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.95,
+      "start": 5.0,
+      "input_duration": 11.399999999999999,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.95,
+      "start": 10.0,
+      "input_duration": 11.399999999999999,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.95,
+      "start": 15.0,
+      "input_duration": 11.399999999999999,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.95,
+      "start": 20.0,
+      "input_duration": 7.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 0.95,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.0,
+      "start": 0.0,
+      "input_duration": 12.0,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.0,
+      "start": 5.0,
+      "input_duration": 12.0,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.0,
+      "start": 10.0,
+      "input_duration": 12.0,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.0,
+      "start": 15.0,
+      "input_duration": 12.0,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.0,
+      "start": 20.0,
+      "input_duration": 7.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.0,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.05,
+      "start": 0.0,
+      "input_duration": 12.600000000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.05,
+      "start": 5.0,
+      "input_duration": 12.600000000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.05,
+      "start": 10.0,
+      "input_duration": 12.600000000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.05,
+      "start": 15.0,
+      "input_duration": 12.600000000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.05,
+      "start": 20.0,
+      "input_duration": 7.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.05,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.1,
+      "start": 0.0,
+      "input_duration": 13.200000000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.1,
+      "start": 5.0,
+      "input_duration": 13.200000000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.1,
+      "start": 10.0,
+      "input_duration": 13.200000000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.1,
+      "start": 15.0,
+      "input_duration": 12.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.1,
+      "start": 20.0,
+      "input_duration": 7.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.1,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.15,
+      "start": 0.0,
+      "input_duration": 13.799999999999999,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.15,
+      "start": 5.0,
+      "input_duration": 13.799999999999999,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.15,
+      "start": 10.0,
+      "input_duration": 13.799999999999999,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.15,
+      "start": 15.0,
+      "input_duration": 12.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.15,
+      "start": 20.0,
+      "input_duration": 7.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.15,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.2,
+      "start": 0.0,
+      "input_duration": 14.399999999999999,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.2,
+      "start": 5.0,
+      "input_duration": 14.399999999999999,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.2,
+      "start": 10.0,
+      "input_duration": 14.399999999999999,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.2,
+      "start": 15.0,
+      "input_duration": 12.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.2,
+      "start": 20.0,
+      "input_duration": 7.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.2,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.3,
+      "start": 0.0,
+      "input_duration": 15.600000000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.3,
+      "start": 5.0,
+      "input_duration": 15.600000000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.3,
+      "start": 10.0,
+      "input_duration": 15.600000000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.3,
+      "start": 15.0,
+      "input_duration": 12.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.3,
+      "start": 20.0,
+      "input_duration": 7.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.3,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.4,
+      "start": 0.0,
+      "input_duration": 16.799999999999997,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.4,
+      "start": 5.0,
+      "input_duration": 16.799999999999997,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.4,
+      "start": 10.0,
+      "input_duration": 16.799999999999997,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.4,
+      "start": 15.0,
+      "input_duration": 12.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.4,
+      "start": 20.0,
+      "input_duration": 7.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.4,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.5,
+      "start": 0.0,
+      "input_duration": 18.0,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.5,
+      "start": 5.0,
+      "input_duration": 18.0,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.5,
+      "start": 10.0,
+      "input_duration": 17.689796,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.5,
+      "start": 15.0,
+      "input_duration": 12.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.5,
+      "start": 20.0,
+      "input_duration": 7.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.5,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.6,
+      "start": 0.0,
+      "input_duration": 19.200000000000003,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.6,
+      "start": 5.0,
+      "input_duration": 19.200000000000003,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.6,
+      "start": 10.0,
+      "input_duration": 17.689796,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.6,
+      "start": 15.0,
+      "input_duration": 12.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.6,
+      "start": 20.0,
+      "input_duration": 7.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.6,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.7,
+      "start": 0.0,
+      "input_duration": 20.4,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.7,
+      "start": 5.0,
+      "input_duration": 20.4,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.7,
+      "start": 10.0,
+      "input_duration": 17.689796,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.7,
+      "start": 15.0,
+      "input_duration": 12.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.7,
+      "start": 20.0,
+      "input_duration": 7.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.7,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.8,
+      "start": 0.0,
+      "input_duration": 21.6,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.8,
+      "start": 5.0,
+      "input_duration": 21.6,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.8,
+      "start": 10.0,
+      "input_duration": 17.689796,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.8,
+      "start": 15.0,
+      "input_duration": 12.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.8,
+      "start": 20.0,
+      "input_duration": 7.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.8,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.9,
+      "start": 0.0,
+      "input_duration": 22.799999999999997,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.9,
+      "start": 5.0,
+      "input_duration": 22.689796,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.9,
+      "start": 10.0,
+      "input_duration": 17.689796,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.9,
+      "start": 15.0,
+      "input_duration": 12.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.9,
+      "start": 20.0,
+      "input_duration": 7.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 1.9,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 2.0,
+      "start": 0.0,
+      "input_duration": 24.0,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 2.0,
+      "start": 5.0,
+      "input_duration": 22.689796,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 2.0,
+      "start": 10.0,
+      "input_duration": 17.689796,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 2.0,
+      "start": 15.0,
+      "input_duration": 12.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 2.0,
+      "start": 20.0,
+      "input_duration": 7.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "tempo",
+      "factor": 2.0,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "rate",
+      "factor": 0.8,
+      "start": 0.0,
+      "input_duration": 9.600000000000001,
+      "matched": false
+    },
+    {
+      "method": "rate",
+      "factor": 0.8,
+      "start": 5.0,
+      "input_duration": 9.600000000000001,
+      "matched": false
+    },
+    {
+      "method": "rate",
+      "factor": 0.8,
+      "start": 10.0,
+      "input_duration": 9.600000000000001,
+      "matched": false
+    },
+    {
+      "method": "rate",
+      "factor": 0.8,
+      "start": 15.0,
+      "input_duration": 9.600000000000001,
+      "matched": false
+    },
+    {
+      "method": "rate",
+      "factor": 0.8,
+      "start": 20.0,
+      "input_duration": 7.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "rate",
+      "factor": 0.8,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "rate",
+      "factor": 0.9,
+      "start": 0.0,
+      "input_duration": 10.8,
+      "matched": false
+    },
+    {
+      "method": "rate",
+      "factor": 0.9,
+      "start": 5.0,
+      "input_duration": 10.8,
+      "matched": false
+    },
+    {
+      "method": "rate",
+      "factor": 0.9,
+      "start": 10.0,
+      "input_duration": 10.8,
+      "matched": false
+    },
+    {
+      "method": "rate",
+      "factor": 0.9,
+      "start": 15.0,
+      "input_duration": 10.8,
+      "matched": false
+    },
+    {
+      "method": "rate",
+      "factor": 0.9,
+      "start": 20.0,
+      "input_duration": 7.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "rate",
+      "factor": 0.9,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "rate",
+      "factor": 1.0,
+      "start": 0.0,
+      "input_duration": 12.0,
+      "matched": false
+    },
+    {
+      "method": "rate",
+      "factor": 1.0,
+      "start": 5.0,
+      "input_duration": 12.0,
+      "matched": false
+    },
+    {
+      "method": "rate",
+      "factor": 1.0,
+      "start": 10.0,
+      "input_duration": 12.0,
+      "matched": false
+    },
+    {
+      "method": "rate",
+      "factor": 1.0,
+      "start": 15.0,
+      "input_duration": 12.0,
+      "matched": false
+    },
+    {
+      "method": "rate",
+      "factor": 1.0,
+      "start": 20.0,
+      "input_duration": 7.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "rate",
+      "factor": 1.0,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "rate",
+      "factor": 1.1,
+      "start": 0.0,
+      "input_duration": 13.200000000000001,
+      "matched": false
+    },
+    {
+      "method": "rate",
+      "factor": 1.1,
+      "start": 5.0,
+      "input_duration": 13.200000000000001,
+      "matched": true,
+      "title": "Drop 180",
+      "subtitle": "Synth lynq",
+      "shazam_track": {
+        "layout": "5",
+        "type": "MUSIC",
+        "key": "891498434",
+        "title": "Drop 180",
+        "subtitle": "Synth lynq",
+        "images": {
+          "background": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8d/fd/21/8dfd21c6-8ed6-5fd2-e14f-4235191312d1/cover.jpg/400x400cc.jpg",
+          "coverart": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8d/fd/21/8dfd21c6-8ed6-5fd2-e14f-4235191312d1/cover.jpg/400x400cc.jpg",
+          "coverarthq": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8d/fd/21/8dfd21c6-8ed6-5fd2-e14f-4235191312d1/cover.jpg/400x400cc.jpg",
+          "joecolor": "b:05081bp:d095a3s:f37d75t:a77988q:c36563"
+        },
+        "display": {
+          "actions": [
+            {
+              "name": "display:updateshazam",
+              "type": "webview",
+              "uri": "https://www.shazam.com/inapp/updatenow/891498434"
+            }
+          ]
+        },
+        "share": {
+          "subject": "Drop 180 - Synth lynq",
+          "text": "Drop 180 by Synth lynq",
+          "href": "https://www.shazam.com/track/891498434/drop-180",
+          "image": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8d/fd/21/8dfd21c6-8ed6-5fd2-e14f-4235191312d1/cover.jpg/400x400cc.jpg",
+          "twitter": "I used @Shazam to discover Drop 180 by Synth lynq.",
+          "html": "https://www.shazam.com/snippets/email-share/891498434?lang=en-US&country=GB",
+          "snapchat": "https://www.shazam.com/partner/sc/track/891498434"
+        },
+        "hub": {
+          "type": "APPLEMUSIC",
+          "image": "https://images.shazam.com/static/icons/hub/android/v5/applemusic_{scalefactor}.png",
+          "actions": [
+            {
+              "name": "apple",
+              "type": "applemusicplay",
+              "id": "6799100152"
+            },
+            {
+              "name": "apple",
+              "type": "uri",
+              "uri": "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/58/e8/c9/58e8c93b-e2d5-5b59-26ea-298e7b098bb2/mzaf_6808667795699539922.plus.aac.p.m4a"
+            }
+          ],
+          "providers": [
+            {
+              "caption": "Open in Spotify",
+              "images": {
+                "overflow": "https://images.shazam.com/static/icons/hub/android/v5/spotify-overflow_{scalefactor}.png",
+                "default": "https://images.shazam.com/static/icons/hub/android/v5/spotify_{scalefactor}.png"
+              },
+              "actions": [
+                {
+                  "name": "hub:spotify:searchdeeplink",
+                  "type": "uri",
+                  "uri": "spotify:search:Drop%20180%20Synth%20lynq"
+                }
+              ],
+              "type": "SPOTIFY"
+            },
+            {
+              "caption": "Open in YouTube Music",
+              "images": {
+                "overflow": "https://images.shazam.com/static/icons/hub/android/v5/youtubemusic-overflow_{scalefactor}.png",
+                "default": "https://images.shazam.com/static/icons/hub/android/v5/youtubemusic_{scalefactor}.png"
+              },
+              "actions": [
+                {
+                  "name": "hub:youtubemusic:androiddeeplink",
+                  "type": "uri",
+                  "uri": "https://music.youtube.com/search?q=Drop+180+Synth+lynq&feature=shazam"
+                }
+              ],
+              "type": "YOUTUBEMUSIC"
+            },
+            {
+              "caption": "Open in Deezer",
+              "images": {
+                "overflow": "https://images.shazam.com/static/icons/hub/android/v5/deezer-overflow_{scalefactor}.png",
+                "default": "https://images.shazam.com/static/icons/hub/android/v5/deezer_{scalefactor}.png"
+              },
+              "actions": [
+                {
+                  "name": "hub:deezer:searchdeeplink",
+                  "type": "uri",
+                  "uri": "deezer-query://www.deezer.com/play?query=%7Btrack%3A%27Drop+180%27%20artist%3A%27Synth+lynq%27%7D"
+                }
+              ],
+              "type": "DEEZER"
+            }
+          ],
+          "explicit": false,
+          "displayname": "APPLE MUSIC",
+          "options": [
+            {
+              "caption": "OPEN IN",
+              "actions": [
+                {
+                  "name": "hub:applemusic:deeplink",
+                  "type": "intent",
+                  "uri": "intent://music.apple.com/gb/album/drop-180/6799100151?i=6799100152&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_android_am&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=music&itsct=Shazam_android_am#Intent;scheme=http;package=com.apple.android.music;action=android.intent.action.VIEW;end"
+                },
+                {
+                  "name": "hub:applemusic:connect",
+                  "type": "applemusicconnect",
+                  "id": "6799100152",
+                  "uri": "https://unsupported.shazam.com"
+                },
+                {
+                  "name": "hub:applemusic:androidstore",
+                  "type": "uri",
+                  "uri": "https://play.google.com/store/apps/details?id=com.apple.android.music&referrer=utm_source=https%3A%2F%2Fmusic.apple.com%2Fsubscribe%3Fmttnagencyid%3Ds2n%26mttnsiteid%3D125115%26mttn3pid%3DApple-Shazam%26mttnsub1%3DShazam_android_am%26mttnsub2%3D5348615A-616D-3235-3830-44754D6D5973%26itscg%3D30201%26app%3Dmusic%26itsct%3DShazam_android_am"
+                }
+              ],
+              "beacondata": {
+                "type": "open",
+                "providername": "applemusic"
+              },
+              "image": "https://images.shazam.com/static/icons/hub/android/v5/overflow-open-option_{scalefactor}.png",
+              "type": "open",
+              "listcaption": "Open in Apple Music",
+              "overflowimage": "https://images.shazam.com/static/icons/hub/android/v5/applemusic-overflow_{scalefactor}.png",
+              "colouroverflowimage": false,
+              "providername": "applemusic"
+            }
+          ]
+        },
+        "sections": [
+          {
+            "type": "SONG",
+            "metapages": [
+              {
+                "image": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8d/fd/21/8dfd21c6-8ed6-5fd2-e14f-4235191312d1/cover.jpg/400x400cc.jpg",
+                "caption": "Drop 180"
+              }
+            ],
+            "tabname": "Song",
+            "metadata": [
+              {
+                "title": "Album",
+                "text": "Drop 180 - Single"
+              },
+              {
+                "title": "Label",
+                "text": "Midnight Orbit"
+              },
+              {
+                "title": "Released",
+                "text": "2026"
+              }
+            ]
+          },
+          {
+            "type": "RELATED",
+            "url": "https://cdn.shazam.com/shazam/v3/en-US/GB/android/-/tracks/track-similarities-id-891498434?startFrom=0&pageSize=20&connected=",
+            "tabname": "Related"
+          }
+        ],
+        "url": "https://www.shazam.com/track/891498434/drop-180",
+        "artists": [
+          {
+            "id": "42",
+            "adamid": "1793831298"
+          }
+        ],
+        "genres": {
+          "primary": "Electronic"
+        },
+        "urlparams": {
+          "{tracktitle}": "Drop+180",
+          "{trackartist}": "Synth+lynq"
+        },
+        "highlightsurls": {},
+        "relatedtracksurl": "https://cdn.shazam.com/shazam/v3/en-US/GB/android/-/tracks/track-similarities-id-891498434?startFrom=0&pageSize=20&connected=",
+        "albumadamid": "6799100151",
+        "isrc": "QT6FH2620069"
+      }
+    },
+    {
+      "method": "rate",
+      "factor": 1.1,
+      "start": 10.0,
+      "input_duration": 13.200000000000001,
+      "matched": true,
+      "title": "Drop 180",
+      "subtitle": "Synth lynq",
+      "shazam_track": {
+        "layout": "5",
+        "type": "MUSIC",
+        "key": "891498434",
+        "title": "Drop 180",
+        "subtitle": "Synth lynq",
+        "images": {
+          "background": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8d/fd/21/8dfd21c6-8ed6-5fd2-e14f-4235191312d1/cover.jpg/400x400cc.jpg",
+          "coverart": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8d/fd/21/8dfd21c6-8ed6-5fd2-e14f-4235191312d1/cover.jpg/400x400cc.jpg",
+          "coverarthq": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8d/fd/21/8dfd21c6-8ed6-5fd2-e14f-4235191312d1/cover.jpg/400x400cc.jpg",
+          "joecolor": "b:05081bp:d095a3s:f37d75t:a77988q:c36563"
+        },
+        "display": {
+          "actions": [
+            {
+              "name": "display:updateshazam",
+              "type": "webview",
+              "uri": "https://www.shazam.com/inapp/updatenow/891498434"
+            }
+          ]
+        },
+        "share": {
+          "subject": "Drop 180 - Synth lynq",
+          "text": "Drop 180 by Synth lynq",
+          "href": "https://www.shazam.com/track/891498434/drop-180",
+          "image": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8d/fd/21/8dfd21c6-8ed6-5fd2-e14f-4235191312d1/cover.jpg/400x400cc.jpg",
+          "twitter": "I used @Shazam to discover Drop 180 by Synth lynq.",
+          "html": "https://www.shazam.com/snippets/email-share/891498434?lang=en-US&country=GB",
+          "snapchat": "https://www.shazam.com/partner/sc/track/891498434"
+        },
+        "hub": {
+          "type": "APPLEMUSIC",
+          "image": "https://images.shazam.com/static/icons/hub/ios/v5/applemusic_{scalefactor}.png",
+          "actions": [
+            {
+              "name": "apple",
+              "type": "applemusicplay",
+              "id": "6799100152"
+            },
+            {
+              "name": "apple",
+              "type": "uri",
+              "uri": "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/58/e8/c9/58e8c93b-e2d5-5b59-26ea-298e7b098bb2/mzaf_6808667795699539922.plus.aac.p.m4a"
+            }
+          ],
+          "providers": [
+            {
+              "caption": "Open in Spotify",
+              "images": {
+                "overflow": "https://images.shazam.com/static/icons/hub/ios/v5/spotify-overflow_{scalefactor}.png",
+                "default": "https://images.shazam.com/static/icons/hub/ios/v5/spotify_{scalefactor}.png"
+              },
+              "actions": [
+                {
+                  "name": "hub:spotify:searchdeeplink",
+                  "type": "uri",
+                  "uri": "spotify:search:Drop%20180%20Synth%20lynq"
+                }
+              ],
+              "type": "SPOTIFY"
+            },
+            {
+              "caption": "Open in Deezer",
+              "images": {
+                "overflow": "https://images.shazam.com/static/icons/hub/ios/v5/deezer-overflow_{scalefactor}.png",
+                "default": "https://images.shazam.com/static/icons/hub/ios/v5/deezer_{scalefactor}.png"
+              },
+              "actions": [
+                {
+                  "name": "hub:deezer:searchdeeplink",
+                  "type": "uri",
+                  "uri": "deezer-query://www.deezer.com/play?query=%7Btrack%3A%27Drop+180%27%20artist%3A%27Synth+lynq%27%7D"
+                }
+              ],
+              "type": "DEEZER"
+            }
+          ],
+          "explicit": false,
+          "displayname": "APPLE MUSIC",
+          "options": [
+            {
+              "caption": "OPEN IN",
+              "actions": [
+                {
+                  "name": "hub:applemusic:deeplink",
+                  "type": "applemusicopen",
+                  "uri": "https://music.apple.com/gb/album/drop-180/6799100151?i=6799100152&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_ios&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=music&itsct=Shazam_ios"
+                },
+                {
+                  "name": "hub:applemusic:deeplink",
+                  "type": "uri",
+                  "uri": "https://music.apple.com/gb/album/drop-180/6799100151?i=6799100152&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_ios&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=music&itsct=Shazam_ios"
+                }
+              ],
+              "beacondata": {
+                "type": "open",
+                "providername": "applemusic"
+              },
+              "image": "https://images.shazam.com/static/icons/hub/ios/v5/overflow-open-option_{scalefactor}.png",
+              "type": "open",
+              "listcaption": "Open in Apple Music",
+              "overflowimage": "https://images.shazam.com/static/icons/hub/ios/v5/applemusic-overflow_{scalefactor}.png",
+              "colouroverflowimage": false,
+              "providername": "applemusic"
+            },
+            {
+              "caption": "BUY",
+              "actions": [
+                {
+                  "type": "uri",
+                  "uri": "https://itunes.apple.com/gb/album/drop-180/6799100151?i=6799100152&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_ios&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=itunes&itsct=Shazam_ios"
+                }
+              ],
+              "beacondata": {
+                "type": "buy",
+                "providername": "itunes"
+              },
+              "image": "https://images.shazam.com/static/icons/hub/ios/v5/itunes-overflow-buy_{scalefactor}.png",
+              "type": "buy",
+              "listcaption": "Buy on iTunes",
+              "overflowimage": "https://images.shazam.com/static/icons/hub/ios/v5/itunes-overflow-buy_{scalefactor}.png",
+              "colouroverflowimage": false,
+              "providername": "itunes"
+            }
+          ]
+        },
+        "sections": [
+          {
+            "type": "SONG",
+            "metapages": [
+              {
+                "image": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8d/fd/21/8dfd21c6-8ed6-5fd2-e14f-4235191312d1/cover.jpg/400x400cc.jpg",
+                "caption": "Drop 180"
+              }
+            ],
+            "tabname": "Song",
+            "metadata": [
+              {
+                "title": "Album",
+                "text": "Drop 180 - Single"
+              },
+              {
+                "title": "Label",
+                "text": "Midnight Orbit"
+              },
+              {
+                "title": "Released",
+                "text": "2026"
+              }
+            ]
+          },
+          {
+            "type": "RELATED",
+            "url": "https://cdn.shazam.com/shazam/v3/en-US/GB/iphone/-/tracks/track-similarities-id-891498434?startFrom=0&pageSize=20&connected=",
+            "tabname": "Related"
+          }
+        ],
+        "url": "https://www.shazam.com/track/891498434/drop-180",
+        "artists": [
+          {
+            "id": "42",
+            "adamid": "1793831298"
+          }
+        ],
+        "genres": {
+          "primary": "Electronic"
+        },
+        "urlparams": {
+          "{tracktitle}": "Drop+180",
+          "{trackartist}": "Synth+lynq"
+        },
+        "myshazam": {
+          "apple": {
+            "actions": [
+              {
+                "name": "myshazam:apple",
+                "type": "uri",
+                "uri": "https://music.apple.com/gb/album/drop-180/6799100151?i=6799100152&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_ios&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=music&itsct=Shazam_ios"
+              }
+            ]
+          }
+        },
+        "highlightsurls": {},
+        "relatedtracksurl": "https://cdn.shazam.com/shazam/v3/en-US/GB/iphone/-/tracks/track-similarities-id-891498434?startFrom=0&pageSize=20&connected=",
+        "albumadamid": "6799100151",
+        "isrc": "QT6FH2620069"
+      }
+    },
+    {
+      "method": "rate",
+      "factor": 1.1,
+      "start": 15.0,
+      "input_duration": 12.689796000000001,
+      "matched": true,
+      "title": "Drop 180",
+      "subtitle": "Synth lynq",
+      "shazam_track": {
+        "layout": "5",
+        "type": "MUSIC",
+        "key": "891498434",
+        "title": "Drop 180",
+        "subtitle": "Synth lynq",
+        "images": {
+          "background": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8d/fd/21/8dfd21c6-8ed6-5fd2-e14f-4235191312d1/cover.jpg/400x400cc.jpg",
+          "coverart": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8d/fd/21/8dfd21c6-8ed6-5fd2-e14f-4235191312d1/cover.jpg/400x400cc.jpg",
+          "coverarthq": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8d/fd/21/8dfd21c6-8ed6-5fd2-e14f-4235191312d1/cover.jpg/400x400cc.jpg",
+          "joecolor": "b:05081bp:d095a3s:f37d75t:a77988q:c36563"
+        },
+        "display": {
+          "actions": [
+            {
+              "name": "display:updateshazam",
+              "type": "webview",
+              "uri": "https://www.shazam.com/inapp/updatenow/891498434"
+            }
+          ]
+        },
+        "share": {
+          "subject": "Drop 180 - Synth lynq",
+          "text": "Drop 180 by Synth lynq",
+          "href": "https://www.shazam.com/track/891498434/drop-180",
+          "image": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8d/fd/21/8dfd21c6-8ed6-5fd2-e14f-4235191312d1/cover.jpg/400x400cc.jpg",
+          "twitter": "I used @Shazam to discover Drop 180 by Synth lynq.",
+          "html": "https://www.shazam.com/snippets/email-share/891498434?lang=en-US&country=GB",
+          "snapchat": "https://www.shazam.com/partner/sc/track/891498434"
+        },
+        "hub": {
+          "type": "APPLEMUSIC",
+          "image": "https://images.shazam.com/static/icons/hub/web/v5/applemusic.png",
+          "actions": [
+            {
+              "name": "apple",
+              "type": "applemusicplay",
+              "id": "6799100152"
+            },
+            {
+              "name": "apple",
+              "type": "uri",
+              "uri": "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/58/e8/c9/58e8c93b-e2d5-5b59-26ea-298e7b098bb2/mzaf_6808667795699539922.plus.aac.p.m4a"
+            }
+          ],
+          "explicit": false,
+          "displayname": "APPLE MUSIC",
+          "options": [
+            {
+              "caption": "OPEN IN",
+              "actions": [
+                {
+                  "name": "hub:applemusic:deeplink",
+                  "type": "applemusicopen",
+                  "uri": "https://music.apple.com/gb/album/drop-180/6799100151?i=6799100152&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_web&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=music&itsct=Shazam_web"
+                },
+                {
+                  "name": "hub:applemusic:deeplink",
+                  "type": "uri",
+                  "uri": "https://music.apple.com/gb/album/drop-180/6799100151?i=6799100152&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_web&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=music&itsct=Shazam_web"
+                }
+              ],
+              "beacondata": {
+                "type": "open",
+                "providername": "applemusic"
+              },
+              "image": "https://images.shazam.com/static/icons/hub/web/v5/overflow-open-option.png",
+              "type": "open",
+              "listcaption": "Open in Apple Music",
+              "overflowimage": "https://images.shazam.com/static/icons/hub/web/v5/applemusic-overflow.png",
+              "colouroverflowimage": false,
+              "providername": "applemusic"
+            }
+          ]
+        },
+        "sections": [
+          {
+            "type": "SONG",
+            "metapages": [
+              {
+                "image": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8d/fd/21/8dfd21c6-8ed6-5fd2-e14f-4235191312d1/cover.jpg/400x400cc.jpg",
+                "caption": "Drop 180"
+              }
+            ],
+            "tabname": "Song",
+            "metadata": [
+              {
+                "title": "Album",
+                "text": "Drop 180 - Single"
+              },
+              {
+                "title": "Label",
+                "text": "Midnight Orbit"
+              },
+              {
+                "title": "Released",
+                "text": "2026"
+              }
+            ]
+          },
+          {
+            "type": "RELATED",
+            "url": "https://cdn.shazam.com/shazam/v3/en-US/GB/web/-/tracks/track-similarities-id-891498434?startFrom=0&pageSize=20&connected=",
+            "tabname": "Related"
+          }
+        ],
+        "url": "https://www.shazam.com/track/891498434/drop-180",
+        "artists": [
+          {
+            "alias": "synth-lynq",
+            "id": "42",
+            "adamid": "1793831298"
+          }
+        ],
+        "alias": "drop-180",
+        "genres": {
+          "primary": "Electronic"
+        },
+        "urlparams": {
+          "{tracktitle}": "Drop+180",
+          "{trackartist}": "Synth+lynq"
+        },
+        "highlightsurls": {},
+        "relatedtracksurl": "https://cdn.shazam.com/shazam/v3/en-US/GB/web/-/tracks/track-similarities-id-891498434?startFrom=0&pageSize=20&connected=",
+        "albumadamid": "6799100151",
+        "trackadamid": "6799100152",
+        "releasedate": "24-07-2026",
+        "isrc": "QT6FH2620069"
+      }
+    },
+    {
+      "method": "rate",
+      "factor": 1.1,
+      "start": 20.0,
+      "input_duration": 7.689796000000001,
+      "matched": true,
+      "title": "Drop 180",
+      "subtitle": "Synth lynq",
+      "shazam_track": {
+        "layout": "5",
+        "type": "MUSIC",
+        "key": "891498434",
+        "title": "Drop 180",
+        "subtitle": "Synth lynq",
+        "images": {
+          "background": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8d/fd/21/8dfd21c6-8ed6-5fd2-e14f-4235191312d1/cover.jpg/400x400cc.jpg",
+          "coverart": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8d/fd/21/8dfd21c6-8ed6-5fd2-e14f-4235191312d1/cover.jpg/400x400cc.jpg",
+          "coverarthq": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8d/fd/21/8dfd21c6-8ed6-5fd2-e14f-4235191312d1/cover.jpg/400x400cc.jpg",
+          "joecolor": "b:05081bp:d095a3s:f37d75t:a77988q:c36563"
+        },
+        "display": {
+          "actions": [
+            {
+              "name": "display:updateshazam",
+              "type": "webview",
+              "uri": "https://www.shazam.com/inapp/updatenow/891498434"
+            }
+          ]
+        },
+        "share": {
+          "subject": "Drop 180 - Synth lynq",
+          "text": "Drop 180 by Synth lynq",
+          "href": "https://www.shazam.com/track/891498434/drop-180",
+          "image": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8d/fd/21/8dfd21c6-8ed6-5fd2-e14f-4235191312d1/cover.jpg/400x400cc.jpg",
+          "twitter": "I used @Shazam to discover Drop 180 by Synth lynq.",
+          "html": "https://www.shazam.com/snippets/email-share/891498434?lang=en-US&country=GB",
+          "snapchat": "https://www.shazam.com/partner/sc/track/891498434"
+        },
+        "hub": {
+          "type": "APPLEMUSIC",
+          "image": "https://images.shazam.com/static/icons/hub/android/v5/applemusic_{scalefactor}.png",
+          "actions": [
+            {
+              "name": "apple",
+              "type": "applemusicplay",
+              "id": "6799100152"
+            },
+            {
+              "name": "apple",
+              "type": "uri",
+              "uri": "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/58/e8/c9/58e8c93b-e2d5-5b59-26ea-298e7b098bb2/mzaf_6808667795699539922.plus.aac.p.m4a"
+            }
+          ],
+          "providers": [
+            {
+              "caption": "Open in Spotify",
+              "images": {
+                "overflow": "https://images.shazam.com/static/icons/hub/android/v5/spotify-overflow_{scalefactor}.png",
+                "default": "https://images.shazam.com/static/icons/hub/android/v5/spotify_{scalefactor}.png"
+              },
+              "actions": [
+                {
+                  "name": "hub:spotify:searchdeeplink",
+                  "type": "uri",
+                  "uri": "spotify:search:Drop%20180%20Synth%20lynq"
+                }
+              ],
+              "type": "SPOTIFY"
+            },
+            {
+              "caption": "Open in YouTube Music",
+              "images": {
+                "overflow": "https://images.shazam.com/static/icons/hub/android/v5/youtubemusic-overflow_{scalefactor}.png",
+                "default": "https://images.shazam.com/static/icons/hub/android/v5/youtubemusic_{scalefactor}.png"
+              },
+              "actions": [
+                {
+                  "name": "hub:youtubemusic:androiddeeplink",
+                  "type": "uri",
+                  "uri": "https://music.youtube.com/search?q=Drop+180+Synth+lynq&feature=shazam"
+                }
+              ],
+              "type": "YOUTUBEMUSIC"
+            },
+            {
+              "caption": "Open in Deezer",
+              "images": {
+                "overflow": "https://images.shazam.com/static/icons/hub/android/v5/deezer-overflow_{scalefactor}.png",
+                "default": "https://images.shazam.com/static/icons/hub/android/v5/deezer_{scalefactor}.png"
+              },
+              "actions": [
+                {
+                  "name": "hub:deezer:searchdeeplink",
+                  "type": "uri",
+                  "uri": "deezer-query://www.deezer.com/play?query=%7Btrack%3A%27Drop+180%27%20artist%3A%27Synth+lynq%27%7D"
+                }
+              ],
+              "type": "DEEZER"
+            }
+          ],
+          "explicit": false,
+          "displayname": "APPLE MUSIC",
+          "options": [
+            {
+              "caption": "OPEN IN",
+              "actions": [
+                {
+                  "name": "hub:applemusic:deeplink",
+                  "type": "intent",
+                  "uri": "intent://music.apple.com/gb/album/drop-180/6799100151?i=6799100152&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_android_am&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=music&itsct=Shazam_android_am#Intent;scheme=http;package=com.apple.android.music;action=android.intent.action.VIEW;end"
+                },
+                {
+                  "name": "hub:applemusic:connect",
+                  "type": "applemusicconnect",
+                  "id": "6799100152",
+                  "uri": "https://unsupported.shazam.com"
+                },
+                {
+                  "name": "hub:applemusic:androidstore",
+                  "type": "uri",
+                  "uri": "https://play.google.com/store/apps/details?id=com.apple.android.music&referrer=utm_source=https%3A%2F%2Fmusic.apple.com%2Fsubscribe%3Fmttnagencyid%3Ds2n%26mttnsiteid%3D125115%26mttn3pid%3DApple-Shazam%26mttnsub1%3DShazam_android_am%26mttnsub2%3D5348615A-616D-3235-3830-44754D6D5973%26itscg%3D30201%26app%3Dmusic%26itsct%3DShazam_android_am"
+                }
+              ],
+              "beacondata": {
+                "type": "open",
+                "providername": "applemusic"
+              },
+              "image": "https://images.shazam.com/static/icons/hub/android/v5/overflow-open-option_{scalefactor}.png",
+              "type": "open",
+              "listcaption": "Open in Apple Music",
+              "overflowimage": "https://images.shazam.com/static/icons/hub/android/v5/applemusic-overflow_{scalefactor}.png",
+              "colouroverflowimage": false,
+              "providername": "applemusic"
+            }
+          ]
+        },
+        "sections": [
+          {
+            "type": "SONG",
+            "metapages": [
+              {
+                "image": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8d/fd/21/8dfd21c6-8ed6-5fd2-e14f-4235191312d1/cover.jpg/400x400cc.jpg",
+                "caption": "Drop 180"
+              }
+            ],
+            "tabname": "Song",
+            "metadata": [
+              {
+                "title": "Album",
+                "text": "Drop 180 - Single"
+              },
+              {
+                "title": "Label",
+                "text": "Midnight Orbit"
+              },
+              {
+                "title": "Released",
+                "text": "2026"
+              }
+            ]
+          },
+          {
+            "type": "RELATED",
+            "url": "https://cdn.shazam.com/shazam/v3/en-US/GB/android/-/tracks/track-similarities-id-891498434?startFrom=0&pageSize=20&connected=",
+            "tabname": "Related"
+          }
+        ],
+        "url": "https://www.shazam.com/track/891498434/drop-180",
+        "artists": [
+          {
+            "id": "42",
+            "adamid": "1793831298"
+          }
+        ],
+        "genres": {
+          "primary": "Electronic"
+        },
+        "urlparams": {
+          "{tracktitle}": "Drop+180",
+          "{trackartist}": "Synth+lynq"
+        },
+        "highlightsurls": {},
+        "relatedtracksurl": "https://cdn.shazam.com/shazam/v3/en-US/GB/android/-/tracks/track-similarities-id-891498434?startFrom=0&pageSize=20&connected=",
+        "albumadamid": "6799100151",
+        "isrc": "QT6FH2620069"
+      }
+    },
+    {
+      "method": "rate",
+      "factor": 1.1,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": false
+    },
+    {
+      "method": "rate",
+      "factor": 1.2,
+      "start": 0.0,
+      "input_duration": 14.399999999999999,
+      "matched": true,
+      "title": "REALISE",
+      "subtitle": "kostugnis",
+      "shazam_track": {
+        "layout": "5",
+        "type": "MUSIC",
+        "key": "893052262",
+        "title": "REALISE",
+        "subtitle": "kostugnis",
+        "images": {
+          "background": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+          "coverart": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+          "coverarthq": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+          "joecolor": "b:000000p:f3f3f3s:d6d6d6t:c2c2c2q:ababab"
+        },
+        "display": {
+          "actions": [
+            {
+              "name": "display:updateshazam",
+              "type": "webview",
+              "uri": "https://www.shazam.com/inapp/updatenow/893052262"
+            }
+          ]
+        },
+        "share": {
+          "subject": "REALISE - kostugnis",
+          "text": "REALISE by kostugnis",
+          "href": "https://www.shazam.com/track/893052262/realise",
+          "image": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+          "twitter": "I used @Shazam to discover REALISE by kostugnis.",
+          "html": "https://www.shazam.com/snippets/email-share/893052262?lang=en-US&country=GB",
+          "snapchat": "https://www.shazam.com/partner/sc/track/893052262"
+        },
+        "hub": {
+          "type": "APPLEMUSIC",
+          "image": "https://images.shazam.com/static/icons/hub/web/v5/applemusic.png",
+          "actions": [
+            {
+              "name": "apple",
+              "type": "applemusicplay",
+              "id": "6798004717"
+            },
+            {
+              "name": "apple",
+              "type": "uri",
+              "uri": "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/4d/5a/6c/4d5a6c07-5272-d98e-23a8-f4b182d61271/mzaf_12405605128822170281.plus.aac.ep.m4a"
+            }
+          ],
+          "explicit": false,
+          "displayname": "APPLE MUSIC",
+          "options": [
+            {
+              "caption": "OPEN IN",
+              "actions": [
+                {
+                  "name": "hub:applemusic:deeplink",
+                  "type": "applemusicopen",
+                  "uri": "https://music.apple.com/gb/album/realise/6798004716?i=6798004717&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_web&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=music&itsct=Shazam_web"
+                },
+                {
+                  "name": "hub:applemusic:deeplink",
+                  "type": "uri",
+                  "uri": "https://music.apple.com/gb/album/realise/6798004716?i=6798004717&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_web&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=music&itsct=Shazam_web"
+                }
+              ],
+              "beacondata": {
+                "type": "open",
+                "providername": "applemusic"
+              },
+              "image": "https://images.shazam.com/static/icons/hub/web/v5/overflow-open-option.png",
+              "type": "open",
+              "listcaption": "Open in Apple Music",
+              "overflowimage": "https://images.shazam.com/static/icons/hub/web/v5/applemusic-overflow.png",
+              "colouroverflowimage": false,
+              "providername": "applemusic"
+            }
+          ]
+        },
+        "sections": [
+          {
+            "type": "SONG",
+            "metapages": [
+              {
+                "image": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+                "caption": "REALISE"
+              }
+            ],
+            "tabname": "Song",
+            "metadata": [
+              {
+                "title": "Album",
+                "text": "REALISE - Single"
+              },
+              {
+                "title": "Label",
+                "text": "Kostugnis"
+              },
+              {
+                "title": "Released",
+                "text": "2026"
+              }
+            ]
+          },
+          {
+            "type": "RELATED",
+            "url": "https://cdn.shazam.com/shazam/v3/en-US/GB/web/-/tracks/track-similarities-id-893052262?startFrom=0&pageSize=20&connected=",
+            "tabname": "Related"
+          }
+        ],
+        "url": "https://www.shazam.com/track/893052262/realise",
+        "artists": [
+          {
+            "alias": "kostugnis",
+            "id": "42",
+            "adamid": "1747103330"
+          }
+        ],
+        "alias": "realise",
+        "genres": {
+          "primary": "Electronic"
+        },
+        "urlparams": {
+          "{tracktitle}": "REALISE",
+          "{trackartist}": "kostugnis"
+        },
+        "highlightsurls": {},
+        "relatedtracksurl": "https://cdn.shazam.com/shazam/v3/en-US/GB/web/-/tracks/track-similarities-id-893052262?startFrom=0&pageSize=20&connected=",
+        "albumadamid": "6798004716",
+        "trackadamid": "6798004717",
+        "releasedate": "01-08-2026",
+        "isrc": "GXHZG2694882"
+      }
+    },
+    {
+      "method": "rate",
+      "factor": 1.2,
+      "start": 5.0,
+      "input_duration": 14.399999999999999,
+      "matched": true,
+      "title": "REALISE",
+      "subtitle": "kostugnis",
+      "shazam_track": {
+        "layout": "5",
+        "type": "MUSIC",
+        "key": "893052262",
+        "title": "REALISE",
+        "subtitle": "kostugnis",
+        "images": {
+          "background": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+          "coverart": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+          "coverarthq": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+          "joecolor": "b:000000p:f3f3f3s:d6d6d6t:c2c2c2q:ababab"
+        },
+        "display": {
+          "actions": [
+            {
+              "name": "display:updateshazam",
+              "type": "webview",
+              "uri": "https://www.shazam.com/inapp/updatenow/893052262"
+            }
+          ]
+        },
+        "share": {
+          "subject": "REALISE - kostugnis",
+          "text": "REALISE by kostugnis",
+          "href": "https://www.shazam.com/track/893052262/realise",
+          "image": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+          "twitter": "I used @Shazam to discover REALISE by kostugnis.",
+          "html": "https://www.shazam.com/snippets/email-share/893052262?lang=en-US&country=GB",
+          "snapchat": "https://www.shazam.com/partner/sc/track/893052262"
+        },
+        "hub": {
+          "type": "APPLEMUSIC",
+          "image": "https://images.shazam.com/static/icons/hub/android/v5/applemusic_{scalefactor}.png",
+          "actions": [
+            {
+              "name": "apple",
+              "type": "applemusicplay",
+              "id": "6798004717"
+            },
+            {
+              "name": "apple",
+              "type": "uri",
+              "uri": "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/4d/5a/6c/4d5a6c07-5272-d98e-23a8-f4b182d61271/mzaf_12405605128822170281.plus.aac.ep.m4a"
+            }
+          ],
+          "providers": [
+            {
+              "caption": "Open in Spotify",
+              "images": {
+                "overflow": "https://images.shazam.com/static/icons/hub/android/v5/spotify-overflow_{scalefactor}.png",
+                "default": "https://images.shazam.com/static/icons/hub/android/v5/spotify_{scalefactor}.png"
+              },
+              "actions": [
+                {
+                  "name": "hub:spotify:searchdeeplink",
+                  "type": "uri",
+                  "uri": "spotify:search:REALISE%20kostugnis"
+                }
+              ],
+              "type": "SPOTIFY"
+            },
+            {
+              "caption": "Open in YouTube Music",
+              "images": {
+                "overflow": "https://images.shazam.com/static/icons/hub/android/v5/youtubemusic-overflow_{scalefactor}.png",
+                "default": "https://images.shazam.com/static/icons/hub/android/v5/youtubemusic_{scalefactor}.png"
+              },
+              "actions": [
+                {
+                  "name": "hub:youtubemusic:androiddeeplink",
+                  "type": "uri",
+                  "uri": "https://music.youtube.com/search?q=REALISE+kostugnis&feature=shazam"
+                }
+              ],
+              "type": "YOUTUBEMUSIC"
+            },
+            {
+              "caption": "Open in Deezer",
+              "images": {
+                "overflow": "https://images.shazam.com/static/icons/hub/android/v5/deezer-overflow_{scalefactor}.png",
+                "default": "https://images.shazam.com/static/icons/hub/android/v5/deezer_{scalefactor}.png"
+              },
+              "actions": [
+                {
+                  "name": "hub:deezer:searchdeeplink",
+                  "type": "uri",
+                  "uri": "deezer-query://www.deezer.com/play?query=%7Btrack%3A%27REALISE%27%20artist%3A%27kostugnis%27%7D"
+                }
+              ],
+              "type": "DEEZER"
+            }
+          ],
+          "explicit": false,
+          "displayname": "APPLE MUSIC",
+          "options": [
+            {
+              "caption": "OPEN IN",
+              "actions": [
+                {
+                  "name": "hub:applemusic:deeplink",
+                  "type": "intent",
+                  "uri": "intent://music.apple.com/gb/album/realise/6798004716?i=6798004717&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_android_am&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=music&itsct=Shazam_android_am#Intent;scheme=http;package=com.apple.android.music;action=android.intent.action.VIEW;end"
+                },
+                {
+                  "name": "hub:applemusic:connect",
+                  "type": "applemusicconnect",
+                  "id": "6798004717",
+                  "uri": "https://unsupported.shazam.com"
+                },
+                {
+                  "name": "hub:applemusic:androidstore",
+                  "type": "uri",
+                  "uri": "https://play.google.com/store/apps/details?id=com.apple.android.music&referrer=utm_source=https%3A%2F%2Fmusic.apple.com%2Fsubscribe%3Fmttnagencyid%3Ds2n%26mttnsiteid%3D125115%26mttn3pid%3DApple-Shazam%26mttnsub1%3DShazam_android_am%26mttnsub2%3D5348615A-616D-3235-3830-44754D6D5973%26itscg%3D30201%26app%3Dmusic%26itsct%3DShazam_android_am"
+                }
+              ],
+              "beacondata": {
+                "type": "open",
+                "providername": "applemusic"
+              },
+              "image": "https://images.shazam.com/static/icons/hub/android/v5/overflow-open-option_{scalefactor}.png",
+              "type": "open",
+              "listcaption": "Open in Apple Music",
+              "overflowimage": "https://images.shazam.com/static/icons/hub/android/v5/applemusic-overflow_{scalefactor}.png",
+              "colouroverflowimage": false,
+              "providername": "applemusic"
+            }
+          ]
+        },
+        "sections": [
+          {
+            "type": "SONG",
+            "metapages": [
+              {
+                "image": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+                "caption": "REALISE"
+              }
+            ],
+            "tabname": "Song",
+            "metadata": [
+              {
+                "title": "Album",
+                "text": "REALISE - Single"
+              },
+              {
+                "title": "Label",
+                "text": "Kostugnis"
+              },
+              {
+                "title": "Released",
+                "text": "2026"
+              }
+            ]
+          },
+          {
+            "type": "RELATED",
+            "url": "https://cdn.shazam.com/shazam/v3/en-US/GB/android/-/tracks/track-similarities-id-893052262?startFrom=0&pageSize=20&connected=",
+            "tabname": "Related"
+          }
+        ],
+        "url": "https://www.shazam.com/track/893052262/realise",
+        "artists": [
+          {
+            "id": "42",
+            "adamid": "1747103330"
+          }
+        ],
+        "genres": {
+          "primary": "Electronic"
+        },
+        "urlparams": {
+          "{tracktitle}": "REALISE",
+          "{trackartist}": "kostugnis"
+        },
+        "highlightsurls": {},
+        "relatedtracksurl": "https://cdn.shazam.com/shazam/v3/en-US/GB/android/-/tracks/track-similarities-id-893052262?startFrom=0&pageSize=20&connected=",
+        "albumadamid": "6798004716",
+        "isrc": "GXHZG2694882"
+      }
+    },
+    {
+      "method": "rate",
+      "factor": 1.2,
+      "start": 10.0,
+      "input_duration": 14.399999999999999,
+      "matched": true,
+      "title": "REALISE",
+      "subtitle": "kostugnis",
+      "shazam_track": {
+        "layout": "5",
+        "type": "MUSIC",
+        "key": "893052262",
+        "title": "REALISE",
+        "subtitle": "kostugnis",
+        "images": {
+          "background": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+          "coverart": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+          "coverarthq": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+          "joecolor": "b:000000p:f3f3f3s:d6d6d6t:c2c2c2q:ababab"
+        },
+        "display": {
+          "actions": [
+            {
+              "name": "display:updateshazam",
+              "type": "webview",
+              "uri": "https://www.shazam.com/inapp/updatenow/893052262"
+            }
+          ]
+        },
+        "share": {
+          "subject": "REALISE - kostugnis",
+          "text": "REALISE by kostugnis",
+          "href": "https://www.shazam.com/track/893052262/realise",
+          "image": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+          "twitter": "I used @Shazam to discover REALISE by kostugnis.",
+          "html": "https://www.shazam.com/snippets/email-share/893052262?lang=en-US&country=GB",
+          "snapchat": "https://www.shazam.com/partner/sc/track/893052262"
+        },
+        "hub": {
+          "type": "APPLEMUSIC",
+          "image": "https://images.shazam.com/static/icons/hub/ios/v5/applemusic_{scalefactor}.png",
+          "actions": [
+            {
+              "name": "apple",
+              "type": "applemusicplay",
+              "id": "6798004717"
+            },
+            {
+              "name": "apple",
+              "type": "uri",
+              "uri": "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/4d/5a/6c/4d5a6c07-5272-d98e-23a8-f4b182d61271/mzaf_12405605128822170281.plus.aac.ep.m4a"
+            }
+          ],
+          "providers": [
+            {
+              "caption": "Open in Spotify",
+              "images": {
+                "overflow": "https://images.shazam.com/static/icons/hub/ios/v5/spotify-overflow_{scalefactor}.png",
+                "default": "https://images.shazam.com/static/icons/hub/ios/v5/spotify_{scalefactor}.png"
+              },
+              "actions": [
+                {
+                  "name": "hub:spotify:searchdeeplink",
+                  "type": "uri",
+                  "uri": "spotify:search:REALISE%20kostugnis"
+                }
+              ],
+              "type": "SPOTIFY"
+            },
+            {
+              "caption": "Open in Deezer",
+              "images": {
+                "overflow": "https://images.shazam.com/static/icons/hub/ios/v5/deezer-overflow_{scalefactor}.png",
+                "default": "https://images.shazam.com/static/icons/hub/ios/v5/deezer_{scalefactor}.png"
+              },
+              "actions": [
+                {
+                  "name": "hub:deezer:searchdeeplink",
+                  "type": "uri",
+                  "uri": "deezer-query://www.deezer.com/play?query=%7Btrack%3A%27REALISE%27%20artist%3A%27kostugnis%27%7D"
+                }
+              ],
+              "type": "DEEZER"
+            }
+          ],
+          "explicit": false,
+          "displayname": "APPLE MUSIC",
+          "options": [
+            {
+              "caption": "OPEN IN",
+              "actions": [
+                {
+                  "name": "hub:applemusic:deeplink",
+                  "type": "applemusicopen",
+                  "uri": "https://music.apple.com/gb/album/realise/6798004716?i=6798004717&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_ios&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=music&itsct=Shazam_ios"
+                },
+                {
+                  "name": "hub:applemusic:deeplink",
+                  "type": "uri",
+                  "uri": "https://music.apple.com/gb/album/realise/6798004716?i=6798004717&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_ios&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=music&itsct=Shazam_ios"
+                }
+              ],
+              "beacondata": {
+                "type": "open",
+                "providername": "applemusic"
+              },
+              "image": "https://images.shazam.com/static/icons/hub/ios/v5/overflow-open-option_{scalefactor}.png",
+              "type": "open",
+              "listcaption": "Open in Apple Music",
+              "overflowimage": "https://images.shazam.com/static/icons/hub/ios/v5/applemusic-overflow_{scalefactor}.png",
+              "colouroverflowimage": false,
+              "providername": "applemusic"
+            },
+            {
+              "caption": "BUY",
+              "actions": [
+                {
+                  "type": "uri",
+                  "uri": "https://itunes.apple.com/gb/album/realise/6798004716?i=6798004717&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_ios&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=itunes&itsct=Shazam_ios"
+                }
+              ],
+              "beacondata": {
+                "type": "buy",
+                "providername": "itunes"
+              },
+              "image": "https://images.shazam.com/static/icons/hub/ios/v5/itunes-overflow-buy_{scalefactor}.png",
+              "type": "buy",
+              "listcaption": "Buy on iTunes",
+              "overflowimage": "https://images.shazam.com/static/icons/hub/ios/v5/itunes-overflow-buy_{scalefactor}.png",
+              "colouroverflowimage": false,
+              "providername": "itunes"
+            }
+          ]
+        },
+        "sections": [
+          {
+            "type": "SONG",
+            "metapages": [
+              {
+                "image": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+                "caption": "REALISE"
+              }
+            ],
+            "tabname": "Song",
+            "metadata": [
+              {
+                "title": "Album",
+                "text": "REALISE - Single"
+              },
+              {
+                "title": "Label",
+                "text": "Kostugnis"
+              },
+              {
+                "title": "Released",
+                "text": "2026"
+              }
+            ]
+          },
+          {
+            "type": "RELATED",
+            "url": "https://cdn.shazam.com/shazam/v3/en-US/GB/iphone/-/tracks/track-similarities-id-893052262?startFrom=0&pageSize=20&connected=",
+            "tabname": "Related"
+          }
+        ],
+        "url": "https://www.shazam.com/track/893052262/realise",
+        "artists": [
+          {
+            "id": "42",
+            "adamid": "1747103330"
+          }
+        ],
+        "genres": {
+          "primary": "Electronic"
+        },
+        "urlparams": {
+          "{tracktitle}": "REALISE",
+          "{trackartist}": "kostugnis"
+        },
+        "myshazam": {
+          "apple": {
+            "actions": [
+              {
+                "name": "myshazam:apple",
+                "type": "uri",
+                "uri": "https://music.apple.com/gb/album/realise/6798004716?i=6798004717&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_ios&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=music&itsct=Shazam_ios"
+              }
+            ]
+          }
+        },
+        "highlightsurls": {},
+        "relatedtracksurl": "https://cdn.shazam.com/shazam/v3/en-US/GB/iphone/-/tracks/track-similarities-id-893052262?startFrom=0&pageSize=20&connected=",
+        "albumadamid": "6798004716",
+        "isrc": "GXHZG2694882"
+      }
+    },
+    {
+      "method": "rate",
+      "factor": 1.2,
+      "start": 15.0,
+      "input_duration": 12.689796000000001,
+      "matched": true,
+      "title": "REALISE",
+      "subtitle": "kostugnis",
+      "shazam_track": {
+        "layout": "5",
+        "type": "MUSIC",
+        "key": "893052262",
+        "title": "REALISE",
+        "subtitle": "kostugnis",
+        "images": {
+          "background": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+          "coverart": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+          "coverarthq": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+          "joecolor": "b:000000p:f3f3f3s:d6d6d6t:c2c2c2q:ababab"
+        },
+        "display": {
+          "actions": [
+            {
+              "name": "display:updateshazam",
+              "type": "webview",
+              "uri": "https://www.shazam.com/inapp/updatenow/893052262"
+            }
+          ]
+        },
+        "share": {
+          "subject": "REALISE - kostugnis",
+          "text": "REALISE by kostugnis",
+          "href": "https://www.shazam.com/track/893052262/realise",
+          "image": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+          "twitter": "I used @Shazam to discover REALISE by kostugnis.",
+          "html": "https://www.shazam.com/snippets/email-share/893052262?lang=en-US&country=GB",
+          "snapchat": "https://www.shazam.com/partner/sc/track/893052262"
+        },
+        "hub": {
+          "type": "APPLEMUSIC",
+          "image": "https://images.shazam.com/static/icons/hub/ios/v5/applemusic_{scalefactor}.png",
+          "actions": [
+            {
+              "name": "apple",
+              "type": "applemusicplay",
+              "id": "6798004717"
+            },
+            {
+              "name": "apple",
+              "type": "uri",
+              "uri": "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/4d/5a/6c/4d5a6c07-5272-d98e-23a8-f4b182d61271/mzaf_12405605128822170281.plus.aac.ep.m4a"
+            }
+          ],
+          "providers": [
+            {
+              "caption": "Open in Spotify",
+              "images": {
+                "overflow": "https://images.shazam.com/static/icons/hub/ios/v5/spotify-overflow_{scalefactor}.png",
+                "default": "https://images.shazam.com/static/icons/hub/ios/v5/spotify_{scalefactor}.png"
+              },
+              "actions": [
+                {
+                  "name": "hub:spotify:searchdeeplink",
+                  "type": "uri",
+                  "uri": "spotify:search:REALISE%20kostugnis"
+                }
+              ],
+              "type": "SPOTIFY"
+            },
+            {
+              "caption": "Open in Deezer",
+              "images": {
+                "overflow": "https://images.shazam.com/static/icons/hub/ios/v5/deezer-overflow_{scalefactor}.png",
+                "default": "https://images.shazam.com/static/icons/hub/ios/v5/deezer_{scalefactor}.png"
+              },
+              "actions": [
+                {
+                  "name": "hub:deezer:searchdeeplink",
+                  "type": "uri",
+                  "uri": "deezer-query://www.deezer.com/play?query=%7Btrack%3A%27REALISE%27%20artist%3A%27kostugnis%27%7D"
+                }
+              ],
+              "type": "DEEZER"
+            }
+          ],
+          "explicit": false,
+          "displayname": "APPLE MUSIC",
+          "options": [
+            {
+              "caption": "OPEN IN",
+              "actions": [
+                {
+                  "name": "hub:applemusic:deeplink",
+                  "type": "applemusicopen",
+                  "uri": "https://music.apple.com/gb/album/realise/6798004716?i=6798004717&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_ios&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=music&itsct=Shazam_ios"
+                },
+                {
+                  "name": "hub:applemusic:deeplink",
+                  "type": "uri",
+                  "uri": "https://music.apple.com/gb/album/realise/6798004716?i=6798004717&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_ios&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=music&itsct=Shazam_ios"
+                }
+              ],
+              "beacondata": {
+                "type": "open",
+                "providername": "applemusic"
+              },
+              "image": "https://images.shazam.com/static/icons/hub/ios/v5/overflow-open-option_{scalefactor}.png",
+              "type": "open",
+              "listcaption": "Open in Apple Music",
+              "overflowimage": "https://images.shazam.com/static/icons/hub/ios/v5/applemusic-overflow_{scalefactor}.png",
+              "colouroverflowimage": false,
+              "providername": "applemusic"
+            },
+            {
+              "caption": "BUY",
+              "actions": [
+                {
+                  "type": "uri",
+                  "uri": "https://itunes.apple.com/gb/album/realise/6798004716?i=6798004717&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_ios&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=itunes&itsct=Shazam_ios"
+                }
+              ],
+              "beacondata": {
+                "type": "buy",
+                "providername": "itunes"
+              },
+              "image": "https://images.shazam.com/static/icons/hub/ios/v5/itunes-overflow-buy_{scalefactor}.png",
+              "type": "buy",
+              "listcaption": "Buy on iTunes",
+              "overflowimage": "https://images.shazam.com/static/icons/hub/ios/v5/itunes-overflow-buy_{scalefactor}.png",
+              "colouroverflowimage": false,
+              "providername": "itunes"
+            }
+          ]
+        },
+        "sections": [
+          {
+            "type": "SONG",
+            "metapages": [
+              {
+                "image": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+                "caption": "REALISE"
+              }
+            ],
+            "tabname": "Song",
+            "metadata": [
+              {
+                "title": "Album",
+                "text": "REALISE - Single"
+              },
+              {
+                "title": "Label",
+                "text": "Kostugnis"
+              },
+              {
+                "title": "Released",
+                "text": "2026"
+              }
+            ]
+          },
+          {
+            "type": "RELATED",
+            "url": "https://cdn.shazam.com/shazam/v3/en-US/GB/iphone/-/tracks/track-similarities-id-893052262?startFrom=0&pageSize=20&connected=",
+            "tabname": "Related"
+          }
+        ],
+        "url": "https://www.shazam.com/track/893052262/realise",
+        "artists": [
+          {
+            "id": "42",
+            "adamid": "1747103330"
+          }
+        ],
+        "genres": {
+          "primary": "Electronic"
+        },
+        "urlparams": {
+          "{tracktitle}": "REALISE",
+          "{trackartist}": "kostugnis"
+        },
+        "myshazam": {
+          "apple": {
+            "actions": [
+              {
+                "name": "myshazam:apple",
+                "type": "uri",
+                "uri": "https://music.apple.com/gb/album/realise/6798004716?i=6798004717&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_ios&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=music&itsct=Shazam_ios"
+              }
+            ]
+          }
+        },
+        "highlightsurls": {},
+        "relatedtracksurl": "https://cdn.shazam.com/shazam/v3/en-US/GB/iphone/-/tracks/track-similarities-id-893052262?startFrom=0&pageSize=20&connected=",
+        "albumadamid": "6798004716",
+        "isrc": "GXHZG2694882"
+      }
+    },
+    {
+      "method": "rate",
+      "factor": 1.2,
+      "start": 20.0,
+      "input_duration": 7.689796000000001,
+      "matched": true,
+      "title": "REALISE",
+      "subtitle": "kostugnis",
+      "shazam_track": {
+        "layout": "5",
+        "type": "MUSIC",
+        "key": "893052262",
+        "title": "REALISE",
+        "subtitle": "kostugnis",
+        "images": {
+          "background": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+          "coverart": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+          "coverarthq": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+          "joecolor": "b:000000p:f3f3f3s:d6d6d6t:c2c2c2q:ababab"
+        },
+        "display": {
+          "actions": [
+            {
+              "name": "display:updateshazam",
+              "type": "webview",
+              "uri": "https://www.shazam.com/inapp/updatenow/893052262"
+            }
+          ]
+        },
+        "share": {
+          "subject": "REALISE - kostugnis",
+          "text": "REALISE by kostugnis",
+          "href": "https://www.shazam.com/track/893052262/realise",
+          "image": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+          "twitter": "I used @Shazam to discover REALISE by kostugnis.",
+          "html": "https://www.shazam.com/snippets/email-share/893052262?lang=en-US&country=GB",
+          "snapchat": "https://www.shazam.com/partner/sc/track/893052262"
+        },
+        "hub": {
+          "type": "APPLEMUSIC",
+          "image": "https://images.shazam.com/static/icons/hub/ios/v5/applemusic_{scalefactor}.png",
+          "actions": [
+            {
+              "name": "apple",
+              "type": "applemusicplay",
+              "id": "6798004717"
+            },
+            {
+              "name": "apple",
+              "type": "uri",
+              "uri": "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/4d/5a/6c/4d5a6c07-5272-d98e-23a8-f4b182d61271/mzaf_12405605128822170281.plus.aac.ep.m4a"
+            }
+          ],
+          "providers": [
+            {
+              "caption": "Open in Spotify",
+              "images": {
+                "overflow": "https://images.shazam.com/static/icons/hub/ios/v5/spotify-overflow_{scalefactor}.png",
+                "default": "https://images.shazam.com/static/icons/hub/ios/v5/spotify_{scalefactor}.png"
+              },
+              "actions": [
+                {
+                  "name": "hub:spotify:searchdeeplink",
+                  "type": "uri",
+                  "uri": "spotify:search:REALISE%20kostugnis"
+                }
+              ],
+              "type": "SPOTIFY"
+            },
+            {
+              "caption": "Open in Deezer",
+              "images": {
+                "overflow": "https://images.shazam.com/static/icons/hub/ios/v5/deezer-overflow_{scalefactor}.png",
+                "default": "https://images.shazam.com/static/icons/hub/ios/v5/deezer_{scalefactor}.png"
+              },
+              "actions": [
+                {
+                  "name": "hub:deezer:searchdeeplink",
+                  "type": "uri",
+                  "uri": "deezer-query://www.deezer.com/play?query=%7Btrack%3A%27REALISE%27%20artist%3A%27kostugnis%27%7D"
+                }
+              ],
+              "type": "DEEZER"
+            }
+          ],
+          "explicit": false,
+          "displayname": "APPLE MUSIC",
+          "options": [
+            {
+              "caption": "OPEN IN",
+              "actions": [
+                {
+                  "name": "hub:applemusic:deeplink",
+                  "type": "applemusicopen",
+                  "uri": "https://music.apple.com/gb/album/realise/6798004716?i=6798004717&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_ios&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=music&itsct=Shazam_ios"
+                },
+                {
+                  "name": "hub:applemusic:deeplink",
+                  "type": "uri",
+                  "uri": "https://music.apple.com/gb/album/realise/6798004716?i=6798004717&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_ios&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=music&itsct=Shazam_ios"
+                }
+              ],
+              "beacondata": {
+                "type": "open",
+                "providername": "applemusic"
+              },
+              "image": "https://images.shazam.com/static/icons/hub/ios/v5/overflow-open-option_{scalefactor}.png",
+              "type": "open",
+              "listcaption": "Open in Apple Music",
+              "overflowimage": "https://images.shazam.com/static/icons/hub/ios/v5/applemusic-overflow_{scalefactor}.png",
+              "colouroverflowimage": false,
+              "providername": "applemusic"
+            },
+            {
+              "caption": "BUY",
+              "actions": [
+                {
+                  "type": "uri",
+                  "uri": "https://itunes.apple.com/gb/album/realise/6798004716?i=6798004717&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_ios&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=itunes&itsct=Shazam_ios"
+                }
+              ],
+              "beacondata": {
+                "type": "buy",
+                "providername": "itunes"
+              },
+              "image": "https://images.shazam.com/static/icons/hub/ios/v5/itunes-overflow-buy_{scalefactor}.png",
+              "type": "buy",
+              "listcaption": "Buy on iTunes",
+              "overflowimage": "https://images.shazam.com/static/icons/hub/ios/v5/itunes-overflow-buy_{scalefactor}.png",
+              "colouroverflowimage": false,
+              "providername": "itunes"
+            }
+          ]
+        },
+        "sections": [
+          {
+            "type": "SONG",
+            "metapages": [
+              {
+                "image": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+                "caption": "REALISE"
+              }
+            ],
+            "tabname": "Song",
+            "metadata": [
+              {
+                "title": "Album",
+                "text": "REALISE - Single"
+              },
+              {
+                "title": "Label",
+                "text": "Kostugnis"
+              },
+              {
+                "title": "Released",
+                "text": "2026"
+              }
+            ]
+          },
+          {
+            "type": "RELATED",
+            "url": "https://cdn.shazam.com/shazam/v3/en-US/GB/iphone/-/tracks/track-similarities-id-893052262?startFrom=0&pageSize=20&connected=",
+            "tabname": "Related"
+          }
+        ],
+        "url": "https://www.shazam.com/track/893052262/realise",
+        "artists": [
+          {
+            "id": "42",
+            "adamid": "1747103330"
+          }
+        ],
+        "genres": {
+          "primary": "Electronic"
+        },
+        "urlparams": {
+          "{tracktitle}": "REALISE",
+          "{trackartist}": "kostugnis"
+        },
+        "myshazam": {
+          "apple": {
+            "actions": [
+              {
+                "name": "myshazam:apple",
+                "type": "uri",
+                "uri": "https://music.apple.com/gb/album/realise/6798004716?i=6798004717&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_ios&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=music&itsct=Shazam_ios"
+              }
+            ]
+          }
+        },
+        "highlightsurls": {},
+        "relatedtracksurl": "https://cdn.shazam.com/shazam/v3/en-US/GB/iphone/-/tracks/track-similarities-id-893052262?startFrom=0&pageSize=20&connected=",
+        "albumadamid": "6798004716",
+        "isrc": "GXHZG2694882"
+      }
+    },
+    {
+      "method": "rate",
+      "factor": 1.2,
+      "start": 25.0,
+      "input_duration": 2.689796000000001,
+      "matched": true,
+      "title": "REALISE",
+      "subtitle": "kostugnis",
+      "shazam_track": {
+        "layout": "5",
+        "type": "MUSIC",
+        "key": "893052262",
+        "title": "REALISE",
+        "subtitle": "kostugnis",
+        "images": {
+          "background": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+          "coverart": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+          "coverarthq": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+          "joecolor": "b:000000p:f3f3f3s:d6d6d6t:c2c2c2q:ababab"
+        },
+        "display": {
+          "actions": [
+            {
+              "name": "display:updateshazam",
+              "type": "webview",
+              "uri": "https://www.shazam.com/inapp/updatenow/893052262"
+            }
+          ]
+        },
+        "share": {
+          "subject": "REALISE - kostugnis",
+          "text": "REALISE by kostugnis",
+          "href": "https://www.shazam.com/track/893052262/realise",
+          "image": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+          "twitter": "I used @Shazam to discover REALISE by kostugnis.",
+          "html": "https://www.shazam.com/snippets/email-share/893052262?lang=en-US&country=GB",
+          "snapchat": "https://www.shazam.com/partner/sc/track/893052262"
+        },
+        "hub": {
+          "type": "APPLEMUSIC",
+          "image": "https://images.shazam.com/static/icons/hub/ios/v5/applemusic_{scalefactor}.png",
+          "actions": [
+            {
+              "name": "apple",
+              "type": "applemusicplay",
+              "id": "6798004717"
+            },
+            {
+              "name": "apple",
+              "type": "uri",
+              "uri": "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/4d/5a/6c/4d5a6c07-5272-d98e-23a8-f4b182d61271/mzaf_12405605128822170281.plus.aac.ep.m4a"
+            }
+          ],
+          "providers": [
+            {
+              "caption": "Open in Spotify",
+              "images": {
+                "overflow": "https://images.shazam.com/static/icons/hub/ios/v5/spotify-overflow_{scalefactor}.png",
+                "default": "https://images.shazam.com/static/icons/hub/ios/v5/spotify_{scalefactor}.png"
+              },
+              "actions": [
+                {
+                  "name": "hub:spotify:searchdeeplink",
+                  "type": "uri",
+                  "uri": "spotify:search:REALISE%20kostugnis"
+                }
+              ],
+              "type": "SPOTIFY"
+            },
+            {
+              "caption": "Open in Deezer",
+              "images": {
+                "overflow": "https://images.shazam.com/static/icons/hub/ios/v5/deezer-overflow_{scalefactor}.png",
+                "default": "https://images.shazam.com/static/icons/hub/ios/v5/deezer_{scalefactor}.png"
+              },
+              "actions": [
+                {
+                  "name": "hub:deezer:searchdeeplink",
+                  "type": "uri",
+                  "uri": "deezer-query://www.deezer.com/play?query=%7Btrack%3A%27REALISE%27%20artist%3A%27kostugnis%27%7D"
+                }
+              ],
+              "type": "DEEZER"
+            }
+          ],
+          "explicit": false,
+          "displayname": "APPLE MUSIC",
+          "options": [
+            {
+              "caption": "OPEN IN",
+              "actions": [
+                {
+                  "name": "hub:applemusic:deeplink",
+                  "type": "applemusicopen",
+                  "uri": "https://music.apple.com/gb/album/realise/6798004716?i=6798004717&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_ios&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=music&itsct=Shazam_ios"
+                },
+                {
+                  "name": "hub:applemusic:deeplink",
+                  "type": "uri",
+                  "uri": "https://music.apple.com/gb/album/realise/6798004716?i=6798004717&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_ios&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=music&itsct=Shazam_ios"
+                }
+              ],
+              "beacondata": {
+                "type": "open",
+                "providername": "applemusic"
+              },
+              "image": "https://images.shazam.com/static/icons/hub/ios/v5/overflow-open-option_{scalefactor}.png",
+              "type": "open",
+              "listcaption": "Open in Apple Music",
+              "overflowimage": "https://images.shazam.com/static/icons/hub/ios/v5/applemusic-overflow_{scalefactor}.png",
+              "colouroverflowimage": false,
+              "providername": "applemusic"
+            },
+            {
+              "caption": "BUY",
+              "actions": [
+                {
+                  "type": "uri",
+                  "uri": "https://itunes.apple.com/gb/album/realise/6798004716?i=6798004717&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_ios&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=itunes&itsct=Shazam_ios"
+                }
+              ],
+              "beacondata": {
+                "type": "buy",
+                "providername": "itunes"
+              },
+              "image": "https://images.shazam.com/static/icons/hub/ios/v5/itunes-overflow-buy_{scalefactor}.png",
+              "type": "buy",
+              "listcaption": "Buy on iTunes",
+              "overflowimage": "https://images.shazam.com/static/icons/hub/ios/v5/itunes-overflow-buy_{scalefactor}.png",
+              "colouroverflowimage": false,
+              "providername": "itunes"
+            }
+          ]
+        },
+        "sections": [
+          {
+            "type": "SONG",
+            "metapages": [
+              {
+                "image": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/90/fb/dc/90fbdc78-f9f1-d28d-f487-a6fae28acd58/5064041620172_cover.jpg/400x400cc.jpg",
+                "caption": "REALISE"
+              }
+            ],
+            "tabname": "Song",
+            "metadata": [
+              {
+                "title": "Album",
+                "text": "REALISE - Single"
+              },
+              {
+                "title": "Label",
+                "text": "Kostugnis"
+              },
+              {
+                "title": "Released",
+                "text": "2026"
+              }
+            ]
+          },
+          {
+            "type": "RELATED",
+            "url": "https://cdn.shazam.com/shazam/v3/en-US/GB/iphone/-/tracks/track-similarities-id-893052262?startFrom=0&pageSize=20&connected=",
+            "tabname": "Related"
+          }
+        ],
+        "url": "https://www.shazam.com/track/893052262/realise",
+        "artists": [
+          {
+            "id": "42",
+            "adamid": "1747103330"
+          }
+        ],
+        "genres": {
+          "primary": "Electronic"
+        },
+        "urlparams": {
+          "{tracktitle}": "REALISE",
+          "{trackartist}": "kostugnis"
+        },
+        "myshazam": {
+          "apple": {
+            "actions": [
+              {
+                "name": "myshazam:apple",
+                "type": "uri",
+                "uri": "https://music.apple.com/gb/album/realise/6798004716?i=6798004717&mttnagencyid=s2n&mttnsiteid=125115&mttn3pid=Apple-Shazam&mttnsub1=Shazam_ios&mttnsub2=5348615A-616D-3235-3830-44754D6D5973&itscg=30201&app=music&itsct=Shazam_ios"
+              }
+            ]
+          }
+        },
+        "highlightsurls": {},
+        "relatedtracksurl": "https://cdn.shazam.com/shazam/v3/en-US/GB/iphone/-/tracks/track-similarities-id-893052262?startFrom=0&pageSize=20&connected=",
+        "albumadamid": "6798004716",
+        "isrc": "GXHZG2694882"
+      }
+    }
+  ]
+}
