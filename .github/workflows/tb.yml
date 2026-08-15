@@ -1,7 +1,7 @@
-name: Telegram OUO Bypass Bot
+name: Telegram OUO Bypass Bot (Async)
 
 on:
-  workflow_dispatch:  # اجرای دستی توسط کاربر
+  workflow_dispatch:  # اجرای دستی
 
 jobs:
   run-bot:
@@ -19,7 +19,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyTelegramBotAPI curl_cffi beautifulsoup4 lxml requests
+          pip install python-telegram-bot==20.7 curl_cffi beautifulsoup4 lxml requests
 
       - name: Run Telegram Bot
         env:
