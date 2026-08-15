@@ -1,22 +1,62 @@
+import asyncio
+import os
 import re
 import logging
-import telebot
-import os
+from urllib.parse import urlparse
+
+from telegram import Update
+from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from curl_cffi import requests
 from bs4 import BeautifulSoup
-from urllib.parse import urlparse
+from bs4 import FeatureNotFound
 
 # ---------- تنظیمات ----------
 TOKEN = os.getenv('TOKEN')
 if not TOKEN:
     raise ValueError("TOKEN environment variable not set")
 
-bot = telebot.TeleBot(TOKEN)
-logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# ---------- توابع bypass (دقیقاً مشابه کد داده شده) ----------
+# ---------- کد bypass (دقیقاً مشابه کد داده شده) ----------
+IMPERSONATION_PROFILES = ("chrome110", "chrome107", "safari15_5")
+
+def _browser_headers(hostname, referer):
+    return {
+        'authority': hostname,
+        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'accept-language': 'en-US,en;q=0.9',
+        'cache-control': 'max-age=0',
+        'pragma': 'no-cache',
+        'referer': referer,
+        'sec-ch-ua': '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"macOS"',
+        'sec-fetch-dest': 'document',
+        'sec-fetch-mode': 'navigate',
+        'sec-fetch-site': 'same-origin',
+        'sec-fetch-user': '?1',
+        'upgrade-insecure-requests': '1',
+        'user-agent': (
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+            'AppleWebKit/537.36 (KHTML, like Gecko) '
+            'Chrome/122.0.0.0 Safari/537.36'
+        ),
+    }
+
+def _is_cloudflare_challenge(response):
+    body_lower = (response.text or "").lower()
+    return (
+        response.status_code in {403, 429, 503}
+        and (
+            "just a moment" in body_lower
+            or "cf-chl" in body_lower
+            or "/cdn-cgi/challenge-platform" in body_lower
+        )
+    )
+
 def RecaptchaV3():
+    import requests
     ANCHOR_URL = 'https://www.google.com/recaptcha/api2/anchor?ar=1&k=6Lcr1ncUAAAAAH3cghg6cOTPGARa8adOf-y9zv2x&co=aHR0cHM6Ly9vdW8ucHJlc3M6NDQz&hl=en&v=pCoGBhjs9s8EhFOHJFe8cqis&size=invisible&cb=ahgyd1gkfkhe'
     url_base = 'https://www.google.com/recaptcha/'
     post_data = "v={}&reason=q&c={}&k={}&co={}"
@@ -24,7 +64,7 @@ def RecaptchaV3():
     client.headers.update({
         'content-type': 'application/x-www-form-urlencoded'
     })
-    matches = re.findall('([api2|enterprise]+)\/anchor\?(.*)', ANCHOR_URL)[0]
+    matches = re.findall(r'(api2|enterprise)/anchor\?(.*)', ANCHOR_URL)[0]
     url_base += matches[0]+'/'
     params = matches[1]
     res = client.get(url_base+'anchor', params=params)
@@ -35,83 +75,119 @@ def RecaptchaV3():
     answer = re.findall(r'"rresp","(.*?)"', res.text)[0]    
     return answer
 
-def ouo_bypass(url):
+client = requests.Session()
+
+async def ouo_bypass(url):
     tempurl = url.replace("ouo.press", "ouo.io")
     p = urlparse(tempurl)
     id = tempurl.split('/')[-1]
-    
-    client = requests.Session()
-    client.headers.update({
-        'authority': 'ouo.io',
-        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-        'accept-language': 'en-GB,en-US;q=0.9,en;q=0.8',
-        'cache-control': 'max-age=0',
-        'referer': 'http://www.google.com/ig/adde?moduleurl=',
-        'upgrade-insecure-requests': '1',
-    })
 
-    res = client.get(tempurl, impersonate="chrome110")
+    home_url = f"{p.scheme}://{p.hostname}/"
+    res = None
+    selected_profile = None
+
+    for profile in IMPERSONATION_PROFILES:
+        client.headers.update(_browser_headers(p.hostname, referer=home_url))
+        try:
+            client.get(home_url, impersonate=profile, timeout=30)
+            candidate = client.get(tempurl, impersonate=profile, timeout=30)
+        except Exception:
+            continue
+
+        if _is_cloudflare_challenge(candidate):
+            res = candidate
+            continue
+
+        selected_profile = profile
+        res = candidate
+        break
+
+    if selected_profile is None and res is not None and _is_cloudflare_challenge(res):
+        raise ValueError(
+            "Blocked by Cloudflare challenge (HTTP 403). Try again later, use a different network/IP, or run from a browser-like environment."
+        )
+    if selected_profile is None or res is None:
+        raise ValueError("Failed to open ouo page with available browser profiles.")
+
     next_url = f"{p.scheme}://{p.hostname}/go/{id}"
 
     for _ in range(2):
         if res.headers.get('Location'):
             break
 
-        bs4 = BeautifulSoup(res.content, 'lxml')
-        inputs = bs4.form.findAll("input", {"name": re.compile(r"token$")})
-        data = { input.get('name'): input.get('value') for input in inputs }
+        try:
+            bs4 = BeautifulSoup(res.content, 'lxml')
+        except FeatureNotFound:
+            bs4 = BeautifulSoup(res.content, 'html.parser')
+        form = bs4.find("form")
+        if form is None:
+            raise ValueError(
+                "Could not find bypass form on the page. The link may be invalid, expired, or temporarily blocked."
+            )
+
+        inputs = form.find_all("input", {"name": re.compile(r"token$")})
+        if not inputs:
+            raise ValueError(
+                "Could not find required bypass tokens on the page. The link flow may have changed."
+            )
+
+        data = {input.get('name'): input.get('value') for input in inputs}
         data['x-token'] = RecaptchaV3()
-        
-        h = {
-            'content-type': 'application/x-www-form-urlencoded'
-        }
-        
+
+        h = {'content-type': 'application/x-www-form-urlencoded'}
         res = client.post(next_url, data=data, headers=h, 
-            allow_redirects=False, impersonate="chrome110")
+            allow_redirects=False, impersonate=selected_profile, timeout=30)
         next_url = f"{p.scheme}://{p.hostname}/xreallcygo/{id}"
+
+    bypassed_link = res.headers.get('Location')
+    if not bypassed_link:
+        raise ValueError(
+            "Bypass did not produce a redirect URL. The link may be protected or currently unavailable."
+        )
 
     return {
         'original_link': url,
-        'bypassed_link': res.headers.get('Location')
+        'bypassed_link': bypassed_link
     }
 
-# ---------- هندلر پیام‌های تلگرام ----------
-@bot.message_handler(func=lambda message: True)
-def handle_message(message):
+# ---------- هندلر پیام‌های تلگرام (async) ----------
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        text = message.text
-        if not text:
-            bot.reply_to(message, "❌ لطفاً یک متن ارسال کنید.")
+        message = update.message
+        if not message or not message.text:
+            await message.reply_text("❌ لطفاً یک متن ارسال کنید.")
             return
 
-        # استخراج لینک ouo از متن
-        # الگوی ساده برای لینک‌های ouo.io یا ouo.press
+        text = message.text
         ouo_pattern = r'(https?://(?:ouo\.io|ouo\.press)/[^\s]+)'
         matches = re.findall(ouo_pattern, text)
         if not matches:
-            bot.reply_to(message, "ℹ️ لینک ouo معتبری در پیام یافت نشد.")
+            await message.reply_text("ℹ️ لینک ouo معتبری در پیام یافت نشد.")
             return
 
-        # فقط اولین لینک را پردازش می‌کنیم
         target_url = matches[0]
-        bot.reply_to(message, f"⏳ در حال پردازش لینک:\n{target_url}")
+        await message.reply_text(f"⏳ در حال پردازش لینک:\n{target_url}")
 
-        # اجرای bypass
-        result = ouo_bypass(target_url)
+        # اجرای async bypass
+        result = await ouo_bypass(target_url)
         bypassed = result.get('bypassed_link')
 
         if bypassed:
-            bot.reply_to(message, f"✅ لینک نهایی:\n{bypassed}")
+            await message.reply_text(f"✅ لینک نهایی:\n{bypassed}")
         else:
-            bot.reply_to(message, "⚠️ امکان bypass کردن لینک وجود نداشت (هدر Location دریافت نشد).")
+            await message.reply_text("⚠️ امکان bypass کردن لینک وجود نداشت (هدر Location دریافت نشد).")
 
     except Exception as e:
-        # ارسال تمام جزئیات خطا به کاربر
         error_msg = f"❌ خطا:\n{str(e)}"
         logger.exception("Error in handler")
-        bot.reply_to(message, error_msg)
+        await update.message.reply_text(error_msg)
 
-# ---------- اجرای ربات ----------
-if __name__ == '__main__':
+# ---------- راه‌اندازی ربات ----------
+def main():
+    app = Application.builder().token(TOKEN).build()
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     logger.info("Starting bot...")
-    bot.infinity_polling()
+    app.run_polling()
+
+if __name__ == '__main__':
+    main()
