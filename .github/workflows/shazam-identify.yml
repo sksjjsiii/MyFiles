@@ -1,0 +1,50 @@
+name: Shazam Identify hsj.mp3
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'hsj.mp3'
+      - '.github/workflows/shazam-identify.yml'
+      - 'shazam_search.py'
+
+permissions:
+  contents: write
+
+jobs:
+  identify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Python dependencies
+        run: |
+          pip install shazamio
+
+      - name: Run Shazam search
+        run: python shazam_search.py
+
+      - name: Commit results
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add shazam-results.json
+          git commit -m "Add Shazam recognition results" || echo "No changes to commit"
+          git push
