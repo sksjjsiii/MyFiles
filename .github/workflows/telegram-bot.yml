@@ -1,0 +1,45 @@
+name: Telegram Music Bot
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'bot.py'
+      - 'shazam_search.py'
+      - 'requirements.txt'
+      - '.github/workflows/telegram-bot.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Telegram Bot
+        env:
+          TOKEN: ${{ secrets.TOKEN }}
+        run: python bot.py
