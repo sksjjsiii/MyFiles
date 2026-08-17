@@ -15,9 +15,6 @@ jobs:
       image: kalilinux/kali-rolling
       options: --user root
     timeout-minutes: 360
-    defaults:
-      run:
-        working-directory: ${{ github.workspace }}
 
     steps:
       # نصب git و ca-certificates قبل از checkout
@@ -168,6 +165,9 @@ jobs:
       - name: Update README.md
         shell: bash
         run: |
+          cd $GITHUB_WORKSPACE
+          pwd
+          ls -la
           if [ ! -f connection.txt ]; then
             echo "ERROR: connection.txt not found."
             exit 1
@@ -199,6 +199,13 @@ jobs:
       - name: Commit and push README.md
         shell: bash
         run: |
+          cd $GITHUB_WORKSPACE
+          pwd
+          ls -la
+          if [ ! -d .git ]; then
+            echo "ERROR: .git directory not found!"
+            exit 1
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add README.md
@@ -210,6 +217,7 @@ jobs:
       - name: Display connection info
         shell: bash
         run: |
+          cd $GITHUB_WORKSPACE
           source connection.txt
           echo ""
           echo "======================================================"
