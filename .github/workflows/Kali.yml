@@ -21,112 +21,47 @@ jobs:
         shell: bash
         run: |
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            ca-certificates \
-            curl \
-            dbus \
-            dbus-x11 \
-            xfce4 \
-            xrdp \
-            xorg \
-            x11-xserver-utils \
-            sudo \
-            net-tools \
-            iputils-ping
+          DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl dbus dbus-x11 xfce4 xrdp xorg x11-xserver-utils sudo net-tools iputils-ping
           mkdir -p /run/dbus
           dbus-daemon --system --fork --nopidfile
 
-      - name: Configure root password and RDP (full fix)
+      - name: Configure root password and RDP
         shell: bash
         run: |
-          # 1. تنظیم رمز عبور root
           echo "root:${{ secrets.RDP_PASSWORD }}" | chpasswd
-          if [ $? -ne 0 ]; then
-            echo "Failed to set root password"
-            exit 1
-          fi
-
-          # 2. ساخت گروه‌های لازم (اگر وجود ندارند)
           groupadd -f tsusers
           groupadd -f tsadmins
-
-          # 3. افزودن root به گروه‌ها
           usermod -aG tsusers,tsadmins root
-
-          # 4. تنظیم sesman.ini
+          
           SESMAN_INI="/etc/xrdp/sesman.ini"
           if [ ! -f "$SESMAN_INI" ]; then
-            cat > "$SESMAN_INI" <<'EOF'
-[Globals]
-ListenAddress=127.0.0.1
-ListenPort=3350
-EnableUserWindowManager=1
-UserWindowManager=startwm.sh
-MaxSessions=10
-
-[Security]
-AllowRootLogin=true
-MaxLoginRetry=4
-TerminalServerUsers=
-TerminalServerAdmins=
-EOF
+            printf "[Globals]\nListenAddress=127.0.0.1\nListenPort=3350\nEnableUserWindowManager=1\nUserWindowManager=startwm.sh\nMaxSessions=10\n\n[Security]\nAllowRootLogin=true\nMaxLoginRetry=4\nTerminalServerUsers=\nTerminalServerAdmins=\n" > "$SESMAN_INI"
           else
-            # اطمینان از وجود AllowRootLogin
-            if grep -q '^AllowRootLogin=' "$SESMAN_INI"; then
-              sed -i 's/^AllowRootLogin=.*/AllowRootLogin=true/' "$SESMAN_INI"
-            else
-              echo "AllowRootLogin=true" >> "$SESMAN_INI"
-            fi
-
-            # خالی کردن محدودیت گروهی
-            if grep -q '^TerminalServerUsers=' "$SESMAN_INI"; then
-              sed -i 's/^TerminalServerUsers=.*/TerminalServerUsers=/' "$SESMAN_INI"
-            else
-              echo "TerminalServerUsers=" >> "$SESMAN_INI"
-            fi
-
-            if grep -q '^TerminalServerAdmins=' "$SESMAN_INI"; then
-              sed -i 's/^TerminalServerAdmins=.*/TerminalServerAdmins=/' "$SESMAN_INI"
-            else
-              echo "TerminalServerAdmins=" >> "$SESMAN_INI"
-            fi
+            grep -q '^AllowRootLogin=' "$SESMAN_INI" && sed -i 's/^AllowRootLogin=.*/AllowRootLogin=true/' "$SESMAN_INI" || echo "AllowRootLogin=true" >> "$SESMAN_INI"
+            grep -q '^TerminalServerUsers=' "$SESMAN_INI" && sed -i 's/^TerminalServerUsers=.*/TerminalServerUsers=/' "$SESMAN_INI" || echo "TerminalServerUsers=" >> "$SESMAN_INI"
+            grep -q '^TerminalServerAdmins=' "$SESMAN_INI" && sed -i 's/^TerminalServerAdmins=.*/TerminalServerAdmins=/' "$SESMAN_INI" || echo "TerminalServerAdmins=" >> "$SESMAN_INI"
           fi
-
-          # 5. تنظیم Xfce برای root
+          
           echo "xfce4-session" > /root/.xsession
           chown root:root /root/.xsession
-
-          # 6. تنظیم startwm.sh
+          
           sed -i 's/^test -x \/etc\/X11\/Xsession && exec \/etc\/X11\/Xsession/#&/' /etc/xrdp/startwm.sh
           echo 'startxfce4' >> /etc/xrdp/startwm.sh
-
-          # 7. ری‌استارت کامل xrdp و sesman
+          
           pkill -f xrdp-sesman || true
           pkill -f xrdp || true
           sleep 2
-
+          
           /etc/init.d/xrdp start
-          if [ -f /etc/init.d/xrdp-sesman ]; then
-            /etc/init.d/xrdp-sesman start
-          else
-            service xrdp-sesman start || true
-          fi
-
-          # 8. بررسی پورت و پروسه‌ها
+          service xrdp-sesman start || true
+          
           sleep 2
           netstat -tulpn | grep 3389 || true
-          ps aux | grep -E 'xrdp|sesman' | grep -v grep || true
-
-          # 9. بررسی وضعیت کاربر
-          echo "User root info:"
+          echo "Root user info:"
           id root
           grep "^root:" /etc/passwd
           HASH=$(grep "^root:" /etc/shadow | cut -d: -f2)
           echo "Root password hash starts with: ${HASH:0:10}..."
-          if [ -z "$HASH" ] || [ "$HASH" = "!" ] || [ "$HASH" = "*" ]; then
-            echo "ERROR: Root password hash is empty or locked."
-            exit 1
-          fi
 
       - name: Download bore binary
         shell: bash
@@ -142,48 +77,7 @@ EOF
       - name: Create bore runner script
         shell: bash
         run: |
-          cat > bore_runner.sh <<'EOF'
-          #!/bin/bash
-          OUT_LOG="bore_out.log"
-          ERR_LOG="bore_err.log"
-          TUNNEL_HOST="bore.pub"
-
-          start_bore() {
-            ./bore local 3389 --to bore.pub > "$OUT_LOG" 2> "$ERR_LOG" &
-            BORE_PID=$!
-            sleep 8
-
-            PORT=$(grep -oP 'listening at [\w\.]+:(\d+)' "$OUT_LOG" | grep -oP '\d+$')
-            if [ -n "$PORT" ]; then
-              echo "host=$TUNNEL_HOST" > connection.txt
-              echo "port=$PORT" >> connection.txt
-              echo "Tunnel established on port $PORT"
-              return 0
-            else
-              echo "ERROR: Could not start bore."
-              return 1
-            fi
-          }
-
-          # Keep-alive probe
-          (
-            while true; do
-              (echo > /dev/tcp/127.0.0.1/3389) >/dev/null 2>&1
-              sleep 30
-            done
-          ) &
-
-          start_bore || exit 1
-
-          while true; do
-            sleep 30
-            if ! pgrep -x "bore" > /dev/null; then
-              echo "Bore stopped. Restarting..."
-              start_bore
-            fi
-          done
-          EOF
-
+          printf '#!/bin/bash\nOUT_LOG="bore_out.log"\nERR_LOG="bore_err.log"\nTUNNEL_HOST="bore.pub"\n\nstart_bore() {\n  ./bore local 3389 --to bore.pub > "$OUT_LOG" 2> "$ERR_LOG" &\n  BORE_PID=$!\n  sleep 8\n  PORT=$(grep -oP "listening at [\\w\\.]+:(\\d+)" "$OUT_LOG" | grep -oP "\\d+$")\n  if [ -n "$PORT" ]; then\n    echo "host=$TUNNEL_HOST" > connection.txt\n    echo "port=$PORT" >> connection.txt\n    echo "Tunnel established on port $PORT"\n    return 0\n  else\n    echo "ERROR: Could not start bore."\n    return 1\n  fi\n}\n\n(\n  while true; do\n    (echo > /dev/tcp/127.0.0.1/3389) >/dev/null 2>&1\n    sleep 30\n  done\n) &\n\nstart_bore || exit 1\n\nwhile true; do\n  sleep 30\n  if ! pgrep -x "bore" > /dev/null; then\n    echo "Bore stopped. Restarting..."\n    start_bore\n  fi\ndone\n' > bore_runner.sh
           chmod +x bore_runner.sh
           echo "bore_runner.sh created."
 
@@ -192,7 +86,6 @@ EOF
         run: |
           nohup ./bore_runner.sh > bore_runner.log 2>&1 &
           echo "Bore runner started in background."
-
           echo "Waiting for tunnel to be ready..."
           for i in {1..30}; do
             [ -f connection.txt ] && break
@@ -202,7 +95,7 @@ EOF
             echo "Tunnel is ready."
             cat connection.txt
           else
-            echo "WARNING: Tunnel may not have started. Check bore_out.log and bore_err.log"
+            echo "WARNING: Tunnel may not have started."
           fi
 
       - name: Display connection info
@@ -223,14 +116,12 @@ EOF
           echo "  PC Name: $host:$port"
           echo "  User Name: root"
           echo ""
-          echo "NOTE: If asked for Session type, select 'Xorg' or 'Xvnc'."
 
       - name: Keep session alive
         shell: bash
         run: |
           DURATION=${{ github.event.inputs.session_minutes }}
           END_TIME=$(date -u -d "+${DURATION} minutes" +%s)
-
           echo "Session will stay active for ${DURATION} minutes."
           while [ $(date -u +%s) -lt $END_TIME ]; do
             REMAINING=$(( END_TIME - $(date -u +%s) ))
