@@ -15,9 +15,12 @@ jobs:
       image: kalilinux/kali-rolling
       options: --user root
     timeout-minutes: 360
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
 
     steps:
-      # مرحله جدید: نصب git و ca-certificates قبل از checkout
+      # نصب git و ca-certificates قبل از checkout
       - name: Install git and CA certificates
         shell: bash
         run: |
@@ -44,8 +47,7 @@ jobs:
             curl \
             sudo \
             net-tools \
-            iputils-ping \
-            # git حذف شده چون قبلاً نصب شده است
+            iputils-ping
 
           # راه‌اندازی dbus (برای xrdp ضروری است)
           mkdir -p /run/dbus
@@ -61,12 +63,12 @@ jobs:
           useradd -m -s /bin/bash "$USERNAME"
           echo "$USERNAME:$PASSWORD" | chpasswd
 
-          # افزودن به گروه sudo (در صورت وجود)
+          # افزودن به گروه sudo
           if getent group sudo >/dev/null; then
             usermod -aG sudo "$USERNAME"
           fi
 
-          # تنظیم Xfce به عنوان محیط پیش‌فرض برای xrdp
+          # تنظیم Xfce به عنوان محیط پیش‌فرض
           echo "xfce4-session" > /home/$USERNAME/.xsession
           chown $USERNAME:$USERNAME /home/$USERNAME/.xsession
 
@@ -74,17 +76,16 @@ jobs:
           sed -i 's/^test -x \/etc\/X11\/Xsession && exec \/etc\/X11\/Xsession/#&/' /etc/xrdp/startwm.sh
           echo 'startxfce4' >> /etc/xrdp/startwm.sh
 
-          # راه‌اندازی سرویس‌های xrdp
+          # راه‌اندازی xrdp
           /etc/init.d/xrdp start
-
-          # تلاش برای راه‌اندازی sesman (در صورت وجود اسکریپت)
+          # تلاش برای sesman (اگر موجود نبود مهم نیست)
           if [ -f /etc/init.d/xrdp-sesman ]; then
             /etc/init.d/xrdp-sesman start
           else
             service xrdp-sesman start || true
           fi
 
-          # اطمینان از اجرا بودن پورت 3389
+          # بررسی پورت
           netstat -tulpn | grep 3389 || true
 
       - name: Download bore binary
@@ -166,7 +167,6 @@ jobs:
 
       - name: Update README.md
         shell: bash
-        working-directory: ${{ github.workspace }}
         run: |
           if [ ! -f connection.txt ]; then
             echo "ERROR: connection.txt not found."
@@ -198,7 +198,6 @@ jobs:
 
       - name: Commit and push README.md
         shell: bash
-        working-directory: ${{ github.workspace }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
