@@ -17,6 +17,14 @@ jobs:
     timeout-minutes: 360
 
     steps:
+      # مرحله جدید: نصب git و ca-certificates قبل از checkout
+      - name: Install git and CA certificates
+        shell: bash
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y git ca-certificates
+          update-ca-certificates
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -37,7 +45,7 @@ jobs:
             sudo \
             net-tools \
             iputils-ping \
-            git
+            # git حذف شده چون قبلاً نصب شده است
 
           # راه‌اندازی dbus (برای xrdp ضروری است)
           mkdir -p /run/dbus
@@ -78,12 +86,6 @@ jobs:
 
           # اطمینان از اجرا بودن پورت 3389
           netstat -tulpn | grep 3389 || true
-
-      - name: Install and update CA certificates
-        shell: bash
-        run: |
-          apt-get install -y ca-certificates
-          update-ca-certificates
 
       - name: Download bore binary
         shell: bash
@@ -164,6 +166,7 @@ jobs:
 
       - name: Update README.md
         shell: bash
+        working-directory: ${{ github.workspace }}
         run: |
           if [ ! -f connection.txt ]; then
             echo "ERROR: connection.txt not found."
@@ -195,6 +198,7 @@ jobs:
 
       - name: Commit and push README.md
         shell: bash
+        working-directory: ${{ github.workspace }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
