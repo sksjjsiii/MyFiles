@@ -33,7 +33,6 @@ jobs:
             xrdp \
             xorg \
             x11-xserver-utils \
-            wget \
             curl \
             sudo \
             net-tools \
@@ -69,7 +68,13 @@ jobs:
 
           # راه‌اندازی سرویس‌های xrdp
           /etc/init.d/xrdp start
-          /etc/init.d/xrdp-sesman start || true
+
+          # تلاش برای راه‌اندازی sesman (در صورت وجود اسکریپت)
+          if [ -f /etc/init.d/xrdp-sesman ]; then
+            /etc/init.d/xrdp-sesman start
+          else
+            service xrdp-sesman start || true
+          fi
 
           # اطمینان از اجرا بودن پورت 3389
           netstat -tulpn | grep 3389 || true
@@ -77,9 +82,10 @@ jobs:
       - name: Download bore binary
         shell: bash
         run: |
-          BORE_VERSION="v0.5.0"
+          BORE_VERSION="v0.6.0"
           BORE_URL="https://github.com/ekzhang/bore/releases/download/${BORE_VERSION}/bore-${BORE_VERSION}-x86_64-unknown-linux-musl.tar.gz"
-          wget -q $BORE_URL -O bore.tar.gz
+          echo "Downloading bore from: $BORE_URL"
+          curl -L --fail -o bore.tar.gz "$BORE_URL"
           tar -xzf bore.tar.gz
           chmod +x bore
           ./bore --version
