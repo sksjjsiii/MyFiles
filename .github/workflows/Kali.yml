@@ -17,7 +17,6 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      # نصب پیش‌نیازها
       - name: Install prerequisites
         shell: bash
         run: |
@@ -39,24 +38,46 @@ jobs:
           mkdir -p /run/dbus
           dbus-daemon --system --fork --nopidfile
 
-      - name: Create user and configure RDP
+      - name: Configure root password and RDP
         shell: bash
         run: |
-          USERNAME="${{ secrets.RDP_USERNAME }}"
-          PASSWORD="${{ secrets.RDP_PASSWORD }}"
+          # تنظیم رمز عبور root از Secret
+          echo "root:${{ secrets.RDP_PASSWORD }}" | chpasswd
+          if [ $? -ne 0 ]; then
+            echo "Failed to set root password"
+            exit 1
+          fi
 
-          # ساخت کاربر
-          useradd -m -s /bin/bash "$USERNAME"
-          echo "$USERNAME:$PASSWORD" | chpasswd
+          # فعال‌سازی ورود root در xrdp (اگر فایل sesman.ini موجود باشد)
+          if [ -f /etc/xrdp/sesman.ini ]; then
+            # اگر خط AllowRootLogin وجود دارد، تغییر بده، وگرنه اضافه کن
+            if grep -q '^AllowRootLogin=' /etc/xrdp/sesman.ini; then
+              sed -i 's/^AllowRootLogin=.*/AllowRootLogin=true/' /etc/xrdp/sesman.ini
+            else
+              # اضافه کردن زیر [Security] یا در انتهای فایل
+              echo "AllowRootLogin=true" >> /etc/xrdp/sesman.ini
+            fi
+          else
+            # اگر فایل وجود نداشت، یک فایل ساده بسازیم
+            cat > /etc/xrdp/sesman.ini <<'EOF'
+[Globals]
+ListenAddress=127.0.0.1
+ListenPort=3350
+EnableUserWindowManager=1
+UserWindowManager=startwm.sh
+MaxSessions=10
 
-          # افزودن به گروه sudo در صورت وجود
-          if getent group sudo >/dev/null; then
-            usermod -aG sudo "$USERNAME"
+[Security]
+AllowRootLogin=true
+MaxLoginRetry=4
+TerminalServerUsers=tsusers
+TerminalServerAdmins=tsadmins
+EOF
           fi
 
           # تنظیم Xfce به عنوان محیط پیش‌فرض
-          echo "xfce4-session" > /home/$USERNAME/.xsession
-          chown $USERNAME:$USERNAME /home/$USERNAME/.xsession
+          echo "xfce4-session" > /root/.xsession
+          chown root:root /root/.xsession
 
           # تنظیم startwm.sh برای اجرای Xfce
           sed -i 's/^test -x \/etc\/X11\/Xsession && exec \/etc\/X11\/Xsession/#&/' /etc/xrdp/startwm.sh
@@ -161,13 +182,13 @@ jobs:
           echo "======================================================"
           echo "  Host: $host"
           echo "  Port: $port"
-          echo "  Username: ${{ secrets.RDP_USERNAME }}"
+          echo "  Username: root"
           echo "  Password: (your secret)"
           echo "======================================================"
           echo ""
           echo "In Microsoft Remote Desktop on Android:"
           echo "  PC Name: $host:$port"
-          echo "  User Name: ${{ secrets.RDP_USERNAME }}"
+          echo "  User Name: root"
           echo ""
 
       - name: Keep session alive
