@@ -36,35 +36,75 @@ jobs:
           mkdir -p /run/dbus
           dbus-daemon --system --fork --nopidfile
 
-      - name: Configure root password and RDP
+      - name: Configure root password and RDP (full fix)
         shell: bash
         run: |
+          # 1. تنظیم رمز عبور root
           echo "root:${{ secrets.RDP_PASSWORD }}" | chpasswd
           if [ $? -ne 0 ]; then
             echo "Failed to set root password"
             exit 1
           fi
 
-          # فعال‌سازی ورود root در xrdp
-          if [ -f /etc/xrdp/sesman.ini ]; then
-            if grep -q '^AllowRootLogin=' /etc/xrdp/sesman.ini; then
-              sed -i 's/^AllowRootLogin=.*/AllowRootLogin=true/' /etc/xrdp/sesman.ini
-            else
-              echo "AllowRootLogin=true" >> /etc/xrdp/sesman.ini
-            fi
+          # 2. ساخت گروه‌های لازم (اگر وجود ندارند)
+          groupadd -f tsusers
+          groupadd -f tsadmins
+
+          # 3. افزودن root به گروه‌ها
+          usermod -aG tsusers,tsadmins root
+
+          # 4. تنظیم sesman.ini
+          SESMAN_INI="/etc/xrdp/sesman.ini"
+          if [ ! -f "$SESMAN_INI" ]; then
+            cat > "$SESMAN_INI" <<'EOF'
+[Globals]
+ListenAddress=127.0.0.1
+ListenPort=3350
+EnableUserWindowManager=1
+UserWindowManager=startwm.sh
+MaxSessions=10
+
+[Security]
+AllowRootLogin=true
+MaxLoginRetry=4
+TerminalServerUsers=
+TerminalServerAdmins=
+EOF
           else
-            printf "[Globals]\nListenAddress=127.0.0.1\nListenPort=3350\nEnableUserWindowManager=1\nUserWindowManager=startwm.sh\nMaxSessions=10\n\n[Security]\nAllowRootLogin=true\nMaxLoginRetry=4\n" > /etc/xrdp/sesman.ini
+            # اطمینان از وجود AllowRootLogin
+            if grep -q '^AllowRootLogin=' "$SESMAN_INI"; then
+              sed -i 's/^AllowRootLogin=.*/AllowRootLogin=true/' "$SESMAN_INI"
+            else
+              echo "AllowRootLogin=true" >> "$SESMAN_INI"
+            fi
+
+            # خالی کردن محدودیت گروهی
+            if grep -q '^TerminalServerUsers=' "$SESMAN_INI"; then
+              sed -i 's/^TerminalServerUsers=.*/TerminalServerUsers=/' "$SESMAN_INI"
+            else
+              echo "TerminalServerUsers=" >> "$SESMAN_INI"
+            fi
+
+            if grep -q '^TerminalServerAdmins=' "$SESMAN_INI"; then
+              sed -i 's/^TerminalServerAdmins=.*/TerminalServerAdmins=/' "$SESMAN_INI"
+            else
+              echo "TerminalServerAdmins=" >> "$SESMAN_INI"
+            fi
           fi
 
-          # تنظیم Xfce برای root
+          # 5. تنظیم Xfce برای root
           echo "xfce4-session" > /root/.xsession
           chown root:root /root/.xsession
 
-          # تنظیم startwm.sh
+          # 6. تنظیم startwm.sh
           sed -i 's/^test -x \/etc\/X11\/Xsession && exec \/etc\/X11\/Xsession/#&/' /etc/xrdp/startwm.sh
           echo 'startxfce4' >> /etc/xrdp/startwm.sh
 
-          # راه‌اندازی xrdp
+          # 7. ری‌استارت کامل xrdp و sesman
+          pkill -f xrdp-sesman || true
+          pkill -f xrdp || true
+          sleep 2
+
           /etc/init.d/xrdp start
           if [ -f /etc/init.d/xrdp-sesman ]; then
             /etc/init.d/xrdp-sesman start
@@ -72,8 +112,21 @@ jobs:
             service xrdp-sesman start || true
           fi
 
-          # بررسی پورت
+          # 8. بررسی پورت و پروسه‌ها
+          sleep 2
           netstat -tulpn | grep 3389 || true
+          ps aux | grep -E 'xrdp|sesman' | grep -v grep || true
+
+          # 9. بررسی وضعیت کاربر
+          echo "User root info:"
+          id root
+          grep "^root:" /etc/passwd
+          HASH=$(grep "^root:" /etc/shadow | cut -d: -f2)
+          echo "Root password hash starts with: ${HASH:0:10}..."
+          if [ -z "$HASH" ] || [ "$HASH" = "!" ] || [ "$HASH" = "*" ]; then
+            echo "ERROR: Root password hash is empty or locked."
+            exit 1
+          fi
 
       - name: Download bore binary
         shell: bash
@@ -170,6 +223,7 @@ jobs:
           echo "  PC Name: $host:$port"
           echo "  User Name: root"
           echo ""
+          echo "NOTE: If asked for Session type, select 'Xorg' or 'Xvnc'."
 
       - name: Keep session alive
         shell: bash
