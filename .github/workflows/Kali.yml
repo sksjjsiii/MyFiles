@@ -1,0 +1,236 @@
+name: Kali Linux RDP with bore (Auto-Update README)
+
+on:
+  workflow_dispatch:
+    inputs:
+      session_minutes:
+        description: 'Duration in minutes'
+        required: true
+        default: '120'
+
+jobs:
+  kali-rdp-tunnel:
+    runs-on: ubuntu-latest
+    container:
+      image: kalilinux/kali-rolling
+      options: --user root
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install desktop environment and required tools
+        shell: bash
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            xfce4 \
+            xrdp \
+            dbus-x11 \
+            xorg \
+            x11-xserver-utils \
+            wget \
+            curl \
+            sudo \
+            net-tools \
+            iputils-ping \
+            git
+
+          # راه‌اندازی dbus (برای xrdp ضروری است)
+          mkdir -p /run/dbus
+          dbus-daemon --system --fork
+
+      - name: Create user and configure RDP
+        shell: bash
+        run: |
+          USERNAME="${{ secrets.RDP_USERNAME }}"
+          PASSWORD="${{ secrets.RDP_PASSWORD }}"
+
+          # ساخت کاربر
+          useradd -m -s /bin/bash "$USERNAME"
+          echo "$USERNAME:$PASSWORD" | chpasswd
+
+          # افزودن به گروه sudo (در صورت وجود)
+          if getent group sudo >/dev/null; then
+            usermod -aG sudo "$USERNAME"
+          fi
+
+          # تنظیم Xfce به عنوان محیط پیش‌فرض برای xrdp
+          echo "xfce4-session" > /home/$USERNAME/.xsession
+          chown $USERNAME:$USERNAME /home/$USERNAME/.xsession
+
+          # تنظیم startwm.sh برای اجرای Xfce (اختیاری ولی مطمئن‌تر)
+          sed -i 's/^test -x \/etc\/X11\/Xsession && exec \/etc\/X11\/Xsession/#&/' /etc/xrdp/startwm.sh
+          echo 'startxfce4' >> /etc/xrdp/startwm.sh
+
+          # راه‌اندازی سرویس‌های xrdp
+          /etc/init.d/xrdp start
+          /etc/init.d/xrdp-sesman start || true
+
+          # اطمینان از اجرا بودن پورت 3389
+          netstat -tulpn | grep 3389 || true
+
+      - name: Download bore binary
+        shell: bash
+        run: |
+          BORE_VERSION="v0.5.0"
+          BORE_URL="https://github.com/ekzhang/bore/releases/download/${BORE_VERSION}/bore-${BORE_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+          wget -q $BORE_URL -O bore.tar.gz
+          tar -xzf bore.tar.gz
+          chmod +x bore
+          ./bore --version
+
+      - name: Create bore runner script
+        shell: bash
+        run: |
+          cat > bore_runner.sh <<'EOF'
+          #!/bin/bash
+          OUT_LOG="bore_out.log"
+          ERR_LOG="bore_err.log"
+          TUNNEL_HOST="bore.pub"
+
+          start_bore() {
+            # اجرای bore و گرفتن خروجی
+            ./bore local 3389 --to bore.pub > "$OUT_LOG" 2> "$ERR_LOG" &
+            BORE_PID=$!
+            sleep 8
+
+            # استخراج پورت از خروجی
+            PORT=$(grep -oP 'listening at [\w\.]+:(\d+)' "$OUT_LOG" | grep -oP '\d+$')
+            if [ -n "$PORT" ]; then
+              echo "host=$TUNNEL_HOST" > connection.txt
+              echo "port=$PORT" >> connection.txt
+              echo "Tunnel established on port $PORT"
+              return 0
+            else
+              echo "ERROR: Could not start bore."
+              return 1
+            fi
+          }
+
+          # Keep-alive probe (بررسی باز بودن پورت محلی)
+          (
+            while true; do
+              (echo > /dev/tcp/127.0.0.1/3389) >/dev/null 2>&1
+              sleep 30
+            done
+          ) &
+
+          # شروع اولیه bore
+          start_bore || exit 1
+
+          # حلقه نظارت و راه‌اندازی مجدد در صورت نیاز
+          while true; do
+            sleep 30
+            if ! pgrep -x "bore" > /dev/null; then
+              echo "Bore stopped. Restarting..."
+              start_bore
+            fi
+          done
+          EOF
+
+          chmod +x bore_runner.sh
+          echo "bore_runner.sh created."
+
+      - name: Start bore tunnel (detached)
+        shell: bash
+        run: |
+          # اجرای bore_runner.sh در پس‌زمینه
+          nohup ./bore_runner.sh > bore_runner.log 2>&1 &
+          echo "Bore runner started in background."
+
+          # صبر برای ساخته شدن connection.txt
+          echo "Waiting for tunnel to be ready..."
+          for i in {1..30}; do
+            [ -f connection.txt ] && break
+            sleep 1
+          done
+          if [ -f connection.txt ]; then
+            echo "Tunnel is ready."
+            cat connection.txt
+          else
+            echo "WARNING: Tunnel may not have started. Check bore_out.log and bore_err.log"
+          fi
+
+      - name: Update README.md
+        shell: bash
+        run: |
+          if [ ! -f connection.txt ]; then
+            echo "ERROR: connection.txt not found."
+            exit 1
+          fi
+
+          # خواندن اطلاعات اتصال
+          source connection.txt
+          CONNECTION_STRING="$host:$port"
+          USERNAME="${{ secrets.RDP_USERNAME }}"
+          EXPIRY=$(date -u -d "+${{ github.event.inputs.session_minutes }} minutes" '+%Y-%m-%d %H:%M:%S UTC')
+
+          # ساخت بخش جدید README
+          NEW_SECTION="## Kali Linux RDP Access\n"
+          NEW_SECTION+="**Connection Address:** \`$CONNECTION_STRING\`\n"
+          NEW_SECTION+="**Username:** \`$USERNAME\`\n"
+          NEW_SECTION+="**Password:** (stored in GitHub Secrets)\n"
+          NEW_SECTION+="**Expires:** $EXPIRY\n"
+
+          if [ ! -f README.md ]; then
+            echo -e "$NEW_SECTION" > README.md
+          else
+            if grep -q '## Kali Linux RDP Access' README.md; then
+              # جایگزینی بخش قبلی
+              perl -0777 -pi -e 's/## Kali Linux RDP Access.*?(\n## |\Z)/'"$NEW_SECTION"'/s' README.md
+            else
+              # افزودن به انتهای فایل
+              echo -e "\n$NEW_SECTION" >> README.md
+            fi
+          fi
+
+          echo "README.md updated."
+
+      - name: Commit and push README.md
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "Update Kali RDP access info [skip ci]" --allow-empty
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Display connection info
+        shell: bash
+        run: |
+          source connection.txt
+          echo ""
+          echo "======================================================"
+          echo "  KALI LINUX RDP READY FOR ANDROID"
+          echo "======================================================"
+          echo "  Host: $host"
+          echo "  Port: $port"
+          echo "  Username: ${{ secrets.RDP_USERNAME }}"
+          echo "  Password: (your secret)"
+          echo "======================================================"
+          echo ""
+          echo "In Microsoft Remote Desktop on Android:"
+          echo "  PC Name: $host:$port"
+          echo "  User Name: ${{ secrets.RDP_USERNAME }}"
+          echo ""
+          echo "This info is also in README.md at the root of the repo."
+
+      - name: Keep session alive
+        shell: bash
+        run: |
+          DURATION=${{ github.event.inputs.session_minutes }}
+          END_TIME=$(date -u -d "+${DURATION} minutes" +%s)
+
+          echo "Session will stay active for ${DURATION} minutes."
+          while [ $(date -u +%s) -lt $END_TIME ]; do
+            REMAINING=$(( END_TIME - $(date -u +%s) ))
+            echo "Remaining $((REMAINING/3600))h:$((REMAINING%3600/60))m:$((REMAINING%60))s | $(date -u '+%H:%M:%S')"
+            sleep 60
+          done
+          echo "Time is up."
