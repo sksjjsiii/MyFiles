@@ -79,6 +79,12 @@ jobs:
           # اطمینان از اجرا بودن پورت 3389
           netstat -tulpn | grep 3389 || true
 
+      - name: Install and update CA certificates
+        shell: bash
+        run: |
+          apt-get install -y ca-certificates
+          update-ca-certificates
+
       - name: Download bore binary
         shell: bash
         run: |
