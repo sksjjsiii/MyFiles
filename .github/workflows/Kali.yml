@@ -27,9 +27,10 @@ jobs:
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            dbus \
+            dbus-x11 \
             xfce4 \
             xrdp \
-            dbus-x11 \
             xorg \
             x11-xserver-utils \
             wget \
@@ -41,7 +42,7 @@ jobs:
 
           # راه‌اندازی dbus (برای xrdp ضروری است)
           mkdir -p /run/dbus
-          dbus-daemon --system --fork
+          dbus-daemon --system --fork --nopidfile
 
       - name: Create user and configure RDP
         shell: bash
@@ -62,7 +63,7 @@ jobs:
           echo "xfce4-session" > /home/$USERNAME/.xsession
           chown $USERNAME:$USERNAME /home/$USERNAME/.xsession
 
-          # تنظیم startwm.sh برای اجرای Xfce (اختیاری ولی مطمئن‌تر)
+          # تنظیم startwm.sh برای اجرای Xfce
           sed -i 's/^test -x \/etc\/X11\/Xsession && exec \/etc\/X11\/Xsession/#&/' /etc/xrdp/startwm.sh
           echo 'startxfce4' >> /etc/xrdp/startwm.sh
 
@@ -93,12 +94,10 @@ jobs:
           TUNNEL_HOST="bore.pub"
 
           start_bore() {
-            # اجرای bore و گرفتن خروجی
             ./bore local 3389 --to bore.pub > "$OUT_LOG" 2> "$ERR_LOG" &
             BORE_PID=$!
             sleep 8
 
-            # استخراج پورت از خروجی
             PORT=$(grep -oP 'listening at [\w\.]+:(\d+)' "$OUT_LOG" | grep -oP '\d+$')
             if [ -n "$PORT" ]; then
               echo "host=$TUNNEL_HOST" > connection.txt
@@ -111,7 +110,7 @@ jobs:
             fi
           }
 
-          # Keep-alive probe (بررسی باز بودن پورت محلی)
+          # Keep-alive probe
           (
             while true; do
               (echo > /dev/tcp/127.0.0.1/3389) >/dev/null 2>&1
@@ -119,10 +118,8 @@ jobs:
             done
           ) &
 
-          # شروع اولیه bore
           start_bore || exit 1
 
-          # حلقه نظارت و راه‌اندازی مجدد در صورت نیاز
           while true; do
             sleep 30
             if ! pgrep -x "bore" > /dev/null; then
@@ -138,11 +135,9 @@ jobs:
       - name: Start bore tunnel (detached)
         shell: bash
         run: |
-          # اجرای bore_runner.sh در پس‌زمینه
           nohup ./bore_runner.sh > bore_runner.log 2>&1 &
           echo "Bore runner started in background."
 
-          # صبر برای ساخته شدن connection.txt
           echo "Waiting for tunnel to be ready..."
           for i in {1..30}; do
             [ -f connection.txt ] && break
@@ -163,13 +158,11 @@ jobs:
             exit 1
           fi
 
-          # خواندن اطلاعات اتصال
           source connection.txt
           CONNECTION_STRING="$host:$port"
           USERNAME="${{ secrets.RDP_USERNAME }}"
           EXPIRY=$(date -u -d "+${{ github.event.inputs.session_minutes }} minutes" '+%Y-%m-%d %H:%M:%S UTC')
 
-          # ساخت بخش جدید README
           NEW_SECTION="## Kali Linux RDP Access\n"
           NEW_SECTION+="**Connection Address:** \`$CONNECTION_STRING\`\n"
           NEW_SECTION+="**Username:** \`$USERNAME\`\n"
@@ -180,10 +173,8 @@ jobs:
             echo -e "$NEW_SECTION" > README.md
           else
             if grep -q '## Kali Linux RDP Access' README.md; then
-              # جایگزینی بخش قبلی
               perl -0777 -pi -e 's/## Kali Linux RDP Access.*?(\n## |\Z)/'"$NEW_SECTION"'/s' README.md
             else
-              # افزودن به انتهای فایل
               echo -e "\n$NEW_SECTION" >> README.md
             fi
           fi
