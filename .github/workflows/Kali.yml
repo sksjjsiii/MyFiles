@@ -1,4 +1,4 @@
-name: Kali Linux RDP with bore (Auto-Update README)
+name: Kali Linux RDP with bore (Show in Log)
 
 on:
   workflow_dispatch:
@@ -17,36 +17,25 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      # نصب git و ca-certificates قبل از checkout
-      - name: Install git and CA certificates
+      # نصب پیش‌نیازها
+      - name: Install prerequisites
         shell: bash
         run: |
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y git ca-certificates
-          update-ca-certificates
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Install desktop environment and required tools
-        shell: bash
-        run: |
-          apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+          DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            ca-certificates \
+            curl \
             dbus \
             dbus-x11 \
             xfce4 \
             xrdp \
             xorg \
             x11-xserver-utils \
-            curl \
             sudo \
             net-tools \
             iputils-ping
 
-          # راه‌اندازی dbus (برای xrdp ضروری است)
+          # راه‌اندازی dbus
           mkdir -p /run/dbus
           dbus-daemon --system --fork --nopidfile
 
@@ -60,7 +49,7 @@ jobs:
           useradd -m -s /bin/bash "$USERNAME"
           echo "$USERNAME:$PASSWORD" | chpasswd
 
-          # افزودن به گروه sudo
+          # افزودن به گروه sudo در صورت وجود
           if getent group sudo >/dev/null; then
             usermod -aG sudo "$USERNAME"
           fi
@@ -75,7 +64,7 @@ jobs:
 
           # راه‌اندازی xrdp
           /etc/init.d/xrdp start
-          # تلاش برای sesman (اگر موجود نبود مهم نیست)
+          # تلاش برای sesman (در صورت وجود)
           if [ -f /etc/init.d/xrdp-sesman ]; then
             /etc/init.d/xrdp-sesman start
           else
@@ -162,66 +151,13 @@ jobs:
             echo "WARNING: Tunnel may not have started. Check bore_out.log and bore_err.log"
           fi
 
-      - name: Update README.md
-        shell: bash
-        run: |
-          cd $GITHUB_WORKSPACE
-          pwd
-          ls -la
-          if [ ! -f connection.txt ]; then
-            echo "ERROR: connection.txt not found."
-            exit 1
-          fi
-
-          source connection.txt
-          CONNECTION_STRING="$host:$port"
-          USERNAME="${{ secrets.RDP_USERNAME }}"
-          EXPIRY=$(date -u -d "+${{ github.event.inputs.session_minutes }} minutes" '+%Y-%m-%d %H:%M:%S UTC')
-
-          NEW_SECTION="## Kali Linux RDP Access\n"
-          NEW_SECTION+="**Connection Address:** \`$CONNECTION_STRING\`\n"
-          NEW_SECTION+="**Username:** \`$USERNAME\`\n"
-          NEW_SECTION+="**Password:** (stored in GitHub Secrets)\n"
-          NEW_SECTION+="**Expires:** $EXPIRY\n"
-
-          if [ ! -f README.md ]; then
-            echo -e "$NEW_SECTION" > README.md
-          else
-            if grep -q '## Kali Linux RDP Access' README.md; then
-              perl -0777 -pi -e 's/## Kali Linux RDP Access.*?(\n## |\Z)/'"$NEW_SECTION"'/s' README.md
-            else
-              echo -e "\n$NEW_SECTION" >> README.md
-            fi
-          fi
-
-          echo "README.md updated."
-
-      - name: Commit and push README.md
-        shell: bash
-        run: |
-          cd $GITHUB_WORKSPACE
-          pwd
-          ls -la
-          if [ ! -d .git ]; then
-            echo "ERROR: .git directory not found!"
-            exit 1
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add README.md
-          git commit -m "Update Kali RDP access info [skip ci]" --allow-empty
-          git push
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Display connection info
         shell: bash
         run: |
-          cd $GITHUB_WORKSPACE
           source connection.txt
           echo ""
           echo "======================================================"
-          echo "  KALI LINUX RDP READY FOR ANDROID"
+          echo "  KALI LINUX RDP READY"
           echo "======================================================"
           echo "  Host: $host"
           echo "  Port: $port"
@@ -233,7 +169,6 @@ jobs:
           echo "  PC Name: $host:$port"
           echo "  User Name: ${{ secrets.RDP_USERNAME }}"
           echo ""
-          echo "This info is also in README.md at the root of the repo."
 
       - name: Keep session alive
         shell: bash
