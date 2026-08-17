@@ -33,59 +33,39 @@ jobs:
             sudo \
             net-tools \
             iputils-ping
-
-          # راه‌اندازی dbus
           mkdir -p /run/dbus
           dbus-daemon --system --fork --nopidfile
 
       - name: Configure root password and RDP
         shell: bash
         run: |
-          # تنظیم رمز عبور root از Secret
           echo "root:${{ secrets.RDP_PASSWORD }}" | chpasswd
           if [ $? -ne 0 ]; then
             echo "Failed to set root password"
             exit 1
           fi
 
-          # فعال‌سازی ورود root در xrdp (اگر فایل sesman.ini موجود باشد)
+          # فعال‌سازی ورود root در xrdp
           if [ -f /etc/xrdp/sesman.ini ]; then
-            # اگر خط AllowRootLogin وجود دارد، تغییر بده، وگرنه اضافه کن
             if grep -q '^AllowRootLogin=' /etc/xrdp/sesman.ini; then
               sed -i 's/^AllowRootLogin=.*/AllowRootLogin=true/' /etc/xrdp/sesman.ini
             else
-              # اضافه کردن زیر [Security] یا در انتهای فایل
               echo "AllowRootLogin=true" >> /etc/xrdp/sesman.ini
             fi
           else
-            # اگر فایل وجود نداشت، یک فایل ساده بسازیم
-            cat > /etc/xrdp/sesman.ini <<'EOF'
-[Globals]
-ListenAddress=127.0.0.1
-ListenPort=3350
-EnableUserWindowManager=1
-UserWindowManager=startwm.sh
-MaxSessions=10
-
-[Security]
-AllowRootLogin=true
-MaxLoginRetry=4
-TerminalServerUsers=tsusers
-TerminalServerAdmins=tsadmins
-EOF
+            printf "[Globals]\nListenAddress=127.0.0.1\nListenPort=3350\nEnableUserWindowManager=1\nUserWindowManager=startwm.sh\nMaxSessions=10\n\n[Security]\nAllowRootLogin=true\nMaxLoginRetry=4\n" > /etc/xrdp/sesman.ini
           fi
 
-          # تنظیم Xfce به عنوان محیط پیش‌فرض
+          # تنظیم Xfce برای root
           echo "xfce4-session" > /root/.xsession
           chown root:root /root/.xsession
 
-          # تنظیم startwm.sh برای اجرای Xfce
+          # تنظیم startwm.sh
           sed -i 's/^test -x \/etc\/X11\/Xsession && exec \/etc\/X11\/Xsession/#&/' /etc/xrdp/startwm.sh
           echo 'startxfce4' >> /etc/xrdp/startwm.sh
 
           # راه‌اندازی xrdp
           /etc/init.d/xrdp start
-          # تلاش برای sesman (در صورت وجود)
           if [ -f /etc/init.d/xrdp-sesman ]; then
             /etc/init.d/xrdp-sesman start
           else
