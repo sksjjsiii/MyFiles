@@ -1,1 +1,1 @@
-https://departments-prostate-uniprotkb-punk.trycloudflare.com
+https://key-nano-referring-successfully.trycloudflare.com
