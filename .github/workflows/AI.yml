@@ -25,6 +25,18 @@ jobs:
         with:
           chrome-version: stable
 
+      - name: آماده‌سازی اسکریپت wrapper برای Chrome
+        run: |
+          CHROME_BIN="${{ steps.setup-chrome.outputs.chrome-path }}"
+          WRAPPER="$RUNNER_TEMP/chrome-wrapper.sh"
+          cat > "$WRAPPER" << 'EOF'
+          #!/bin/bash
+          exec "$CHROME_BIN" --no-sandbox --disable-gpu --disable-dev-shm-usage "$@"
+          EOF
+          chmod +x "$WRAPPER"
+          echo "CHROME_WRAPPER=$WRAPPER" >> $GITHUB_ENV
+          echo "✅ Chrome wrapper created at $WRAPPER"
+
       - name: نصب Python
         uses: actions/setup-python@v5
         with:
@@ -53,21 +65,15 @@ jobs:
           from pydantic import BaseModel
           import uvicorn
 
-          # تنظیم مسیر کروم برای g4f
+          # تنظیم مسیر Chrome برای g4f (با استفاده از wrapper)
           try:
               from g4f.cookies import BrowserConfig
               chrome_path = os.environ.get("CHROME_PATH")
-              if not chrome_path:
-                  chrome_path = (
-                      shutil.which("google-chrome-stable")
-                      or shutil.which("google-chrome")
-                      or shutil.which("chromium-browser")
-                  )
-              if chrome_path:
+              if chrome_path and os.path.exists(chrome_path):
                   BrowserConfig.executable_path = chrome_path
                   print(f"✅ Chrome path set to: {chrome_path}")
               else:
-                  print("⚠️ Chrome not found, will try default detection")
+                  print("⚠️ Chrome wrapper not found, will try default detection")
           except ImportError:
               pass
 
@@ -271,7 +277,7 @@ jobs:
       - name: راه‌اندازی سرور API
         env:
           RDP_PASSWORD: ${{ secrets.RDP_PASSWORD }}
-          CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
+          CHROME_PATH: ${{ env.CHROME_WRAPPER }}
         run: |
           if [ -z "$RDP_PASSWORD" ]; then
             echo "::error::لطفاً RDP_PASSWORD را در Secrets مخزن تعریف کنید."
@@ -280,6 +286,7 @@ jobs:
           export RDP_PASSWORD="$RDP_PASSWORD"
           export CHROME_PATH="$CHROME_PATH"
           export SESSION_MINUTES="${{ github.event.inputs.session_minutes }}"
+          echo "Using Chrome wrapper: $CHROME_PATH"
           nohup python3 api_server.py > api_server.log 2>&1 &
           echo "سرور AI API روی پورت 5000 اجرا شد"
 
@@ -374,6 +381,8 @@ jobs:
               echo "❌ سرور محلی پاسخ نمی‌دهد - راه‌اندازی مجدد API server..."
               pkill -f api_server.py || true
               sleep 2
+              export RDP_PASSWORD="$RDP_PASSWORD"
+              export CHROME_PATH="$CHROME_PATH"
               nohup python3 api_server.py > api_server.log 2>&1 &
               sleep 5
             fi
@@ -411,7 +420,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RDP_PASSWORD: ${{ secrets.RDP_PASSWORD }}
-          CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
+          CHROME_PATH: ${{ env.CHROME_WRAPPER }}
 
       - name: کامیت تغییرات نهایی (در صورت وجود)
         if: always()
