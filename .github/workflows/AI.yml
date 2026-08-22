@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: دریافت کد مخزن
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: نصب Python
         uses: actions/setup-python@v5
@@ -228,6 +230,21 @@ jobs:
           export SESSION_MINUTES="${{ github.event.inputs.session_minutes }}"
           nohup python3 api_server.py > api_server.log 2>&1 &
           echo "سرور AI API روی پورت 5000 اجرا شد"
+          
+          # انتظار برای آماده شدن سرور
+          for i in {1..30}; do
+            if curl -s http://localhost:5000/health | grep -q '"status":"ok"'; then
+              echo "✅ سرور سالم است"
+              break
+            fi
+            sleep 1
+          done
+          
+          if ! curl -s http://localhost:5000/health >/dev/null; then
+            echo "❌ سرور API بالا نیامد"
+            cat api_server.log
+            exit 1
+          fi
 
       - name: راه‌اندازی اولیه تونل Cloudflare
         run: |
@@ -291,9 +308,19 @@ jobs:
             REMAINING=$((END_TIME - $(date +%s)))
             echo "[$(date +%H:%M:%S)] زمان باقی‌مانده: $((REMAINING/60)) دقیقه"
 
+            # بررسی سلامت سرور محلی
+            LOCAL_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/health 2>/dev/null || echo "000")
+            if [ "$LOCAL_CODE" != "200" ]; then
+              echo "❌ سرور محلی پاسخ نمی‌دهد - راه‌اندازی مجدد API server..."
+              pkill -f api_server.py || true
+              sleep 2
+              nohup python3 api_server.py > api_server.log 2>&1 &
+              sleep 5
+            fi
+
             # بررسی سلامت تونل از بیرون (با curl)
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "$TUNNEL_URL/api/status" 2>/dev/null || echo "000")
-            if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "401" ]; then
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "$TUNNEL_URL/health" 2>/dev/null || echo "000")
+            if [ "$HTTP_CODE" != "200" ]; then
               echo "❌ تونل پاسخ نمی‌دهد (کد $HTTP_CODE) - راه‌اندازی مجدد..."
 
               # کشتن پروسه‌های قبلی cloudflared
@@ -322,7 +349,7 @@ jobs:
               fi
             else
               # یک درخواست ساده برای فعال نگه‌داشتن تونل
-              curl -s -o /dev/null "$TUNNEL_URL/api/status" 2>/dev/null || true
+              curl -s -o /dev/null "$TUNNEL_URL/health" 2>/dev/null || true
             fi
 
             sleep 30
@@ -331,17 +358,56 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: کامیت تغییرات احتمالی (در صورت وجود)
+      - name: آپلود لاگ‌ها به مخزن (بدون اطلاعات حساس)
+        if: always()
+        run: |
+          # ایجاد پوشه logs اگر وجود ندارد
+          mkdir -p logs
+          
+          # کپی لاگ‌ها
+          if [ -f api_server.log ]; then
+            cp api_server.log logs/api_server.log
+          fi
+          
+          if [ -f cloudflare.log ]; then
+            cp cloudflare.log logs/cloudflare.log
+          fi
+          
+          # حذف اطلاعات حساس از لاگ‌ها
+          if [ -f logs/api_server.log ]; then
+            # حذف رمز عبور از لاگ (اگر به هر دلیلی لاگ شده باشد)
+            sed -i "s/${{ secrets.RDP_PASSWORD }}/[REDACTED]/g" logs/api_server.log 2>/dev/null || true
+            sed -i "s/RDP_PASSWORD=[^ ]*/RDP_PASSWORD=[REDACTED]/g" logs/api_server.log 2>/dev/null || true
+          fi
+          
+          if [ -f logs/cloudflare.log ]; then
+            # حذف اطلاعات حساس از لاگ cloudflare
+            sed -i "s/${{ secrets.RDP_PASSWORD }}/[REDACTED]/g" logs/cloudflare.log 2>/dev/null || true
+          fi
+          
+          # کامیت و push لاگ‌ها
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add logs/
+          git commit -m "📝 آپلود لاگ‌ها [skip ci]" || echo "⚠️ commit لاگ‌ها ناموفق (ممکن است تغییری نباشد)"
+          git pull --rebase origin main && git push || echo "⚠️ push لاگ‌ها ناموفق"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: کامیت تغییرات نهایی
         if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if [ -f README.md ] && ! git diff --quiet README.md; then
-            git add README.md
-            git commit -m "📝 به‌روزرسانی README [skip ci]" || echo "⚠️ commit ناموفق"
-            git pull --rebase origin main && git push || echo "⚠️ push ناموفق"
+          
+          # اضافه کردن همه تغییرات به جز فایل‌های حساس
+          git add -A -- . ':!api_server.py' ':!cloudflared' ':!cloudflare.log' ':!api_server.log'
+          
+          if git diff --cached --quiet; then
+            echo "بدون تغییر"
           else
-            echo "بدون تغییر در README"
+            git commit -m "💾 ذخیره تغییرات [skip ci]" || echo "⚠️ commit ناموفق"
+            git pull --rebase origin main && git push || echo "⚠️ push ناموفق"
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
