@@ -80,9 +80,9 @@ jobs:
               browser_path = os.environ.get("BROWSER_PATH")
               if browser_path and os.path.exists(browser_path):
                   BrowserConfig.executable_path = browser_path
-                  print(f"✅ Browser path set to: {browser_path}")
+                  print(f"Browser path set to: {browser_path}")
               else:
-                  print("⚠️ مرورگر یافت نشد، از مسیر پیش‌فرض استفاده می‌شود")
+                  print("Browser not found, using default detection")
           except ImportError:
               pass
 
@@ -289,6 +289,7 @@ jobs:
         env:
           RDP_PASSWORD: ${{ secrets.RDP_PASSWORD }}
           BROWSER_PATH: ${{ env.BROWSER_PATH }}
+          PYTHONIOENCODING: utf-8
         run: |
           if ([string]::IsNullOrEmpty($env:RDP_PASSWORD)) {
             Write-Error "لطفاً RDP_PASSWORD را در Secrets مخزن تعریف کنید."
@@ -439,7 +440,6 @@ jobs:
                 Write-Host "⚠️ نتوانستیم آدرس جدید را از لاگ بخوانیم"
               }
             } else {
-              # یک درخواست ساده برای فعال نگه‌داشتن تونل
               try { Invoke-WebRequest -Uri "$TUNNEL_URL/health" -UseBasicParsing -TimeoutSec 5 | Out-Null } catch {}
             }
 
