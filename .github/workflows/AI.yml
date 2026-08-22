@@ -230,7 +230,7 @@ jobs:
           export SESSION_MINUTES="${{ github.event.inputs.session_minutes }}"
           nohup python3 api_server.py > api_server.log 2>&1 &
           echo "سرور AI API روی پورت 5000 اجرا شد"
-          
+
           # انتظار برای آماده شدن سرور
           for i in {1..30}; do
             if curl -s http://localhost:5000/health | grep -q '"status":"ok"'; then
@@ -239,7 +239,7 @@ jobs:
             fi
             sleep 1
           done
-          
+
           if ! curl -s http://localhost:5000/health >/dev/null; then
             echo "❌ سرور API بالا نیامد"
             cat api_server.log
@@ -292,7 +292,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: زنده نگه‌داشتن نشست و نگهبانی تونل
+      - name: زنده نگه‌داشتن نشست و نگهبانی تونل + آپلود لاگ‌ها
         run: |
           set +e  # جلوگیری از توقف اسکریپت روی خطاهای غیرمنتظره
 
@@ -300,6 +300,32 @@ jobs:
           END_TIME=$(date -d "$DURATION minutes" +%s)
           TUNNEL_URL="${{ env.TUNNEL_URL }}"
           echo "⏳ سرور تا $DURATION دقیقه فعال خواهد ماند"
+
+          # تابع آپلود لاگ‌ها به مخزن (بدون اطلاعات حساس)
+          upload_logs() {
+            mkdir -p logs
+            if [ -f api_server.log ]; then
+              cp api_server.log logs/api_server.log
+            fi
+            if [ -f cloudflare.log ]; then
+              cp cloudflare.log logs/cloudflare.log
+            fi
+            # حذف اطلاعات حساس از لاگ‌ها
+            if [ -f logs/api_server.log ]; then
+              sed -i "s/$RDP_PASSWORD/[REDACTED]/g" logs/api_server.log 2>/dev/null || true
+              sed -i "s/RDP_PASSWORD=[^ ]*/RDP_PASSWORD=[REDACTED]/g" logs/api_server.log 2>/dev/null || true
+            fi
+            if [ -f logs/cloudflare.log ]; then
+              sed -i "s/$RDP_PASSWORD/[REDACTED]/g" logs/cloudflare.log 2>/dev/null || true
+            fi
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add logs/ README.md
+            if ! git diff --cached --quiet; then
+              git commit -m "🔄 به‌روزرسانی لاگ‌ها [skip ci]" || true
+              git pull --rebase origin main && git push || echo "⚠️ push لاگ‌ها ناموفق"
+            fi
+          }
 
           # تأخیر اولیه برای اطمینان از آماده‌سازی کامل تونل و DNS
           sleep 10
@@ -338,6 +364,7 @@ jobs:
                 if [ "$NEW_URL" != "$TUNNEL_URL" ]; then
                   TUNNEL_URL=$NEW_URL
                   echo "$NEW_URL" > README.md
+                  # آپلود فوری لینک جدید (دقیقاً مثل کد مثال)
                   git config user.name "github-actions[bot]"
                   git config user.email "github-actions[bot]@users.noreply.github.com"
                   git add README.md
@@ -352,57 +379,25 @@ jobs:
               curl -s -o /dev/null "$TUNNEL_URL/health" 2>/dev/null || true
             fi
 
+            # آپلود لاگ‌ها به مخزن در هر چرخه (در صورت وجود تغییر)
+            upload_logs
+
             sleep 30
           done
           echo "زمان به پایان رسید."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RDP_PASSWORD: ${{ secrets.RDP_PASSWORD }}
 
-      - name: آپلود لاگ‌ها به مخزن (بدون اطلاعات حساس)
-        if: always()
-        run: |
-          # ایجاد پوشه logs اگر وجود ندارد
-          mkdir -p logs
-          
-          # کپی لاگ‌ها
-          if [ -f api_server.log ]; then
-            cp api_server.log logs/api_server.log
-          fi
-          
-          if [ -f cloudflare.log ]; then
-            cp cloudflare.log logs/cloudflare.log
-          fi
-          
-          # حذف اطلاعات حساس از لاگ‌ها
-          if [ -f logs/api_server.log ]; then
-            # حذف رمز عبور از لاگ (اگر به هر دلیلی لاگ شده باشد)
-            sed -i "s/${{ secrets.RDP_PASSWORD }}/[REDACTED]/g" logs/api_server.log 2>/dev/null || true
-            sed -i "s/RDP_PASSWORD=[^ ]*/RDP_PASSWORD=[REDACTED]/g" logs/api_server.log 2>/dev/null || true
-          fi
-          
-          if [ -f logs/cloudflare.log ]; then
-            # حذف اطلاعات حساس از لاگ cloudflare
-            sed -i "s/${{ secrets.RDP_PASSWORD }}/[REDACTED]/g" logs/cloudflare.log 2>/dev/null || true
-          fi
-          
-          # کامیت و push لاگ‌ها
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add logs/
-          git commit -m "📝 آپلود لاگ‌ها [skip ci]" || echo "⚠️ commit لاگ‌ها ناموفق (ممکن است تغییری نباشد)"
-          git pull --rebase origin main && git push || echo "⚠️ push لاگ‌ها ناموفق"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: کامیت تغییرات نهایی
+      - name: کامیت تغییرات نهایی (در صورت وجود)
         if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # اضافه کردن همه تغییرات به جز فایل‌های حساس
+
+          # اضافه کردن همه تغییرات به جز فایل‌های حساس و باینری
           git add -A -- . ':!api_server.py' ':!cloudflared' ':!cloudflare.log' ':!api_server.log'
-          
+
           if git diff --cached --quiet; then
             echo "بدون تغییر"
           else
