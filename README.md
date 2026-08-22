@@ -1,1 +1,1 @@
-https://allow-tell-targets-refined.trycloudflare.com
+https://afternoon-requiring-watch-immune.trycloudflare.com
