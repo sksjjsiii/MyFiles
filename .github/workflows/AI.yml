@@ -281,27 +281,40 @@ jobs:
 
           echo "TUNNEL_URL=$TUNNEL_URL" >> $GITHUB_ENV
 
-      - name: به‌روزرسانی README با لینک اولیه
+      - name: به‌روزرسانی README با لینک اولیه (شاخه فعلی)
         run: |
+          # تعیین شاخه فعلی
+          BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          echo "شاخه فعلی: $BRANCH"
+
+          # به‌روزرسانی remote با توکن
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
           echo "${{ env.TUNNEL_URL }}" > README.md
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add README.md
           git commit -m "🔗 لینک API [skip ci]" || true
-          git pull --rebase origin main && git push || echo "⚠️ push اولیه ناموفق (در ادامه دوباره تلاش می‌شود)"
+          git pull --rebase origin "$BRANCH" && git push origin HEAD:"$BRANCH" || echo "⚠️ push اولیه ناموفق (در ادامه دوباره تلاش می‌شود)"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: زنده نگه‌داشتن نشست و نگهبانی تونل + آپلود لاگ‌ها
+      - name: زنده نگه‌داشتن نشست و نگهبانی تونل + آپلود لاگ‌ها (شاخه فعلی)
         run: |
           set +e  # جلوگیری از توقف اسکریپت روی خطاهای غیرمنتظره
 
           DURATION=${{ github.event.inputs.session_minutes }}
           END_TIME=$(date -d "$DURATION minutes" +%s)
           TUNNEL_URL="${{ env.TUNNEL_URL }}"
-          echo "⏳ سرور تا $DURATION دقیقه فعال خواهد ماند"
+          BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          echo "⏳ سرور تا $DURATION دقیقه فعال خواهد ماند (شاخه: $BRANCH)"
 
-          # تابع آپلود لاگ‌ها به مخزن (بدون اطلاعات حساس)
+          # به‌روزرسانی remote با توکن
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # تابع آپلود لاگ‌ها و README به مخزن
           upload_logs() {
             mkdir -p logs
             if [ -f api_server.log ]; then
@@ -318,16 +331,15 @@ jobs:
             if [ -f logs/cloudflare.log ]; then
               sed -i "s/$RDP_PASSWORD/[REDACTED]/g" logs/cloudflare.log 2>/dev/null || true
             fi
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
+
             git add logs/ README.md
             if ! git diff --cached --quiet; then
               git commit -m "🔄 به‌روزرسانی لاگ‌ها [skip ci]" || true
-              git pull --rebase origin main && git push || echo "⚠️ push لاگ‌ها ناموفق"
+              git pull --rebase origin "$BRANCH" && git push origin HEAD:"$BRANCH" || echo "⚠️ push لاگ‌ها ناموفق"
             fi
           }
 
-          # تأخیر اولیه برای اطمینان از آماده‌سازی کامل تونل و DNS
+          # تأخیر اولیه
           sleep 10
 
           while [ $(date +%s) -lt $END_TIME ]; do
@@ -344,42 +356,36 @@ jobs:
               sleep 5
             fi
 
-            # بررسی سلامت تونل از بیرون (با curl)
+            # بررسی سلامت تونل از بیرون
             HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "$TUNNEL_URL/health" 2>/dev/null || echo "000")
             if [ "$HTTP_CODE" != "200" ]; then
               echo "❌ تونل پاسخ نمی‌دهد (کد $HTTP_CODE) - راه‌اندازی مجدد..."
 
-              # کشتن پروسه‌های قبلی cloudflared
               pkill cloudflared || true
               sleep 2
 
-              # راه‌اندازی دوباره (با مسیر کامل)
               cloudflared tunnel --url http://localhost:5000 --no-autoupdate > cloudflare.log 2>&1 &
               sleep 8
 
-              # استخراج آدرس جدید
               NEW_URL=$(grep -oP 'https://[a-zA-Z0-9.-]+\.trycloudflare\.com' cloudflare.log | head -n1)
               if [ -n "$NEW_URL" ]; then
                 echo "✅ آدرس جدید: $NEW_URL"
                 if [ "$NEW_URL" != "$TUNNEL_URL" ]; then
                   TUNNEL_URL=$NEW_URL
                   echo "$NEW_URL" > README.md
-                  # آپلود فوری لینک جدید (دقیقاً مثل کد مثال)
-                  git config user.name "github-actions[bot]"
-                  git config user.email "github-actions[bot]@users.noreply.github.com"
+                  # آپلود فوری لینک جدید
                   git add README.md
                   git commit -m "🔄 به‌روزرسانی لینک تونل [skip ci]" || true
-                  git pull --rebase origin main && git push || echo "⚠️ push لینک جدید ناموفق"
+                  git pull --rebase origin "$BRANCH" && git push origin HEAD:"$BRANCH" || echo "⚠️ push لینک جدید ناموفق"
                 fi
               else
                 echo "⚠️ نتوانستیم آدرس جدید را از لاگ بخوانیم"
               fi
             else
-              # یک درخواست ساده برای فعال نگه‌داشتن تونل
               curl -s -o /dev/null "$TUNNEL_URL/health" 2>/dev/null || true
             fi
 
-            # آپلود لاگ‌ها به مخزن در هر چرخه (در صورت وجود تغییر)
+            # آپلود لاگ‌ها در هر چرخه
             upload_logs
 
             sleep 30
@@ -392,17 +398,19 @@ jobs:
       - name: کامیت تغییرات نهایی (در صورت وجود)
         if: always()
         run: |
+          # تعیین شاخه
+          BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # اضافه کردن همه تغییرات به جز فایل‌های حساس و باینری
           git add -A -- . ':!api_server.py' ':!cloudflared' ':!cloudflare.log' ':!api_server.log'
 
           if git diff --cached --quiet; then
             echo "بدون تغییر"
           else
             git commit -m "💾 ذخیره تغییرات [skip ci]" || echo "⚠️ commit ناموفق"
-            git pull --rebase origin main && git push || echo "⚠️ push ناموفق"
+            git pull --rebase origin "$BRANCH" && git push origin HEAD:"$BRANCH" || echo "⚠️ push ناموفق"
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
