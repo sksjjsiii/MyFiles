@@ -1,1 +1,1 @@
-https://resorts-colors-lance-defining.trycloudflare.com
+https://motorcycle-inner-educational-limitation.trycloudflare.com
