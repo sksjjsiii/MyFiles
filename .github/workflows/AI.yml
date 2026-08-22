@@ -28,7 +28,7 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          pip install g4f fastapi uvicorn pydantic
+          pip install g4f fastapi uvicorn pydantic websocket-client
 
       - name: یافتن مسیر Chrome یا Edge
         id: find-browser
