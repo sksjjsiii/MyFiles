@@ -71,6 +71,7 @@ jobs:
           import g4f
           from fastapi import FastAPI, Depends, HTTPException, Header
           from fastapi.responses import JSONResponse
+          from fastapi.encoders import jsonable_encoder
           from pydantic import BaseModel
           import uvicorn
 
@@ -173,7 +174,14 @@ jobs:
 
               finish_reason = "tool_calls" if tool_calls else "stop"
 
-              return {
+              usage_raw = getattr(g4f_response, 'usage', None)
+              # تبدیل usage به dict با استفاده از jsonable_encoder
+              if usage_raw is not None:
+                  usage = jsonable_encoder(usage_raw)
+              else:
+                  usage = None
+
+              response_dict = {
                   "id": getattr(g4f_response, 'id', f"chatcmpl-{int(time.time())}"),
                   "object": "chat.completion",
                   "created": int(time.time()),
@@ -189,8 +197,10 @@ jobs:
                           "finish_reason": finish_reason
                       }
                   ],
-                  "usage": getattr(g4f_response, 'usage', None)
+                  "usage": usage
               }
+              # اطمینان از JSON-serializable بودن کل پاسخ
+              return jsonable_encoder(response_dict)
 
           # هندلر سراسری برای خطاهای پیش‌بینی‌نشده
           @app.exception_handler(Exception)
