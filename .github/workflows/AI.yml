@@ -19,6 +19,12 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: نصب گوگل کروم
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
       - name: نصب Python
         uses: actions/setup-python@v5
         with:
@@ -38,6 +44,7 @@ jobs:
           import secrets
           import warnings
           import traceback
+          import shutil
           from typing import List, Optional, Dict, Any
 
           import g4f
@@ -45,6 +52,24 @@ jobs:
           from fastapi.responses import JSONResponse
           from pydantic import BaseModel
           import uvicorn
+
+          # تنظیم مسیر کروم برای g4f
+          try:
+              from g4f.cookies import BrowserConfig
+              chrome_path = os.environ.get("CHROME_PATH")
+              if not chrome_path:
+                  chrome_path = (
+                      shutil.which("google-chrome-stable")
+                      or shutil.which("google-chrome")
+                      or shutil.which("chromium-browser")
+                  )
+              if chrome_path:
+                  BrowserConfig.executable_path = chrome_path
+                  print(f"✅ Chrome path set to: {chrome_path}")
+              else:
+                  print("⚠️ Chrome not found, will try default detection")
+          except ImportError:
+              pass
 
           g4f.debug.logging = False
           warnings.filterwarnings("ignore", category=UserWarning)
@@ -246,12 +271,14 @@ jobs:
       - name: راه‌اندازی سرور API
         env:
           RDP_PASSWORD: ${{ secrets.RDP_PASSWORD }}
+          CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
         run: |
           if [ -z "$RDP_PASSWORD" ]; then
             echo "::error::لطفاً RDP_PASSWORD را در Secrets مخزن تعریف کنید."
             exit 1
           fi
           export RDP_PASSWORD="$RDP_PASSWORD"
+          export CHROME_PATH="$CHROME_PATH"
           export SESSION_MINUTES="${{ github.event.inputs.session_minutes }}"
           nohup python3 api_server.py > api_server.log 2>&1 &
           echo "سرور AI API روی پورت 5000 اجرا شد"
@@ -383,6 +410,8 @@ jobs:
           echo "زمان به پایان رسید."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RDP_PASSWORD: ${{ secrets.RDP_PASSWORD }}
+          CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
 
       - name: کامیت تغییرات نهایی (در صورت وجود)
         if: always()
