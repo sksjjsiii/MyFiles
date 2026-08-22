@@ -175,7 +175,6 @@ jobs:
               finish_reason = "tool_calls" if tool_calls else "stop"
 
               usage_raw = getattr(g4f_response, 'usage', None)
-              # تبدیل usage به dict با استفاده از jsonable_encoder
               if usage_raw is not None:
                   usage = jsonable_encoder(usage_raw)
               else:
@@ -199,10 +198,8 @@ jobs:
                   ],
                   "usage": usage
               }
-              # اطمینان از JSON-serializable بودن کل پاسخ
               return jsonable_encoder(response_dict)
 
-          # هندلر سراسری برای خطاهای پیش‌بینی‌نشده
           @app.exception_handler(Exception)
           async def unhandled_exception_handler(request, exc):
               tb = traceback.format_exc()
@@ -310,17 +307,15 @@ jobs:
           Start-Process -FilePath "python" -ArgumentList "api_server.py" -WorkingDirectory $PWD -RedirectStandardOutput "api_server.log" -RedirectStandardError "api_server.err" -NoNewWindow
           Start-Sleep -Seconds 8
 
-          # انتظار برای آماده شدن سرور
+          # استفاده از curl.exe برای بررسی سلامت (مطمئن‌تر)
           $healthy = $false
           for ($i = 0; $i -lt 30; $i++) {
-            try {
-              $response = Invoke-WebRequest -Uri "http://localhost:5000/health" -UseBasicParsing -TimeoutSec 2
-              if ($response.StatusCode -eq 200) {
-                $healthy = $true
-                Write-Host "✅ سرور سالم است"
-                break
-              }
-            } catch {}
+            $code = & curl.exe -s -o NUL -w "%{http_code}" http://localhost:5000/health 2>$null
+            if ($code -eq "200") {
+              $healthy = $true
+              Write-Host "✅ سرور سالم است"
+              break
+            }
             Start-Sleep -Seconds 1
           }
           if (-not $healthy) {
@@ -403,14 +398,9 @@ jobs:
             $remaining = $END_TIME - (Get-Date)
             Write-Host "[$(Get-Date -Format 'HH:mm:ss')] زمان باقی‌مانده: $([math]::Floor($remaining.TotalMinutes)) دقیقه"
 
-            # بررسی سلامت سرور محلی
-            try {
-              $localResponse = Invoke-WebRequest -Uri "http://localhost:5000/health" -UseBasicParsing -TimeoutSec 5
-              $localCode = $localResponse.StatusCode
-            } catch {
-              $localCode = 0
-            }
-            if ($localCode -ne 200) {
+            # بررسی سلامت سرور محلی با curl.exe
+            $localCode = & curl.exe -s -o NUL -w "%{http_code}" http://localhost:5000/health 2>$null
+            if ($localCode -ne "200") {
               Write-Host "❌ سرور محلی پاسخ نمی‌دهد - راه‌اندازی مجدد API server..."
               Get-Process python -ErrorAction SilentlyContinue | Stop-Process -Force
               Start-Sleep -Seconds 2
@@ -420,14 +410,9 @@ jobs:
               Start-Sleep -Seconds 5
             }
 
-            # بررسی سلامت تونل از بیرون
-            try {
-              $tunnelResponse = Invoke-WebRequest -Uri "$TUNNEL_URL/health" -UseBasicParsing -TimeoutSec 5
-              $tunnelCode = $tunnelResponse.StatusCode
-            } catch {
-              $tunnelCode = 0
-            }
-            if ($tunnelCode -ne 200) {
+            # بررسی سلامت تونل از بیرون با curl.exe
+            $tunnelCode = & curl.exe -s -o NUL -w "%{http_code}" --connect-timeout 5 "$TUNNEL_URL/health" 2>$null
+            if ($tunnelCode -ne "200") {
               Write-Host "❌ تونل پاسخ نمی‌دهد (کد $tunnelCode) - راه‌اندازی مجدد..."
               Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force
               Start-Sleep -Seconds 2
@@ -450,7 +435,7 @@ jobs:
                 Write-Host "⚠️ نتوانستیم آدرس جدید را از لاگ بخوانیم"
               }
             } else {
-              try { Invoke-WebRequest -Uri "$TUNNEL_URL/health" -UseBasicParsing -TimeoutSec 5 | Out-Null } catch {}
+              & curl.exe -s -o NUL "$TUNNEL_URL/health" 2>$null
             }
 
             Start-Sleep -Seconds 30
