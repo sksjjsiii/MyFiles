@@ -281,40 +281,35 @@ jobs:
 
           echo "TUNNEL_URL=$TUNNEL_URL" >> $GITHUB_ENV
 
-      - name: به‌روزرسانی README با لینک اولیه (شاخه فعلی)
+      - name: به‌روزرسانی README با لینک اولیه
         run: |
-          # تعیین شاخه فعلی
           BRANCH=$(git rev-parse --abbrev-ref HEAD)
-          echo "شاخه فعلی: $BRANCH"
-
-          # به‌روزرسانی remote با توکن
           git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-
-          echo "${{ env.TUNNEL_URL }}" > README.md
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          echo "${{ env.TUNNEL_URL }}" > README.md
           git add README.md
           git commit -m "🔗 لینک API [skip ci]" || true
-          git pull --rebase origin "$BRANCH" && git push origin HEAD:"$BRANCH" || echo "⚠️ push اولیه ناموفق (در ادامه دوباره تلاش می‌شود)"
+          git pull --rebase --autostash origin "$BRANCH" && git push origin HEAD:"$BRANCH" || echo "⚠️ push اولیه ناموفق (در ادامه دوباره تلاش می‌شود)"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: زنده نگه‌داشتن نشست و نگهبانی تونل + آپلود لاگ‌ها (شاخه فعلی)
+      - name: زنده نگه‌داشتن نشست و نگهبانی تونل + آپلود لاگ‌ها
         run: |
-          set +e  # جلوگیری از توقف اسکریپت روی خطاهای غیرمنتظره
+          set +e
 
           DURATION=${{ github.event.inputs.session_minutes }}
           END_TIME=$(date -d "$DURATION minutes" +%s)
           TUNNEL_URL="${{ env.TUNNEL_URL }}"
           BRANCH=$(git rev-parse --abbrev-ref HEAD)
-          echo "⏳ سرور تا $DURATION دقیقه فعال خواهد ماند (شاخه: $BRANCH)"
 
-          # به‌روزرسانی remote با توکن
           git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # تابع آپلود لاگ‌ها و README به مخزن
+          echo "⏳ سرور تا $DURATION دقیقه فعال خواهد ماند (شاخه: $BRANCH)"
+
           upload_logs() {
             mkdir -p logs
             if [ -f api_server.log ]; then
@@ -323,7 +318,8 @@ jobs:
             if [ -f cloudflare.log ]; then
               cp cloudflare.log logs/cloudflare.log
             fi
-            # حذف اطلاعات حساس از لاگ‌ها
+
+            # حذف اطلاعات حساس
             if [ -f logs/api_server.log ]; then
               sed -i "s/$RDP_PASSWORD/[REDACTED]/g" logs/api_server.log 2>/dev/null || true
               sed -i "s/RDP_PASSWORD=[^ ]*/RDP_PASSWORD=[REDACTED]/g" logs/api_server.log 2>/dev/null || true
@@ -335,11 +331,10 @@ jobs:
             git add logs/ README.md
             if ! git diff --cached --quiet; then
               git commit -m "🔄 به‌روزرسانی لاگ‌ها [skip ci]" || true
-              git pull --rebase origin "$BRANCH" && git push origin HEAD:"$BRANCH" || echo "⚠️ push لاگ‌ها ناموفق"
+              git pull --rebase --autostash origin "$BRANCH" && git push origin HEAD:"$BRANCH" || echo "⚠️ push لاگ‌ها ناموفق"
             fi
           }
 
-          # تأخیر اولیه
           sleep 10
 
           while [ $(date +%s) -lt $END_TIME ]; do
@@ -356,14 +351,13 @@ jobs:
               sleep 5
             fi
 
-            # بررسی سلامت تونل از بیرون
+            # بررسی سلامت تونل
             HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "$TUNNEL_URL/health" 2>/dev/null || echo "000")
             if [ "$HTTP_CODE" != "200" ]; then
               echo "❌ تونل پاسخ نمی‌دهد (کد $HTTP_CODE) - راه‌اندازی مجدد..."
 
               pkill cloudflared || true
               sleep 2
-
               cloudflared tunnel --url http://localhost:5000 --no-autoupdate > cloudflare.log 2>&1 &
               sleep 8
 
@@ -373,10 +367,9 @@ jobs:
                 if [ "$NEW_URL" != "$TUNNEL_URL" ]; then
                   TUNNEL_URL=$NEW_URL
                   echo "$NEW_URL" > README.md
-                  # آپلود فوری لینک جدید
                   git add README.md
                   git commit -m "🔄 به‌روزرسانی لینک تونل [skip ci]" || true
-                  git pull --rebase origin "$BRANCH" && git push origin HEAD:"$BRANCH" || echo "⚠️ push لینک جدید ناموفق"
+                  git pull --rebase --autostash origin "$BRANCH" && git push origin HEAD:"$BRANCH" || echo "⚠️ push لینک جدید ناموفق"
                 fi
               else
                 echo "⚠️ نتوانستیم آدرس جدید را از لاگ بخوانیم"
@@ -398,7 +391,6 @@ jobs:
       - name: کامیت تغییرات نهایی (در صورت وجود)
         if: always()
         run: |
-          # تعیین شاخه
           BRANCH=$(git rev-parse --abbrev-ref HEAD)
           git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git config user.name "github-actions[bot]"
@@ -410,7 +402,7 @@ jobs:
             echo "بدون تغییر"
           else
             git commit -m "💾 ذخیره تغییرات [skip ci]" || echo "⚠️ commit ناموفق"
-            git pull --rebase origin "$BRANCH" && git push origin HEAD:"$BRANCH" || echo "⚠️ push ناموفق"
+            git pull --rebase --autostash origin "$BRANCH" && git push origin HEAD:"$BRANCH" || echo "⚠️ push ناموفق"
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
