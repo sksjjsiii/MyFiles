@@ -1,37 +1,35 @@
-name: Windows Cloudflare Tunnel API Server
+name: AI API Server with Cloudflare Tunnel (Ubuntu)
 
 on:
   workflow_dispatch:
     inputs:
       session_minutes:
-        description: 'مدت زمان اجرای سرور (دقیقه)'
+        description: 'مدت زمان اجرا (دقیقه)'
         required: true
-        default: '60'
+        default: '120'
 
 jobs:
-  run-api-server:
-    runs-on: windows-latest
+  ai-api:
+    runs-on: ubuntu-latest
     timeout-minutes: 360
 
     steps:
-      - name: Checkout repository
+      - name: دریافت کد مخزن
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: نصب Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
-        shell: pwsh
+      - name: نصب وابستگی‌ها
         run: |
           python -m pip install --upgrade pip
           pip install g4f fastapi uvicorn pydantic
 
-      - name: Create api_server.py
-        shell: pwsh
+      - name: نوشتن سرور AI API
         run: |
-          $content = @'
+          cat << 'PYEOF' > api_server.py
           import os
           import json
           import time
@@ -41,7 +39,7 @@ jobs:
 
           import g4f
           from fastapi import FastAPI, Depends, HTTPException, Header
-          from pydantic import BaseModel, Field
+          from pydantic import BaseModel
           import uvicorn
 
           g4f.debug.logging = False
@@ -216,136 +214,134 @@ jobs:
 
           if __name__ == "__main__":
               uvicorn.run(app, host="0.0.0.0", port=5000)
-          '@
-          Set-Content -Path api_server.py -Value $content -Encoding UTF8
+          PYEOF
 
-      - name: Start API Server
-        shell: pwsh
+      - name: راه‌اندازی سرور API
         env:
           RDP_PASSWORD: ${{ secrets.RDP_PASSWORD }}
         run: |
-          # راه‌اندازی سرور به صورت پس‌زمینه
-          Start-Process -NoNewWindow -FilePath "python" -ArgumentList "api_server.py" -WorkingDirectory $PWD -RedirectStandardOutput "api_server.log" -RedirectStandardError "api_server.err"
-          Start-Sleep -Seconds 8
-          Write-Host "سرور API روی پورت 5000 اجرا شد"
-          Get-Content api_server.log -ErrorAction SilentlyContinue
-          Get-Content api_server.err -ErrorAction SilentlyContinue
+          if [ -z "$RDP_PASSWORD" ]; then
+            echo "::error::لطفاً RDP_PASSWORD را در Secrets مخزن تعریف کنید."
+            exit 1
+          fi
+          export RDP_PASSWORD="$RDP_PASSWORD"
+          export SESSION_MINUTES="${{ github.event.inputs.session_minutes }}"
+          nohup python3 api_server.py > api_server.log 2>&1 &
+          echo "سرور AI API روی پورت 5000 اجرا شد"
 
-      - name: Start Cloudflare Tunnel
-        shell: pwsh
+      - name: راه‌اندازی اولیه تونل Cloudflare
         run: |
-          $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "cloudflared.exe"
+          curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
+          chmod +x cloudflared
+          sudo mv cloudflared /usr/local/bin/cloudflared
 
-          Write-Host "راه‌اندازی تونل Cloudflare..."
-          Start-Process -NoNewWindow -FilePath "$PWD\cloudflared.exe" -ArgumentList "tunnel --url http://localhost:5000 --no-autoupdate" -RedirectStandardOutput "cloudflare.log" -RedirectStandardError "cloudflare.err"
-          Start-Sleep -Seconds 5
+          echo "🌐 راه‌اندازی تونل Cloudflare..."
+          cloudflared tunnel --url http://localhost:5000 --no-autoupdate > cloudflare.log 2>&1 &
+          sleep 5
 
-          $timeout = 60
-          $startTime = Get-Date
-          $tunnelUrl = $null
-          while ($true) {
-              if (-not (Get-Process cloudflared -ErrorAction SilentlyContinue)) {
-                  Write-Host "cloudflared متوقف شد"
-                  Get-Content cloudflare.log -ErrorAction SilentlyContinue
-                  Get-Content cloudflare.err -ErrorAction SilentlyContinue
-                  exit 1
-              }
-              $match = Select-String -Path "cloudflare.log","cloudflare.err" -Pattern 'https://[a-zA-Z0-9.-]+\.trycloudflare\.com' | Select-Object -First 1
-              if ($match) {
-                  $tunnelUrl = $match.Matches[0].Value
-                  Write-Host "تونل ساخته شد: $tunnelUrl"
-                  break
-              }
-              if (((Get-Date) - $startTime).TotalSeconds -ge $timeout) {
-                  Write-Host "تونل در زمان مقرر ساخته نشد"
-                  Get-Content cloudflare.log -ErrorAction SilentlyContinue
-                  Get-Content cloudflare.err -ErrorAction SilentlyContinue
-                  exit 1
-              }
-              Start-Sleep -Seconds 2
-          }
-          Add-Content -Path $env:GITHUB_ENV -Value "TUNNEL_URL=$tunnelUrl"
+          TIMEOUT=60
+          START_TIME=$(date +%s)
+          while true; do
+            if ! pgrep cloudflared > /dev/null; then
+              echo "⛔ cloudflared از کار افتاد"
+              cat cloudflare.log
+              exit 1
+            fi
+            if grep -q 'trycloudflare\.com' cloudflare.log; then
+              TUNNEL_URL=$(grep -oP 'https://[a-zA-Z0-9.-]+\.trycloudflare\.com' cloudflare.log | head -n1)
+              if [ -n "$TUNNEL_URL" ]; then
+                echo "✅ تونل ساخته شد: $TUNNEL_URL"
+                break
+              fi
+            fi
+            if [ $(( $(date +%s) - START_TIME )) -ge $TIMEOUT ]; then
+              echo "❌ تونل در زمان مقرر ساخته نشد"
+              cat cloudflare.log
+              exit 1
+            fi
+            sleep 2
+          done
 
-      - name: Update README with initial link
-        shell: pwsh
+          echo "TUNNEL_URL=$TUNNEL_URL" >> $GITHUB_ENV
+
+      - name: به‌روزرسانی README با لینک اولیه
         run: |
-          Set-Content -Path README.md -Value $env:TUNNEL_URL
+          echo "${{ env.TUNNEL_URL }}" > README.md
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add README.md
-          git commit -m "🔗 لینک API [skip ci]" | Out-Null
-          git pull --rebase origin main
-          git push
+          git commit -m "🔗 لینک API [skip ci]" || true
+          git pull --rebase origin main && git push || echo "⚠️ push اولیه ناموفق (در ادامه دوباره تلاش می‌شود)"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Keep session alive and guard tunnel
-        shell: pwsh
+      - name: زنده نگه‌داشتن نشست و نگهبانی تونل
         run: |
-          $duration = ${{ github.event.inputs.session_minutes }}
-          $endTime = (Get-Date).AddMinutes([double]$duration)
-          $tunnelUrl = $env:TUNNEL_URL
-          Write-Host "سرور تا $duration دقیقه فعال خواهد ماند"
+          set +e  # جلوگیری از توقف اسکریپت روی خطاهای غیرمنتظره
 
-          Start-Sleep -Seconds 10
+          DURATION=${{ github.event.inputs.session_minutes }}
+          END_TIME=$(date -d "$DURATION minutes" +%s)
+          TUNNEL_URL="${{ env.TUNNEL_URL }}"
+          echo "⏳ سرور تا $DURATION دقیقه فعال خواهد ماند"
 
-          while ((Get-Date) -lt $endTime) {
-              $remaining = $endTime - (Get-Date)
-              Write-Host "[$(Get-Date -Format 'HH:mm:ss')] زمان باقی‌مانده: $([math]::Floor($remaining.TotalMinutes)) دقیقه"
+          # تأخیر اولیه برای اطمینان از آماده‌سازی کامل تونل و DNS
+          sleep 10
 
-              $httpCode = & curl.exe -s -o NUL -w "%{http_code}" --connect-timeout 5 "$tunnelUrl/api/status" 2>$null
-              if ($httpCode -ne "200" -and $httpCode -ne "401") {
-                  Write-Host "تونل پاسخ نمی‌دهد (کد $httpCode) - راه‌اندازی مجدد..."
+          while [ $(date +%s) -lt $END_TIME ]; do
+            REMAINING=$((END_TIME - $(date +%s)))
+            echo "[$(date +%H:%M:%S)] زمان باقی‌مانده: $((REMAINING/60)) دقیقه"
 
-                  Stop-Process -Name cloudflared -Force -ErrorAction SilentlyContinue
-                  Start-Sleep -Seconds 2
+            # بررسی سلامت تونل از بیرون (با curl)
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "$TUNNEL_URL/api/status" 2>/dev/null || echo "000")
+            if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "401" ]; then
+              echo "❌ تونل پاسخ نمی‌دهد (کد $HTTP_CODE) - راه‌اندازی مجدد..."
 
-                  Start-Process -NoNewWindow -FilePath "$PWD\cloudflared.exe" -ArgumentList "tunnel --url http://localhost:5000 --no-autoupdate" -RedirectStandardOutput "cloudflare.log" -RedirectStandardError "cloudflare.err"
-                  Start-Sleep -Seconds 8
+              # کشتن پروسه‌های قبلی cloudflared
+              pkill cloudflared || true
+              sleep 2
 
-                  $match = Select-String -Path "cloudflare.log","cloudflare.err" -Pattern 'https://[a-zA-Z0-9.-]+\.trycloudflare\.com' | Select-Object -First 1
-                  if ($match) {
-                      $newUrl = $match.Matches[0].Value
-                      Write-Host "آدرس جدید: $newUrl"
-                      if ($newUrl -ne $tunnelUrl) {
-                          $tunnelUrl = $newUrl
-                          Set-Content -Path README.md -Value $tunnelUrl
-                          git config user.name "github-actions[bot]"
-                          git config user.email "github-actions[bot]@users.noreply.github.com"
-                          git add README.md
-                          git commit -m "🔄 به‌روزرسانی لینک تونل [skip ci]" | Out-Null
-                          git pull --rebase origin main
-                          git push
-                      }
-                  } else {
-                      Write-Host "نتوانستیم آدرس جدید را از لاگ بخوانیم"
-                  }
-              } else {
-                  # یک درخواست ساده برای فعال نگه‌داشتن تونل
-                  & curl.exe -s -o NUL "$tunnelUrl/api/status" 2>$null
-              }
+              # راه‌اندازی دوباره (با مسیر کامل)
+              cloudflared tunnel --url http://localhost:5000 --no-autoupdate > cloudflare.log 2>&1 &
+              sleep 8
 
-              Start-Sleep -Seconds 30
-          }
-          Write-Host "زمان به پایان رسید."
+              # استخراج آدرس جدید
+              NEW_URL=$(grep -oP 'https://[a-zA-Z0-9.-]+\.trycloudflare\.com' cloudflare.log | head -n1)
+              if [ -n "$NEW_URL" ]; then
+                echo "✅ آدرس جدید: $NEW_URL"
+                if [ "$NEW_URL" != "$TUNNEL_URL" ]; then
+                  TUNNEL_URL=$NEW_URL
+                  echo "$NEW_URL" > README.md
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
+                  git add README.md
+                  git commit -m "🔄 به‌روزرسانی لینک تونل [skip ci]" || true
+                  git pull --rebase origin main && git push || echo "⚠️ push لینک جدید ناموفق"
+                fi
+              else
+                echo "⚠️ نتوانستیم آدرس جدید را از لاگ بخوانیم"
+              fi
+            else
+              # یک درخواست ساده برای فعال نگه‌داشتن تونل
+              curl -s -o /dev/null "$TUNNEL_URL/api/status" 2>/dev/null || true
+            fi
+
+            sleep 30
+          done
+          echo "زمان به پایان رسید."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Commit any changes
+      - name: کامیت تغییرات احتمالی (در صورت وجود)
         if: always()
-        shell: pwsh
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --exit-code | Out-Null
-          if ($LASTEXITCODE -ne 0) {
-              git commit -m "ذخیره تغییرات [skip ci]" | Out-Null
-              git pull --rebase origin main
-              git push
-          } else {
-              Write-Host "بدون تغییر"
-          }
+          if [ -f README.md ] && ! git diff --quiet README.md; then
+            git add README.md
+            git commit -m "📝 به‌روزرسانی README [skip ci]" || echo "⚠️ commit ناموفق"
+            git pull --rebase origin main && git push || echo "⚠️ push ناموفق"
+          else
+            echo "بدون تغییر در README"
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
