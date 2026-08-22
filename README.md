@@ -1,1 +1,1 @@
-https://strategies-spot-isaac-layout.trycloudflare.com
+https://allow-tell-targets-refined.trycloudflare.com
