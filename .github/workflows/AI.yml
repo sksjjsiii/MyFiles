@@ -37,10 +37,12 @@ jobs:
           import time
           import secrets
           import warnings
+          import traceback
           from typing import List, Optional, Dict, Any
 
           import g4f
           from fastapi import FastAPI, Depends, HTTPException, Header
+          from fastapi.responses import JSONResponse
           from pydantic import BaseModel
           import uvicorn
 
@@ -150,6 +152,21 @@ jobs:
                   "usage": getattr(g4f_response, 'usage', None)
               }
 
+          # هندلر سراسری برای خطاهای پیش‌بینی‌نشده
+          @app.exception_handler(Exception)
+          async def unhandled_exception_handler(request, exc):
+              tb = traceback.format_exc()
+              return JSONResponse(
+                  status_code=500,
+                  content={
+                      "detail": {
+                          "error": str(exc),
+                          "type": type(exc).__name__,
+                          "traceback": tb,
+                      }
+                  },
+              )
+
           @app.post("/v1/chat/completions", response_model=ChatCompletionResponse)
           async def chat_completions(
               request: ChatCompletionRequest,
@@ -189,8 +206,16 @@ jobs:
                   response = client.chat.completions.create(**params)
                   return convert_g4f_response(response, MODEL_NAME)
               except Exception as e:
-                  print(f"Error during completion: {type(e).__name__}: {e}")
-                  raise HTTPException(status_code=500, detail="Internal server error")
+                  tb = traceback.format_exc()
+                  print(tb)
+                  raise HTTPException(
+                      status_code=500,
+                      detail={
+                          "error": str(e),
+                          "type": type(e).__name__,
+                          "traceback": tb,
+                      }
+                  )
 
           @app.get("/health")
           async def health():
