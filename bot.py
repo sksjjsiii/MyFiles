@@ -71,7 +71,6 @@ def is_allowed(user) -> bool:
 
 async def download_file_from_tg(file_id: str, dest_dir: Path) -> Path:
     file = await bot.get_file(file_id)
-    # اصلاح خطای مسیر: پرانتزگذاری صحیح برای جمع رشته و پسوند
     file_path = dest_dir / ("input" + Path(file.file_path).suffix)
     await bot.download_file(file.file_path, file_path)
     return file_path
@@ -88,7 +87,6 @@ def extract_audio(input_path: Path, output_dir: Path) -> Path:
     return output_path
 
 def get_audio_title(input_path: Path) -> str:
-    """دریافت عنوان از متادیتا یا نام فایل"""
     cmd = [
         "ffprobe", "-v", "error",
         "-show_entries", "format_tags=title",
@@ -102,7 +100,6 @@ def get_audio_title(input_path: Path) -> str:
     return title
 
 async def download_from_url(url: str, dest_dir: Path) -> Path:
-    """دانلود صدا از لینک با yt-dlp"""
     ydl_opts = {
         'format': 'bestaudio/best',
         'postprocessors': [{
@@ -127,8 +124,17 @@ async def download_from_url(url: str, dest_dir: Path) -> Path:
             raise FileNotFoundError("Downloaded audio not found")
     return Path(await asyncio.to_thread(_sync_download))
 
+async def send_long_message(chat_id: int, text: str, parse_mode: Optional[str] = None):
+    """ارسال متن طولانی با شکستن به قطعات حداکثر ۴۰۰۰ کاراکتر"""
+    max_len = 4000
+    if len(text) <= max_len:
+        await bot.send_message(chat_id, text, parse_mode=parse_mode)
+    else:
+        for i in range(0, len(text), max_len):
+            chunk = text[i:i+max_len]
+            await bot.send_message(chat_id, chunk, parse_mode=parse_mode)
+
 async def process_audio_input(message: types.Message, state: FSMContext, mode: str):
-    """پردازش ورودی صوتی/لینک و شروع عملیات مناسب"""
     chat_id = message.chat.id
     user = message.from_user
 
@@ -227,12 +233,22 @@ async def identify_task(chat_id: int, audio_path: Path, temp_dir: Path, cancel_e
         else:
             text = "😢 هیچ موسیقی شناسایی نشد."
 
-        await bot.edit_message_text(
-            text,
-            chat_id=chat_id,
-            message_id=processing_messages[chat_id],
-            parse_mode="Markdown"
-        )
+        # ارسال متن با شکستن به قطعات در صورت نیاز
+        if len(text) <= 4000:
+            await bot.edit_message_text(
+                text,
+                chat_id=chat_id,
+                message_id=processing_messages[chat_id],
+                parse_mode="Markdown"
+            )
+        else:
+            # پیام کوتاه در پیام اصلی و ارسال جزئیات به صورت جداگانه
+            await bot.edit_message_text(
+                "🎉 نتایج شناسایی (به دلیل طولانی بودن، در پیام‌های جداگانه ارسال می‌شوند):",
+                chat_id=chat_id,
+                message_id=processing_messages[chat_id]
+            )
+            await send_long_message(chat_id, text, parse_mode="Markdown")
     except asyncio.CancelledError:
         await bot.edit_message_text("⏹ عملیات لغو شد.", chat_id=chat_id, message_id=processing_messages[chat_id])
     except Exception as e:
