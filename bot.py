@@ -125,14 +125,18 @@ async def download_from_url(url: str, dest_dir: Path) -> Path:
     return Path(await asyncio.to_thread(_sync_download))
 
 async def send_long_message(chat_id: int, text: str, parse_mode: Optional[str] = None):
-    """ارسال متن طولانی با شکستن به قطعات حداکثر ۴۰۰۰ کاراکتر"""
+    """
+    ارسال متن طولانی با شکستن به قطعات حداکثر ۴۰۰۰ کاراکتر.
+    در صورت شکستن، برای جلوگیری از خطای موجودیت‌های Markdown، parse_mode حذف می‌شود.
+    """
     max_len = 4000
     if len(text) <= max_len:
         await bot.send_message(chat_id, text, parse_mode=parse_mode)
     else:
+        # قطعات را بدون parse_mode ارسال می‌کنیم تا از بروز خطا جلوگیری شود
         for i in range(0, len(text), max_len):
             chunk = text[i:i+max_len]
-            await bot.send_message(chat_id, chunk, parse_mode=parse_mode)
+            await bot.send_message(chat_id, chunk)
 
 async def process_audio_input(message: types.Message, state: FSMContext, mode: str):
     chat_id = message.chat.id
@@ -233,7 +237,7 @@ async def identify_task(chat_id: int, audio_path: Path, temp_dir: Path, cancel_e
         else:
             text = "😢 هیچ موسیقی شناسایی نشد."
 
-        # ارسال متن با شکستن به قطعات در صورت نیاز
+        # اگر متن کوتاه است، همان پیام را با Markdown ویرایش می‌کنیم
         if len(text) <= 4000:
             await bot.edit_message_text(
                 text,
@@ -242,13 +246,14 @@ async def identify_task(chat_id: int, audio_path: Path, temp_dir: Path, cancel_e
                 parse_mode="Markdown"
             )
         else:
-            # پیام کوتاه در پیام اصلی و ارسال جزئیات به صورت جداگانه
+            # در غیر این صورت، پیام اصلی را به خلاصه تغییر داده و متن کامل را بدون قالب‌بندی ارسال می‌کنیم
             await bot.edit_message_text(
                 "🎉 نتایج شناسایی (به دلیل طولانی بودن، در پیام‌های جداگانه ارسال می‌شوند):",
                 chat_id=chat_id,
                 message_id=processing_messages[chat_id]
             )
-            await send_long_message(chat_id, text, parse_mode="Markdown")
+            await send_long_message(chat_id, text)  # بدون parse_mode
+
     except asyncio.CancelledError:
         await bot.edit_message_text("⏹ عملیات لغو شد.", chat_id=chat_id, message_id=processing_messages[chat_id])
     except Exception as e:
