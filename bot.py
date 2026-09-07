@@ -36,6 +36,9 @@ active_tasks: dict[int, asyncio.Task] = {}
 cancel_events: dict[int, asyncio.Event] = {}
 processing_messages: dict[int, int] = {}  # chat_id -> message_id
 
+# ─── مجموعه‌ی آهنگ‌های ارسال شده (برای جلوگیری از تکراری) ──
+sent_songs_global = set()
+
 # ─── لیست نسخه‌های تولیدی ─────────────────────────────────
 VERSION_SPECS = [
     ("Speed Up", "atempo=1.1"),
@@ -114,6 +117,37 @@ async def download_from_url(url: str, dest_dir: Path) -> Path:
     def _sync_download():
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+            mp3_path = Path(filename).with_suffix('.mp3')
+            if mp3_path.exists():
+                return str(mp3_path)
+            mp3_files = list(dest_dir.glob('*.mp3'))
+            if mp3_files:
+                return str(mp3_files[-1])
+            raise FileNotFoundError("Downloaded audio not found")
+    return Path(await asyncio.to_thread(_sync_download))
+
+async def download_audio_from_query(query: str, dest_dir: Path) -> Path:
+    """
+    جستجوی query در YouTube و دانلود اولین نتیجه به صورت mp3.
+    """
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }],
+        'outtmpl': str(dest_dir / '%(title)s.%(ext)s'),
+        'quiet': True,
+        'noplaylist': True,
+        'default_search': 'ytsearch1',  # جستجو در یوتیوب و انتخاب اولین نتیجه
+    }
+    def _sync_download():
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(query, download=True)
+            if 'entries' in info:
+                info = info['entries'][0]
             filename = ydl.prepare_filename(info)
             mp3_path = Path(filename).with_suffix('.mp3')
             if mp3_path.exists():
@@ -237,7 +271,7 @@ async def identify_task(chat_id: int, audio_path: Path, temp_dir: Path, cancel_e
         else:
             text = "😢 هیچ موسیقی شناسایی نشد."
 
-        # اگر متن کوتاه است، همان پیام را با Markdown ویرایش می‌کنیم
+        # ارسال متن نتایج
         if len(text) <= 4000:
             await bot.edit_message_text(
                 text,
@@ -246,13 +280,71 @@ async def identify_task(chat_id: int, audio_path: Path, temp_dir: Path, cancel_e
                 parse_mode="Markdown"
             )
         else:
-            # در غیر این صورت، پیام اصلی را به خلاصه تغییر داده و متن کامل را بدون قالب‌بندی ارسال می‌کنیم
             await bot.edit_message_text(
                 "🎉 نتایج شناسایی (به دلیل طولانی بودن، در پیام‌های جداگانه ارسال می‌شوند):",
                 chat_id=chat_id,
                 message_id=processing_messages[chat_id]
             )
-            await send_long_message(chat_id, text)  # بدون parse_mode
+            await send_long_message(chat_id, text)
+
+        # دانلود و ارسال آهنگ‌های شناسایی شده
+        if found > 0 and results:
+            matched_items = [r for r in results if r.get("matched")]
+            # حذف تکراری‌ها (بر اساس عنوان و هنرمند)
+            unique_items = []
+            seen_keys = set()
+            for r in matched_items:
+                key = (r.get('title', '').strip().lower(), r.get('subtitle', '').strip().lower())
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    unique_items.append(r)
+
+            if unique_items:
+                await bot.edit_message_text(
+                    f"⬇️ در حال دانلود و ارسال {len(unique_items)} آهنگ...",
+                    chat_id=chat_id,
+                    message_id=processing_messages[chat_id]
+                )
+                sent_count = 0
+                for idx, r in enumerate(unique_items, 1):
+                    if cancel_event.is_set():
+                        await bot.edit_message_text(
+                            f"⏹ دانلود و ارسال لغو شد. {sent_count} از {len(unique_items)} ارسال شد.",
+                            chat_id=chat_id,
+                            message_id=processing_messages[chat_id]
+                        )
+                        return
+                    key = (r['title'].strip().lower(), r.get('subtitle', '').strip().lower())
+                    # بررسی تکراری سراسری
+                    if key in sent_songs_global:
+                        continue
+                    query = f"{r['title']} {r.get('subtitle', '')} official audio"
+                    try:
+                        downloaded_file = await download_audio_from_query(query, temp_dir)
+                        await bot.send_audio(
+                            chat_id=chat_id,
+                            audio=types.FSInputFile(downloaded_file),
+                            caption=f"🎵 {r['title']} - {r.get('subtitle', '')}"
+                        )
+                        sent_songs_global.add(key)
+                        sent_count += 1
+                        await bot.edit_message_text(
+                            f"⬇️ در حال دانلود و ارسال... ({sent_count}/{len(unique_items)})",
+                            chat_id=chat_id,
+                            message_id=processing_messages[chat_id]
+                        )
+                        await asyncio.sleep(0.5)
+                    except Exception as e:
+                        await bot.send_message(
+                            chat_id,
+                            f"⚠️ خطا در دانلود «{r['title']}»: {str(e)}"
+                        )
+                        continue
+                await bot.edit_message_text(
+                    f"✅ ارسال {sent_count} آهنگ به پایان رسید.",
+                    chat_id=chat_id,
+                    message_id=processing_messages[chat_id]
+                )
 
     except asyncio.CancelledError:
         await bot.edit_message_text("⏹ عملیات لغو شد.", chat_id=chat_id, message_id=processing_messages[chat_id])
