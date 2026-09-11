@@ -141,7 +141,7 @@ async def download_audio_from_query(query: str, dest_dir: Path) -> Path:
         'outtmpl': str(dest_dir / '%(title)s.%(ext)s'),
         'quiet': True,
         'noplaylist': True,
-        'default_search': 'ytsearch1',  # جستجو در یوتیوب و انتخاب اولین نتیجه
+        'default_search': 'ytsearch1',
     }
     def _sync_download():
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -161,13 +161,11 @@ async def download_audio_from_query(query: str, dest_dir: Path) -> Path:
 async def send_long_message(chat_id: int, text: str, parse_mode: Optional[str] = None):
     """
     ارسال متن طولانی با شکستن به قطعات حداکثر ۴۰۰۰ کاراکتر.
-    در صورت شکستن، برای جلوگیری از خطای موجودیت‌های Markdown، parse_mode حذف می‌شود.
     """
     max_len = 4000
     if len(text) <= max_len:
         await bot.send_message(chat_id, text, parse_mode=parse_mode)
     else:
-        # قطعات را بدون parse_mode ارسال می‌کنیم تا از بروز خطا جلوگیری شود
         for i in range(0, len(text), max_len):
             chunk = text[i:i+max_len]
             await bot.send_message(chat_id, chunk)
@@ -236,61 +234,85 @@ async def process_audio_input(message: types.Message, state: FSMContext, mode: s
 
 # ─── تسک شناسایی ──────────────────────────────────────────
 async def identify_task(chat_id: int, audio_path: Path, temp_dir: Path, cancel_event: asyncio.Event):
+    result_file = temp_dir / "shazam-results.json"
+    stats = {"matches": 0}
+
+    async def safe_edit(text: str, parse_mode: Optional[str] = None):
+        try:
+            await bot.edit_message_text(
+                text,
+                chat_id=chat_id,
+                message_id=processing_messages.get(chat_id),
+                parse_mode=parse_mode,
+                reply_markup=InlineKeyboardBuilder().button(
+                    text="❌ لغو", callback_data="cancel"
+                ).as_markup() if processing_messages.get(chat_id) else None,
+            )
+        except TelegramBadRequest:
+            pass
+        except Exception:
+            pass
+
     try:
         async def progress_callback(done, total):
             if done % 5 == 0 or done == total:
-                try:
-                    await bot.edit_message_text(
-                        f"🔄 در حال شناسایی...\n"
-                        f"پیشرفت: {done}/{total}\n"
-                        f"لغو با دکمه زیر",
-                        chat_id=chat_id,
-                        message_id=processing_messages[chat_id],
-                        reply_markup=InlineKeyboardBuilder().button(
-                            text="❌ لغو", callback_data="cancel"
-                        ).as_markup()
-                    )
-                except TelegramBadRequest:
-                    pass
+                await safe_edit(
+                    f"🔄 در حال شناسایی...\n"
+                    f"پیشرفت: {done}/{total}\n"
+                    f"تطابق‌های یافت‌شده: {stats['matches']}\n"
+                    f"لغو با دکمه زیر"
+                )
+
+        async def match_callback(entry):
+            """به محض یافتن تطابق، همین‌جا نتیجه را ارسال کن (stream-like)."""
+            title = entry.get("title") or "?"
+            subtitle = entry.get("subtitle") or "?"
+            text = (
+                f"🎵 تطابق یافت شد!\n\n"
+                f"عنوان: {title}\n"
+                f"هنرمند: {subtitle}\n"
+                f"روش: {entry.get('method')} | "
+                f"فاکتور: {entry.get('factor')} | "
+                f"شروع: {entry.get('start')}s"
+            )
+            try:
+                await bot.send_message(chat_id, text)
+                stats["matches"] += 1
+            except Exception as e:
+                print(f"match_callback send failed: {e}")
 
         result = await search_all_variations(
             audio_path,
             progress_callback=progress_callback,
+            match_callback=match_callback,
             cancel_event=cancel_event,
+            result_file=result_file,
         )
 
         found = result.get("found_matches", 0)
         results = result.get("results", [])
-        if found:
-            text = f"🎉 **نتایج شناسایی:**\n\n"
-            for r in results:
-                if r.get("matched"):
-                    text += f"✅ `{r.get('title', '')}` - `{r.get('subtitle', '')}`\n"
-                    text += f"   روش: {r['method']} | فاکتور: {r['factor']} | شروع: {r['start']}s\n"
-            text += f"\nکل تطابق‌ها: {found}"
-        else:
-            text = "😢 هیچ موسیقی شناسایی نشد."
 
-        # ارسال متن نتایج
-        if len(text) <= 4000:
-            await bot.edit_message_text(
-                text,
-                chat_id=chat_id,
-                message_id=processing_messages[chat_id],
-                parse_mode="Markdown"
-            )
-        else:
-            await bot.edit_message_text(
-                "🎉 نتایج شناسایی (به دلیل طولانی بودن، در پیام‌های جداگانه ارسال می‌شوند):",
-                chat_id=chat_id,
-                message_id=processing_messages[chat_id]
-            )
-            await send_long_message(chat_id, text)
+        # ارسال فایل JSON به کاربر
+        try:
+            if result_file.exists():
+                await bot.send_document(
+                    chat_id=chat_id,
+                    document=types.FSInputFile(result_file, filename="shazam-results.json"),
+                    caption=f"📄 فایل JSON نتایج شناسایی\nتعداد تطابق‌ها: {found}",
+                )
+        except Exception as e:
+            await bot.send_message(chat_id, f"⚠️ خطا در ارسال فایل JSON: {e}")
+
+        # خلاصه
+        summary = (
+            f"✅ شناسایی کامل شد. {found} تطابق یافت شد."
+            if found else "😢 هیچ موسیقی شناسایی نشد."
+        )
+        await safe_edit(summary)
 
         # دانلود و ارسال آهنگ‌های شناسایی شده
         if found > 0 and results:
             matched_items = [r for r in results if r.get("matched")]
-            # حذف تکراری‌ها (بر اساس عنوان و هنرمند)
             unique_items = []
             seen_keys = set()
             for r in matched_items:
@@ -300,22 +322,19 @@ async def identify_task(chat_id: int, audio_path: Path, temp_dir: Path, cancel_e
                     unique_items.append(r)
 
             if unique_items:
-                await bot.edit_message_text(
-                    f"⬇️ در حال دانلود و ارسال {len(unique_items)} آهنگ...",
-                    chat_id=chat_id,
-                    message_id=processing_messages[chat_id]
+                await bot.send_message(
+                    chat_id,
+                    f"⬇️ در حال دانلود و ارسال {len(unique_items)} آهنگ..."
                 )
                 sent_count = 0
                 for idx, r in enumerate(unique_items, 1):
                     if cancel_event.is_set():
-                        await bot.edit_message_text(
-                            f"⏹ دانلود و ارسال لغو شد. {sent_count} از {len(unique_items)} ارسال شد.",
-                            chat_id=chat_id,
-                            message_id=processing_messages[chat_id]
+                        await bot.send_message(
+                            chat_id,
+                            f"⏹ دانلود و ارسال لغو شد. {sent_count} از {len(unique_items)} ارسال شد."
                         )
                         return
                     key = (r['title'].strip().lower(), r.get('subtitle', '').strip().lower())
-                    # بررسی تکراری سراسری
                     if key in sent_songs_global:
                         continue
                     query = f"{r['title']} {r.get('subtitle', '')} official audio"
@@ -328,11 +347,6 @@ async def identify_task(chat_id: int, audio_path: Path, temp_dir: Path, cancel_e
                         )
                         sent_songs_global.add(key)
                         sent_count += 1
-                        await bot.edit_message_text(
-                            f"⬇️ در حال دانلود و ارسال... ({sent_count}/{len(unique_items)})",
-                            chat_id=chat_id,
-                            message_id=processing_messages[chat_id]
-                        )
                         await asyncio.sleep(0.5)
                     except Exception as e:
                         await bot.send_message(
@@ -340,16 +354,38 @@ async def identify_task(chat_id: int, audio_path: Path, temp_dir: Path, cancel_e
                             f"⚠️ خطا در دانلود «{r['title']}»: {str(e)}"
                         )
                         continue
-                await bot.edit_message_text(
-                    f"✅ ارسال {sent_count} آهنگ به پایان رسید.",
-                    chat_id=chat_id,
-                    message_id=processing_messages[chat_id]
-                )
+                await bot.send_message(chat_id, f"✅ ارسال {sent_count} آهنگ به پایان رسید.")
 
     except asyncio.CancelledError:
-        await bot.edit_message_text("⏹ عملیات لغو شد.", chat_id=chat_id, message_id=processing_messages[chat_id])
+        # حتی در صورت لغو، تلاش کن فایل JSON را ارسال کنی
+        try:
+            if result_file.exists():
+                await asyncio.shield(
+                    bot.send_document(
+                        chat_id=chat_id,
+                        document=types.FSInputFile(result_file, filename="shazam-results.json"),
+                        caption="📄 فایل JSON نتایج (لغو شده — بخشی از نتایج)",
+                    )
+                )
+        except Exception:
+            pass
+        try:
+            await bot.edit_message_text(
+                "⏹ عملیات لغو شد.",
+                chat_id=chat_id,
+                message_id=processing_messages.get(chat_id),
+            )
+        except Exception:
+            pass
     except Exception as e:
-        await bot.edit_message_text(f"❌ خطا در شناسایی: {str(e)}", chat_id=chat_id, message_id=processing_messages[chat_id])
+        try:
+            await bot.edit_message_text(
+                f"❌ خطا در شناسایی: {str(e)}",
+                chat_id=chat_id,
+                message_id=processing_messages.get(chat_id),
+            )
+        except Exception:
+            pass
     finally:
         active_tasks.pop(chat_id, None)
         cancel_events.pop(chat_id, None)
