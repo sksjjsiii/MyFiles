@@ -12,6 +12,7 @@ from shazamio import Shazam
 SEGMENT_LENGTH = 12          # طول هر قطعه برای شناسایی (ثانیه)
 START_STEP = 5               # گام برش از زمان‌های مختلف (ثانیه)
 DEFAULT_RESULT_FILE = Path("shazam-results.json")
+VARIATION_TIMEOUT = 30       # تایم‌اوت هر variation (ثانیه) — اگر گیر کرد، رد می‌شود
 
 # ─── روش‌های تغییر صدا ────────────────────────────────────
 METHODS = [
@@ -120,7 +121,8 @@ def create_audio_bytes(file_path, start, input_duration, method_name, factor):
         "-vn", "-ac", "2", "-ar", "44100",
         "-f", "mp3", "pipe:1"
     ]
-    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+    # تایم‌اوت داخلی ffmpeg کمی کمتر از VARIATION_TIMEOUT تا فرصت کافی برای shazam بماند
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20)
     if result.returncode != 0:
         raise RuntimeError(f"ffmpeg failed: {result.stderr.decode(errors='ignore')[:200]}")
     return result.stdout
@@ -136,15 +138,44 @@ async def recognize_with_retry(shazam, audio_bytes, retries=2):
         except Exception as e:
             err = str(e).lower()
             if '429' in err or 'rate' in err or 'too many' in err:
-                await asyncio.sleep(5)
+                await asyncio.sleep(3)
             else:
                 return {"error": str(e)}
     return {"error": "Max retries exceeded"}
+
+# ─── پردازش یک variation با تایم‌اوت ────────────────────
+async def _process_one_variation(shazam, audio_file_path, var):
+    """یک variation را پردازش می‌کند (بدون تایم‌اوت خارجی)."""
+    audio_bytes = await asyncio.to_thread(
+        create_audio_bytes,
+        audio_file_path, var["start"], var["input_duration"],
+        var["method"], var["factor"]
+    )
+    if len(audio_bytes) == 0:
+        return {**var, "matched": False, "error": "Empty audio"}
+
+    resp = await recognize_with_retry(shazam, audio_bytes)
+
+    matches = resp.get("matches", [])
+    track = resp.get("track", {})
+    title = track.get("title")
+    subtitle = track.get("subtitle")
+
+    matched = bool(matches) or bool(title)
+    result_entry = {**var, "matched": matched}
+    if matched:
+        result_entry["title"] = title
+        result_entry["subtitle"] = subtitle
+        result_entry["shazam_track"] = track
+    if resp.get("error"):
+        result_entry["error"] = resp["error"]
+    return result_entry
 
 # ─── تابع اصلی جستجو (قابل استفاده در ربات) ────────────────
 async def search_all_variations(
     audio_file_path,
     progress_callback: Optional[Callable[[int, int], Awaitable[None]]] = None,
+    match_callback: Optional[Callable[[dict], Awaitable[None]]] = None,
     cancel_event: Optional[asyncio.Event] = None,
     result_file: Optional[Path] = None,
 ) -> dict:
@@ -154,6 +185,7 @@ async def search_all_variations(
     Args:
         audio_file_path: مسیر فایل صوتی
         progress_callback: تابع async که (پردازش‌شده، کل) را می‌گیرد
+        match_callback: تابع async که با هر تطابق یافته‌شده فراخوانی می‌شود (stream-like)
         cancel_event: رویداد لغو
         result_file: اگر داده شود، نتایج در آن ذخیره می‌شود
 
@@ -181,7 +213,10 @@ async def search_all_variations(
                 if method["name"] in ("reverse",):
                     input_duration = min(SEGMENT_LENGTH, duration - start)
                 else:
-                    input_duration = min(SEGMENT_LENGTH * (float(factor) if isinstance(factor, (int, float)) else 1.0), duration - start)
+                    input_duration = min(
+                        SEGMENT_LENGTH * (float(factor) if isinstance(factor, (int, float)) else 1.0),
+                        duration - start
+                    )
                 if input_duration < 2:
                     continue
                 variations.append({
@@ -202,42 +237,35 @@ async def search_all_variations(
             break
 
         if progress_callback:
-            await progress_callback(idx, total)
+            try:
+                await progress_callback(idx, total)
+            except Exception as e:
+                print(f"progress_callback error: {e}")
 
+        # اجرای پردازش با تایم‌اوت ۳۰ ثانیه — اگر گیر کرد، رد شو
         try:
-            audio_bytes = create_audio_bytes(
-                audio_file_path, var["start"], var["input_duration"],
-                var["method"], var["factor"]
+            result_entry = await asyncio.wait_for(
+                _process_one_variation(shazam, audio_file_path, var),
+                timeout=VARIATION_TIMEOUT,
             )
-            if len(audio_bytes) == 0:
-                results.append({**var, "matched": False, "error": "Empty audio"})
-                continue
-
-            resp = await recognize_with_retry(shazam, audio_bytes)
-
-            matches = resp.get("matches", [])
-            track = resp.get("track", {})
-            title = track.get("title")
-            subtitle = track.get("subtitle")
-
-            matched = bool(matches) or bool(title)
-            if matched:
-                found_matches += 1
-                print(f"✅ MATCH: {title} - {subtitle}")
-
-            result_entry = {**var, "matched": matched}
-            if matched:
-                result_entry["title"] = title
-                result_entry["subtitle"] = subtitle
-                result_entry["shazam_track"] = track
-            if resp.get("error"):
-                result_entry["error"] = resp["error"]
-            results.append(result_entry)
-
+        except asyncio.TimeoutError:
+            print(f"⏱ TIMEOUT ({VARIATION_TIMEOUT}s): {var['method']} factor={var['factor']} @ {var['start']}s")
+            result_entry = {**var, "matched": False, "error": f"Timeout ({VARIATION_TIMEOUT}s)"}
         except Exception as e:
-            print(f"❌ Exception: {e}")
-            results.append({**var, "matched": False, "error": str(e)})
+            print(f"❌ Exception in variation: {e}")
+            result_entry = {**var, "matched": False, "error": str(e)}
 
+        # اگر تطابق داشت، بلافاصله به کاربر خبر بده (stream-like)
+        if result_entry.get("matched"):
+            found_matches += 1
+            print(f"✅ MATCH: {result_entry.get('title')} - {result_entry.get('subtitle')}")
+            if match_callback:
+                try:
+                    await match_callback(result_entry)
+                except Exception as cb_err:
+                    print(f"match_callback error: {cb_err}")
+
+        results.append(result_entry)
         await asyncio.sleep(0.3)
 
     final = {
@@ -250,8 +278,15 @@ async def search_all_variations(
         "results": results,
     }
 
+    # ذخیره‌ی فایل JSON — حتی در صورت لغو
     if result_file:
-        result_file.write_text(json.dumps(final, ensure_ascii=False, indent=2), encoding="utf-8")
+        try:
+            result_file.write_text(
+                json.dumps(final, ensure_ascii=False, indent=2),
+                encoding="utf-8"
+            )
+        except Exception as e:
+            print(f"Failed to write result file: {e}")
 
     return final
 
