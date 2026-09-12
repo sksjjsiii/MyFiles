@@ -275,7 +275,7 @@ class TgjuScraper {
     if (text == null) return null;
     var t = text.trim().replaceAll(',', '').replaceAll('٬', '').replaceAll(' ', '');
     for (int i = 0; i < 10; i++) {
-      t = t.replaceAll(_faDigits[i], '$_i').replaceAll(_arDigits[i], '$_i');
+      t = t.replaceAll(_faDigits[i], '$i').replaceAll(_arDigits[i], '$i');
     }
     t = t.replaceAll(RegExp(r'[^\d.\-]'), '');
     return double.tryParse(t);
@@ -297,13 +297,13 @@ class TgjuScraper {
     m = RegExp(r'(-?[\d,٬\.]+)\s*\((-?\d+\.?\d*)%\)').firstMatch(t);
     if (m != null) {
       result['value'] = parseNumber(m.group(1));
-      result['percent'] = double.tryParse(m.group(2));
+      result['percent'] = double.tryParse(m.group(2)!);
       return result;
     }
     // الگوی ۳: فقط درصد
     m = RegExp(r'\((-?\d+\.?\d*)%\)').firstMatch(t);
     if (m != null) {
-      result['percent'] = double.tryParse(m.group(1));
+      result['percent'] = double.tryParse(m.group(1)!);
       return result;
     }
     result['value'] = parseNumber(t);
@@ -1052,7 +1052,7 @@ class TGJUApp extends StatelessWidget {
             theme: theme,
             builder: (context, child) {
               return Directionality(
-                textDirection: TextDirection.rtl,
+                textDirection: ui.TextDirection.rtl,
                 child: MediaQuery(
                   data: MediaQuery.of(context)
                       .copyWith(textScaler: TextScaler.linear(s.fontScale)),
@@ -1749,14 +1749,14 @@ Future<void> showAlertEditor(BuildContext context, MarketItem item) async {
   final market = context.read<MarketProvider>();
   final existing = s.alertFor(item.key);
   final upperCtrl = TextEditingController(
-      text: existing?['above'] != null ? formatNumber(existing['above'], fa: false) : '');
+      text: existing?['above'] != null ? formatNumber(existing!['above'], fa: false) : '');
   final lowerCtrl = TextEditingController(
-      text: existing?['below'] != null ? formatNumber(existing['below'], fa: false) : '');
+      text: existing?['below'] != null ? formatNumber(existing!['below'], fa: false) : '');
 
   await showDialog(
     context: context,
     builder: (ctx) => Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: ui.TextDirection.rtl,
       child: AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: Text('هشدار قیمت «${item.name}»', style: const TextStyle(fontSize: 15)),
@@ -2060,7 +2060,7 @@ class HomeScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Directionality(
-                              textDirection: TextDirection.ltr,
+                              textDirection: ui.TextDirection.ltr,
                               child: Text(e.name,
                                   style: const TextStyle(
                                       fontSize: 12.5, fontWeight: FontWeight.bold))),
@@ -2137,7 +2137,7 @@ class HomeScreen extends StatelessWidget {
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Text('$label: ', style: TextStyle(fontSize: 11, color: color)),
         Directionality(
-            textDirection: TextDirection.ltr,
+            textDirection: ui.TextDirection.ltr,
             child: Text(value ?? '-',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color))),
       ]),
@@ -2506,7 +2506,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
                           titlesData: const FlTitlesData(show: false),
                           borderData: FlBorderData(show: false),
                           lineTouchData: LineTouchData(
-                            touchTooltip: LineTouchTooltipData(
+                            touchTooltipData: LineTouchTooltipData(
                               getTooltipItems: (spots) => spots
                                   .map((sp) => LineTooltipItem(
                                       formatNumber(sp.y, fa: s.faDigits),
@@ -2606,18 +2606,18 @@ class SettingsScreen extends StatelessWidget {
 
         // ── رنگ‌ها ──
         _SettingCard(title: 'رنگ اصلی برنامه', icon: Icons.palette_rounded, children: [
-          _colorGrid(s.palette, s.accentValue, (c) => s.set((x) => x.accentValue = c)),
+          _colorGrid(SettingsProvider.palette, s.accentValue, (c) => s.set((x) => x.accentValue = c)),
           const SizedBox(height: 12),
           const Text('رنگ نوار ناوبری', style: TextStyle(fontSize: 12.5)),
           const SizedBox(height: 8),
-          _colorGrid(s.palette, s.menuColorValue, (c) => s.set((x) => x.menuColorValue = c)),
+          _colorGrid(SettingsProvider.palette, s.menuColorValue, (c) => s.set((x) => x.menuColorValue = c)),
           const SizedBox(height: 12),
           Row(children: [
             Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               const Text('رنگ رشد', style: TextStyle(fontSize: 12.5)),
               const SizedBox(height: 6),
-              _colorGrid(s.palette.sublist(3, 8), s.positiveValue,
+              _colorGrid(SettingsProvider.palette.sublist(3, 8), s.positiveValue,
                   (c) => s.set((x) => x.positiveValue = c), size: 30),
             ])),
             const SizedBox(width: 12),
@@ -2625,7 +2625,7 @@ class SettingsScreen extends StatelessWidget {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               const Text('رنگ افت', style: TextStyle(fontSize: 12.5)),
               const SizedBox(height: 6),
-              _colorGrid(s.palette.sublist(0, 5), s.negativeValue,
+              _colorGrid(SettingsProvider.palette.sublist(0, 5), s.negativeValue,
                   (c) => s.set((x) => x.negativeValue = c), size: 30),
             ])),
           ]),
