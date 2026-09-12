@@ -1,56 +1,9 @@
 ==========================================
-⏰ 2026-09-12 20:53:11
+⏰ 2026-09-12 22:34:35
 🌐 TUNNEL_URL: https://cove-homepage-respiratory-bloomberg.trycloudflare.com
-⏱️  آپ‌تایم: 4271 ثانیه
+⏱️  آپ‌تایم: 10355 ثانیه
 ==========================================
 ------ api_server.log ------
- * Serving Flask app 'api_server'
- * Debug mode: off
-WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
- * Running on all addresses (0.0.0.0)
- * Running on http://127.0.0.1:5000
- * Running on http://10.1.0.200:5000
-Press CTRL+C to quit
-127.0.0.1 - - [12/Sep/2026 19:42:10] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 19:42:10] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 19:42:10] "GET /api/build HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:42:42] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 19:43:12] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 19:43:42] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 19:44:06] "GET /api/status HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:44:06] "GET /api/project/info HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:44:13] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 19:44:43] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 19:44:47] "GET /api/files HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:44:52] "GET /api/files/pubspec.yaml HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:44:57] "PUT /api/files/pubspec.yaml HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:44:57] "GET /api/files HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:45:04] "GET /api/files/lib HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:45:05] "GET /api/files/lib/main.dart HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:45:13] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 19:45:14] "PUT /api/files/lib/main.dart HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:45:15] "GET /api/files/lib HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:45:17] "GET /api/build HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:45:19] "POST /api/build HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:45:19] "GET /api/build HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:45:22] "GET /api/build HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:45:25] "GET /api/build HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:45:28] "GET /api/build HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:45:31] "GET /api/build HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:45:34] "GET /api/build HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:45:37] "GET /api/build HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:45:40] "GET /api/build HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:45:43] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 19:45:43] "GET /api/build HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:45:46] "GET /api/build HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:45:49] "GET /api/build HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:45:52] "GET /api/build HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:45:55] "GET /api/build HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:45:59] "GET /api/build HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:46:01] "GET /api/build HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:46:04] "GET /api/build HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:46:07] "GET /api/build HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 19:46:10] "GET /api/build HTTP/1.1" 200 -
 127.0.0.1 - - [12/Sep/2026 19:46:13] "GET /api/build HTTP/1.1" 200 -
 127.0.0.1 - - [12/Sep/2026 19:46:14] "GET /api/status HTTP/1.1" 401 -
 127.0.0.1 - - [12/Sep/2026 19:46:16] "GET /api/build HTTP/1.1" 200 -
@@ -265,6 +218,292 @@ Press CTRL+C to quit
 127.0.0.1 - - [12/Sep/2026 20:52:11] "GET /api/status HTTP/1.1" 401 -
 127.0.0.1 - - [12/Sep/2026 20:52:41] "GET /api/status HTTP/1.1" 401 -
 127.0.0.1 - - [12/Sep/2026 20:53:11] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 20:53:11] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 20:53:11] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 20:53:43] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 20:54:13] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 20:54:36] "GET / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 20:54:37] "GET / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 20:54:43] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 20:55:14] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 20:55:44] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 20:56:14] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 20:56:44] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 20:57:15] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 20:57:45] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 20:58:15] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 20:58:15] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 20:58:15] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 20:58:47] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 20:59:17] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 20:59:28] "GET / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 20:59:28] "GET / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 20:59:28] "GET / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 20:59:48] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:00:18] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:00:48] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:01:18] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:01:48] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:02:19] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:02:49] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:03:19] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:03:19] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:03:20] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 21:03:51] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:04:22] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:04:52] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:05:22] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:05:52] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:06:23] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:06:53] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:07:23] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:07:53] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:08:24] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:08:24] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:08:24] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 21:08:56] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:09:26] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:09:33] "GET / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:09:33] "GET / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:09:56] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:10:26] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:10:57] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:11:27] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:11:57] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:12:27] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:12:57] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:13:28] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:13:28] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:13:28] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 21:14:00] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:14:30] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:15:00] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:15:21] "GET / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:15:21] "GET / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:15:30] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:16:01] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:16:31] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:17:01] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:17:31] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:18:01] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:18:32] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:18:32] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:18:32] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 21:19:04] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:19:28] "GET / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:19:28] "GET / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:19:34] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:20:04] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:20:34] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:21:04] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:21:35] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:22:05] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:22:35] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:23:05] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:23:36] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:23:36] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:23:36] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 21:24:03] "GET / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:24:03] "GET / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:24:08] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:24:38] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:25:08] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:25:38] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:26:09] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:26:39] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:27:09] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:27:39] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:28:10] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:28:40] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:28:40] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:28:40] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 21:29:12] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:29:42] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:30:12] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:30:43] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:31:13] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:31:43] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:32:13] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:32:44] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:33:14] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:33:44] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:33:44] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:33:44] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 21:34:16] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:34:46] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:35:17] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:35:47] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:36:17] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:36:47] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:37:17] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:37:48] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:38:18] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:38:48] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:38:48] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:38:48] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 21:39:20] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:39:50] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:40:21] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:40:51] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:41:21] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:41:51] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:42:21] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:42:52] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:43:22] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:43:52] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:43:52] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:43:52] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 21:44:24] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:44:54] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:45:25] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:45:55] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:46:25] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:46:55] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:47:25] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:47:56] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:48:19] "GET / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:48:26] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:48:56] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:48:56] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:48:56] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 21:49:28] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:49:58] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:50:29] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:50:59] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:51:29] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:51:59] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:52:29] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:53:00] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:53:30] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:54:00] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:54:00] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:54:01] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 21:54:32] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:55:03] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:55:33] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:56:03] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:56:33] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:57:04] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:57:34] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:58:04] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:58:34] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:59:04] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:59:05] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 21:59:05] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 21:59:37] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:00:07] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:00:37] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:01:07] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:01:38] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:02:08] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:02:38] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:03:08] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:03:38] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:04:09] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:04:09] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:04:09] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:04:31] "GET / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:04:31] "GET / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:04:41] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:05:11] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:05:41] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:06:11] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:06:42] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:07:12] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:07:42] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:08:12] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:08:43] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:08:43] "GET / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:09:13] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:09:14] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:09:15] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:09:46] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:10:17] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:10:47] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:11:17] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:11:47] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:12:18] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:12:48] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:13:18] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:13:41] "GET / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:13:41] "GET / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:13:48] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:14:19] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:14:19] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:14:19] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:14:51] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:15:21] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:15:51] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:16:21] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:16:51] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:17:22] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:17:52] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:18:22] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:18:52] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:19:23] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:19:23] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:19:23] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:19:45] "GET / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:19:55] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:20:25] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:20:55] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:21:25] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:21:55] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:22:26] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:22:56] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:23:26] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:23:43] "GET / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:23:43] "GET / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:23:56] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:24:27] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:24:27] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:24:27] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:24:59] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:24:59] "HEAD / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:24:59] "HEAD / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:25:29] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:25:59] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:26:29] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:27:00] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:27:30] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:28:00] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:28:30] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:29:01] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:29:31] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:29:31] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:29:31] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:30:03] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:30:33] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:31:03] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:31:34] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:31:54] "GET /api/status HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:31:55] "GET /api/project/info HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:31:59] "GET /api/files/lib/main.dart HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:32:04] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:32:14] "PUT /api/files/lib/main.dart HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:32:16] "GET /api/files HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:32:20] "GET /api/files/lib HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:32:34] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:32:58] "GET /api/status HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:32:59] "GET /api/project/info HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:33:00] "GET /api/files HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:33:03] "GET /api/files/lib HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:33:04] "GET /api/files/lib HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:33:04] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:33:13] "POST /api/files/upload?dest=lib/tgju_scraper.dart HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:33:13] "GET /api/files/lib HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:33:14] "GET /api/files/lib HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:33:15] "GET /api/files/lib/tgju_scraper.dart HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:33:19] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:33:21] "POST /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:33:22] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:33:25] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:33:28] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:33:31] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:33:34] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:33:35] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:34:05] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:34:35] "GET /api/status HTTP/1.1" 401 -
 
 ------ cloudflare.log ------
 2026-09-12T19:41:53Z INF Thank you for trying Cloudflare Tunnel. Doing so, without a Cloudflare account, is a quick way to experiment and try it out. However, be aware that these account-less Tunnels have no uptime guarantee, are subject to the Cloudflare Online Services Terms of Use (https://www.cloudflare.com/website-terms/), and Cloudflare reserves the right to investigate your use of Tunnels for violations of such terms. If you intend to use Tunnels in production you should use a pre-created named tunnel by following: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps
@@ -315,9 +554,9 @@ Press CTRL+C to quit
 ------ پروسه‌ها ------
 root         961  0.0  0.1  32540 20860 ?        Ss   19:40   0:00 /usr/bin/python3 /usr/bin/networkd-dispatcher --run-startup-triggers
 root         998  0.0  0.1  39484 31148 ?        Ss   19:40   0:00 /usr/bin/python3 -u /usr/sbin/waagent -daemon
-root        1340  0.0  0.2 454656 37768 ?        Sl   19:40   0:03 /usr/bin/python3 -u bin/WALinuxAgent-2.16.0.2-py3.12.egg -run-exthandlers
-runner      2944  0.0  0.2 206500 36304 ?        S    19:41   0:01 python3 api_server.py
-runner      2952  0.0  0.2 1295604 43716 ?       Sl   19:41   0:04 cloudflared tunnel --url http://localhost:5000 --no-autoupdate
+root        1340  0.0  0.2 454656 37804 ?        Sl   19:40   0:06 /usr/bin/python3 -u bin/WALinuxAgent-2.16.0.2-py3.12.egg -run-exthandlers
+runner      2944  0.0  0.2 206500 37176 ?        S    19:41   0:02 python3 api_server.py
+runner      2952  0.0  0.3 1295604 54648 ?       Sl   19:41   0:08 cloudflared tunnel --url http://localhost:5000 --no-autoupdate
 
 ------ دیسک ------
 Filesystem      Size  Used Avail Use% Mounted on
@@ -333,4 +572,4 @@ tmpfs           1.6G   12K  1.6G   1% /run/user/1001
 ------ API status ------
 Unauthorized
 ------ build status ------
-{"apk_available":true,"error":null,"log":["Resolving dependencies...\n","Downloading packages...\n","  clock 1.1.2 (1.1.3 available)\n","  flutter_lints 4.0.0 (6.0.0 available)\n","  lints 4.0.0 (6.1.0 available)\n","  material_color_utilities 0.13.0 (0.13.1 available)\n","  platform 3.1.6 (3.2.0 available)\n","  shared_preferences_android 2.4.27 (2.4.28 available)\n","  shared_preferences_foundation 2.5.6 (2.5.7 available)\n","  shimmer 3.0.0 (4.0.0 available)\n","  stack_trace 1.12.1 (1.12.2 available)\n","  test_api 0.7.12 (0.7.14 available)\n","  vm_service 15.2.0 (15.3.0 available)\n","Got dependencies!\n","11 packages have newer versions incompatible with dependency constraints.\n","Try `flutter pub outdated` for more information.\n","Running Gradle task 'assembleRelease'...                        \n","Font asset \"MaterialIcons-Regular.otf\" was tree-shaken, reducing it from 1645184 to 9424 bytes (99.4% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.\n","Caught exception: Already watching path: /home/runner/work/MyFiles/MyFiles/insta/android\n","Running Gradle task 'assembleRelease'...                          125.2s\n","\u2713 Built build/app/outputs/flutter-apk/app-release.apk (18.7MB)\n"],"start_time":1789243006.392931,"status":"success"}
+{"apk_available":false,"error":"\u0628\u06cc\u0644\u062f \u0646\u0627\u0645\u0648\u0641\u0642","log":["Resolving dependencies...\n","Downloading packages...\n","  clock 1.1.2 (1.1.3 available)\n","  flutter_lints 4.0.0 (6.0.0 available)\n","  lints 4.0.0 (6.1.0 available)\n","  material_color_utilities 0.13.0 (0.13.1 available)\n","  platform 3.1.6 (3.2.0 available)\n","  shared_preferences_android 2.4.27 (2.4.28 available)\n","  shared_preferences_foundation 2.5.6 (2.5.7 available)\n","  shimmer 3.0.0 (4.0.0 available)\n","  stack_trace 1.12.1 (1.12.2 available)\n","  test_api 0.7.12 (0.7.14 available)\n","  vm_service 15.2.0 (15.3.0 available)\n","Got dependencies!\n","11 packages have newer versions incompatible with dependency constraints.\n","Try `flutter pub outdated` for more information.\n","Running Gradle task 'assembleRelease'...                        \n","Error: Couldn't resolve the package 'flutter_localizations' in 'package:flutter_localizations/flutter_localizations.dart'.\n","Error: Couldn't resolve the package 'liquid_glass_widgets' in 'package:liquid_glass_widgets/liquid_glass_widgets.dart'.\n","Error: Couldn't resolve the package 'path_provider' in 'package:path_provider/path_provider.dart'.\n","lib/main.dart:13:8: Error: Not found: 'package:flutter_localizations/flutter_localizations.dart'\n","import 'package:flutter_localizations/flutter_localizations.dart';\n","       ^\n","lib/main.dart:14:8: Error: Not found: 'package:liquid_glass_widgets/liquid_glass_widgets.dart'\n","import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';\n","       ^\n","lib/main.dart:15:8: Error: Not found: 'package:path_provider/path_provider.dart'\n","import 'package:path_provider/path_provider.dart';\n","       ^\n","Error: Couldn't resolve the package 'html' in 'package:html/dom.dart'.\n","Error: Couldn't resolve the package 'html' in 'package:html/parser.dart'.\n","lib/tgju_scraper.dart:25:8: Error: Not found: 'package:html/dom.dart'\n","import 'package:html
