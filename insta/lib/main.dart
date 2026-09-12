@@ -1447,7 +1447,7 @@ class _MarketDetailSheetState extends State<MarketDetailSheet> {
                           const SnackBar(content: Text('هشدار قیمت ثبت شد.')),
                         );
                       },
-                      icon: const Icon(Icons.notifications_add_rounded),
+                      icon: const Icon(Icons.notifications_active_rounded),
                       label: const Text('ثبت هشدار'),
                     ),
                   ),
