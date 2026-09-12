@@ -499,3 +499,17 @@ Press CTRL+C to quit
 127.0.0.1 - - [12/Sep/2026 22:24:27] "GET /api/status HTTP/1.1" 401 -
 127.0.0.1 - - [12/Sep/2026 22:24:27] "GET /api/status HTTP/1.1" 401 -
 127.0.0.1 - - [12/Sep/2026 22:24:27] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:24:59] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:24:59] "HEAD / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:24:59] "HEAD / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:25:29] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:25:59] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:26:29] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:27:00] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:27:30] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:28:00] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:28:30] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:29:01] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:29:31] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:29:31] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:29:31] "GET /api/build HTTP/1.1" 200 -
