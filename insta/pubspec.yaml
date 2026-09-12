@@ -1,5 +1,5 @@
 name: tgju_app
-description: نبض بازار - شبکه اطلاع رسانی طلا، سکه، دلار و ارز
+description: "نبض بازار - اپلیکیشن قیمت طلا، سکه، ارز و رمزارز"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -9,13 +9,18 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  liquid_glass_widgets:
+  http:
+  html:
   provider:
   shared_preferences:
-  http:
+  path_provider:
   fl_chart:
   shimmer:
-  intl:
   url_launcher:
+  cupertino_icons:
 
 dev_dependencies:
   flutter_test:

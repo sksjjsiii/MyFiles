@@ -1,22 +1,4 @@
 /// TGJU Full Scraper — Dart/Flutter Version
-///
-/// معادل کامل فایل Python `g.py`.
-/// یک درخواست HTTP واحد انجام می‌دهد و کل داده‌های صفحه اصلی TGJU
-/// (شاخص‌ها، نوار بالا، جدول‌ها، صرافی‌های رمزارز، تحلیل‌ها، تقویم اقتصادی،
-/// اخبار و نقشه جهانی) را استخراج می‌کند.
-///
-/// نحوه استفاده:
-/// ```dart
-/// import 'package:your_app/tgju_scraper.dart';
-///
-/// final scraper = TgjuScraper();
-/// try {
-///   final data = await scraper.run();
-///   print(data['markets']);
-/// } finally {
-///   scraper.close();
-/// }
-/// ```
 library tgju_scraper;
 
 import 'dart:async';
@@ -95,7 +77,7 @@ String? getDirection(String? klass) {
   return null;
 }
 
-/// استخراج متن یک Element به معادل `" ".join(el.xpath(".//text()"))` پایتون.
+/// معادل `extractText` پایتون: استخراج همه‌ی متن‌های داخلی
 String extractText(dom.Element el) {
   final parts = <String>[];
   void walk(dom.Node n) {
@@ -161,13 +143,13 @@ String? _extractFlag(dom.Element tr) {
   final flagEl = tr.querySelector('span.mini-flag');
   if (flagEl == null) return null;
   final m = RegExp(r'flag-([\w\-]+)')
-      .firstMatch(flagEl.getAttribute('class') ?? '');
+      .firstMatch(flagEl.attributes['class'] ?? '');
   return m?.group(1);
 }
 
 Map<String, dynamic>? _parseOneRow(dom.Element tr) {
-  final rowKey = (tr.getAttribute('data-market-row') ?? '').trim();
-  final nameslug = (tr.getAttribute('data-market-nameslug') ?? '').trim();
+  final rowKey = (tr.attributes['data-market-row'] ?? '').trim();
+  final nameslug = (tr.attributes['data-market-nameslug'] ?? '').trim();
   final slug = (rowKey.isNotEmpty ? rowKey : nameslug)
       .replaceAll('disabled_', '');
   if (slug.isEmpty) return null;
@@ -189,7 +171,7 @@ Map<String, dynamic>? _parseOneRow(dom.Element tr) {
 
   final isCrypto = tr.querySelector('td.market-price-irr') != null;
   final isExchange = tr.querySelectorAll('td').any((td) =>
-      (td.getAttribute('class') ?? '').contains('market-currency-'));
+      (td.attributes['class'] ?? '').contains('market-currency-'));
 
   if (isCrypto) {
     final irrEl = tr.querySelector('td.market-price-irr');
@@ -207,7 +189,7 @@ Map<String, dynamic>? _parseOneRow(dom.Element tr) {
       final inner = changeTd.querySelectorAll('div, span');
       if (inner.isNotEmpty) {
         changeRaw = extractText(inner.first);
-        direction = getDirection(inner.first.getAttribute('class') ?? '');
+        direction = getDirection(inner.first.attributes['class'] ?? '');
       }
     }
 
@@ -230,14 +212,14 @@ Map<String, dynamic>? _parseOneRow(dom.Element tr) {
   } else if (isExchange) {
     dom.Element? targetTd;
     for (final td in tr.querySelectorAll('td[data-market-p]')) {
-      if (td.getAttribute('data-market-p') == slug) {
+      if (td.attributes['data-market-p'] == slug) {
         targetTd = td;
         break;
       }
     }
     if (targetTd == null) {
       for (final td in tr.querySelectorAll('td')) {
-        final cls = td.getAttribute('class') ?? '';
+        final cls = td.attributes['class'] ?? '';
         if (!cls.contains('market-currency-')) continue;
         final inner = td.querySelectorAll('div, span');
         if (inner.isNotEmpty && extractText(inner.first).isNotEmpty) {
@@ -250,7 +232,7 @@ Map<String, dynamic>? _parseOneRow(dom.Element tr) {
       final inner = targetTd.querySelectorAll('div, span');
       if (inner.isNotEmpty) {
         priceRaw = extractText(inner.first);
-        direction = getDirection(inner.first.getAttribute('class') ?? '');
+        direction = getDirection(inner.first.attributes['class'] ?? '');
       } else {
         priceRaw = extractText(targetTd);
       }
@@ -262,7 +244,7 @@ Map<String, dynamic>? _parseOneRow(dom.Element tr) {
       if (span != null) {
         if (changeRaw == null) {
           changeRaw = extractText(span);
-          direction = getDirection(span.getAttribute('class') ?? '');
+          direction = getDirection(span.attributes['class'] ?? '');
         }
       } else {
         final txt = extractText(td);
@@ -272,11 +254,11 @@ Map<String, dynamic>? _parseOneRow(dom.Element tr) {
 
     if (changeRaw == null) {
       for (final td in tr.querySelectorAll('td')) {
-        if ((td.getAttribute('class') ?? '').isNotEmpty) continue;
+        if ((td.attributes['class'] ?? '').isNotEmpty) continue;
         final span = td.querySelector('span');
         if (span != null) {
           changeRaw = extractText(span);
-          direction = getDirection(span.getAttribute('class') ?? '');
+          direction = getDirection(span.attributes['class'] ?? '');
           break;
         }
       }
@@ -287,7 +269,7 @@ Map<String, dynamic>? _parseOneRow(dom.Element tr) {
         final div = td.querySelector('div');
         if (div != null) {
           changeRaw = extractText(div);
-          direction = getDirection(div.getAttribute('class') ?? '');
+          direction = getDirection(div.attributes['class'] ?? '');
           break;
         }
       }
@@ -304,7 +286,7 @@ Map<String, dynamic>? _parseOneRow(dom.Element tr) {
     }
 
     if (priceRaw == null) {
-      final dp = (tr.getAttribute('data-price') ?? '').trim();
+      final dp = (tr.attributes['data-price'] ?? '').trim();
       if (dp.isNotEmpty) priceRaw = dp;
     }
 
@@ -331,7 +313,7 @@ Map<String, dynamic>? _parseOneRow(dom.Element tr) {
     changePct = computeChangePct(priceNum, changeValue, direction);
   }
 
-  final dt = parseDataTitle(tr.getAttribute('data-title'));
+  final dt = parseDataTitle(tr.attributes['data-title']);
   final history = dt.history;
   final firstRate = dt.firstRate;
 
@@ -356,7 +338,7 @@ Map<String, dynamic>? _parseOneRow(dom.Element tr) {
     'low': low,
     'high': high,
     'time': timeStr,
-    'market_coding': tr.getAttribute('data-market-coding'),
+    'market_coding': tr.attributes['data-market-coding'],
     'history': history,
     'first_rate_today': firstRate,
   };
@@ -407,7 +389,7 @@ Map<String, Map<String, dynamic>> parseMarketRows(dom.Document sel) {
 Map<String, Map<String, dynamic>> parseInfoBar(dom.Document sel) {
   final result = <String, Map<String, dynamic>>{};
   for (final li in sel.querySelectorAll('ul.info-bar > li')) {
-    final liId = li.getAttribute('id') ?? '';
+    final liId = li.attributes['id'] ?? '';
     if (!liId.startsWith('l-')) continue;
     String slug = liId.substring(2);
     if (slug.startsWith('crypto-') && slug.endsWith('-irr')) {
@@ -430,7 +412,7 @@ Map<String, Map<String, dynamic>> parseInfoBar(dom.Document sel) {
       'price_raw': priceRaw,
       'change': pv.$2,
       'change_pct': pv.$1,
-      'direction': getDirection(li.getAttribute('class') ?? ''),
+      'direction': getDirection(li.attributes['class'] ?? ''),
     };
   }
   return result;
@@ -439,7 +421,7 @@ Map<String, Map<String, dynamic>> parseInfoBar(dom.Document sel) {
 Map<String, Map<String, dynamic>> parseSummaryWidgets(dom.Document sel) {
   final result = <String, Map<String, dynamic>>{};
   for (final w in sel.querySelectorAll('.summary-widget[data-market-row]')) {
-    final slug = w.getAttribute('data-market-row')!;
+    final slug = w.attributes['data-market-row']!;
     final price =
         cleanText(w.querySelector('[data-market-name="p"]')?.text ?? '');
     final change =
@@ -447,7 +429,7 @@ Map<String, Map<String, dynamic>> parseSummaryWidgets(dom.Document sel) {
     final pv = parsePctAndValue(change);
     result[slug] = <String, dynamic>{
       'title': cleanText(w.querySelector('.summary-widget-title')?.text ?? ''),
-      'url': w.querySelector('.summary-widget-title')?.getAttribute('href'),
+      'url': w.querySelector('.summary-widget-title')?.attributes['href'],
       'price': toNumber(price),
       'price_raw': price,
       'change': pv.$2,
@@ -460,7 +442,7 @@ Map<String, Map<String, dynamic>> parseSummaryWidgets(dom.Document sel) {
 Map<String, Map<String, dynamic>> parseIndexTabsSummary(dom.Document sel) {
   final result = <String, Map<String, dynamic>>{};
   for (final box in sel.querySelectorAll('.index-tabs-summery[data-index]')) {
-    final slug = box.getAttribute('data-index')!;
+    final slug = box.attributes['data-index']!;
     final items = <String, String>{};
     for (final it in box.querySelectorAll('.summery-item')) {
       final label =
@@ -492,7 +474,7 @@ Map<String, Map<String, dynamic>> parseTableHeaderSummary(dom.Document sel) {
   final result = <String, Map<String, dynamic>>{};
   for (final box
       in sel.querySelectorAll('.table-header-summary-container[data-index]')) {
-    final slug = box.getAttribute('data-index')!;
+    final slug = box.attributes['data-index']!;
 
     String firstDivText(String containerSelector) {
       final c = box.querySelector(containerSelector);
@@ -540,7 +522,7 @@ List<Map<String, dynamic>> parseCryptoExchanges(dom.Document sel) {
       'sell': toNumber(sell),
       'sell_raw': sell,
       'time': t,
-      'url': aEl?.getAttribute('href'),
+      'url': aEl?.attributes['href'],
     });
   }
   return rows;
@@ -553,7 +535,7 @@ List<Map<String, dynamic>> parseTechnicals(dom.Document sel) {
     final content = contentEl != null ? extractText(contentEl) : '';
     cards.add(<String, dynamic>{
       'title': cleanText(c.querySelector('h2')?.text ?? ''),
-      'url': c.querySelector('h2 a')?.getAttribute('href'),
+      'url': c.querySelector('h2 a')?.attributes['href'],
       'analyst':
           cleanText(c.querySelector('.card-technical-user-name')?.text ?? ''),
       'market':
@@ -562,7 +544,7 @@ List<Map<String, dynamic>> parseTechnicals(dom.Document sel) {
           cleanText(c.querySelector('.card-technical-user-date')?.text ?? ''),
       'image': c
           .querySelector('img.carousel-cell-image')
-          ?.getAttribute('data-flickity-lazyload'),
+          ?.attributes['data-flickity-lazyload'],
       'content':
           content.length > 500 ? '${content.substring(0, 500)}...' : content,
     });
@@ -581,7 +563,7 @@ List<Map<String, dynamic>> parseCalendar(dom.Document sel) {
     String? flag;
     if (flagEl != null) {
       final m = RegExp(r'flag-([\w\-]+)')
-          .firstMatch(flagEl.getAttribute('class') ?? '');
+          .firstMatch(flagEl.attributes['class'] ?? '');
       flag = m?.group(1);
     }
     events.add(<String, dynamic>{
@@ -636,12 +618,12 @@ List<Map<String, dynamic>> parseHeaderNews(dom.Document sel) {
 List<Map<String, String>> parseWorldMap(dom.Document sel) {
   final result = <Map<String, String>>[];
   for (final opt in sel.querySelectorAll('#world-map-select option')) {
-    final value = opt.getAttribute('value') ?? '';
+    final value = opt.attributes['value'] ?? '';
     if (value.isEmpty || value == 'hide') continue;
     result.add(<String, String>{
       'code': value,
       'title': cleanText(opt.text),
-      'flag': opt.getAttribute('data-flag') ?? '',
+      'flag': opt.attributes['data-flag'] ?? '',
     });
   }
   return result;
@@ -651,8 +633,8 @@ Map<String, String?> parseServerTime(dom.Document sel) {
   final el = sel.querySelector('#server-time');
   if (el == null) return {};
   return <String, String?>{
-    'value': el.getAttribute('data-value'),
-    'server': el.getAttribute('data-server'),
+    'value': el.attributes['data-value'],
+    'server': el.attributes['data-server'],
   };
 }
 
@@ -681,7 +663,6 @@ class TgjuScraper {
               'Chrome/124.0.0.0 Safari/537.36',
         };
 
-  /// دریافت HTML خام صفحه اصلی TGJU.
   Future<String> fetch([String? url]) async {
     final response = await _client
         .get(Uri.parse(url ?? baseUrl), headers: _headers)
@@ -693,14 +674,12 @@ class TgjuScraper {
     return utf8.decode(response.bodyBytes);
   }
 
-  /// پارس یک رشته HTML که قبلاً دریافت شده.
   Map<String, dynamic> parse(String html) {
     final sel = html_parser.parse(html);
 
     final infoBar = parseInfoBar(sel);
     final markets = parseMarketRows(sel);
 
-    // ادغام info_bar روی markets (فقط پر کردن فیلدهای خالی)
     infoBar.forEach((slug, item) {
       if (markets.containsKey(slug)) {
         item.forEach((k, v) {
@@ -751,13 +730,11 @@ class TgjuScraper {
     };
   }
 
-  /// یک درخواست می‌فرستد و کل داده‌ها را برمی‌گرداند.
   Future<Map<String, dynamic>> run() async {
     final html = await fetch();
     return parse(html);
   }
 
-  /// آزادسازی منابع HTTP client.
   void close() {
     if (_ownsClient) _client.close();
   }
