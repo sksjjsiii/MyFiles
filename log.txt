@@ -1,7 +1,7 @@
 ==========================================
-⏰ 2026-09-12 22:09:13
+⏰ 2026-09-12 22:14:19
 🌐 TUNNEL_URL: https://cove-homepage-respiratory-bloomberg.trycloudflare.com
-⏱️  آپ‌تایم: 8833 ثانیه
+⏱️  آپ‌تایم: 9139 ثانیه
 ==========================================
 ------ api_server.log ------
  * Serving Flask app 'api_server'
@@ -462,6 +462,20 @@ Press CTRL+C to quit
 127.0.0.1 - - [12/Sep/2026 22:08:43] "GET /api/status HTTP/1.1" 401 -
 127.0.0.1 - - [12/Sep/2026 22:08:43] "GET / HTTP/1.1" 401 -
 127.0.0.1 - - [12/Sep/2026 22:09:13] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:09:14] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:09:15] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [12/Sep/2026 22:09:46] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:10:17] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:10:47] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:11:17] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:11:47] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:12:18] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:12:48] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:13:18] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:13:41] "GET / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:13:41] "GET / HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:13:48] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [12/Sep/2026 22:14:19] "GET /api/status HTTP/1.1" 401 -
 
 ------ cloudflare.log ------
 2026-09-12T19:41:53Z INF Thank you for trying Cloudflare Tunnel. Doing so, without a Cloudflare account, is a quick way to experiment and try it out. However, be aware that these account-less Tunnels have no uptime guarantee, are subject to the Cloudflare Online Services Terms of Use (https://www.cloudflare.com/website-terms/), and Cloudflare reserves the right to investigate your use of Tunnels for violations of such terms. If you intend to use Tunnels in production you should use a pre-created named tunnel by following: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps
@@ -514,7 +528,7 @@ root         961  0.0  0.1  32540 20860 ?        Ss   19:40   0:00 /usr/bin/pyth
 root         998  0.0  0.1  39484 31148 ?        Ss   19:40   0:00 /usr/bin/python3 -u /usr/sbin/waagent -daemon
 root        1340  0.0  0.2 454656 37800 ?        Sl   19:40   0:05 /usr/bin/python3 -u bin/WALinuxAgent-2.16.0.2-py3.12.egg -run-exthandlers
 runner      2944  0.0  0.2 206500 37100 ?        S    19:41   0:01 python3 api_server.py
-runner      2952  0.0  0.3 1295604 54620 ?       Sl   19:41   0:07 cloudflared tunnel --url http://localhost:5000 --no-autoupdate
+runner      2952  0.0  0.3 1295604 54624 ?       Sl   19:41   0:07 cloudflared tunnel --url http://localhost:5000 --no-autoupdate
 
 ------ دیسک ------
 Filesystem      Size  Used Avail Use% Mounted on
