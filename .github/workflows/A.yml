@@ -1,4 +1,4 @@
-name: Flutter API Builder (Cloudflare Tunnel with Watchdog)
+name: Flutter API Builder (Cloudflare Tunnel with Watchdog + Forced Upload)
 
 on:
   workflow_dispatch:
@@ -6,11 +6,11 @@ on:
       session_minutes:
         description: 'مدت زمان اجرا (دقیقه)'
         required: true
-        default: '120'
+        default: '355'
       project_folder:
         description: 'نام پوشه پروژه فلاتر (پیش‌فرض: flutter_app)'
         required: true
-        default: 'flutter_app'
+        default: 'insta'
 
 jobs:
   flutter-api:
@@ -24,6 +24,55 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: تنظیم Git و اسکریپت push اجباری
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+
+          cat << 'PUSHEOF' > /usr/local/bin/force_push.sh
+          #!/bin/bash
+          # اسکریپت push اجباری با retry - هرطور شده push می‌کند
+          MSG="${1:-auto commit [skip ci]}"
+          MAX_RETRIES=10
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "🔁 تلاش $i/$MAX_RETRIES برای push..."
+            git add -A 2>/dev/null || true
+            git commit -m "$MSG" 2>/dev/null || echo "چیزی برای commit نیست"
+
+            # تلاش ۱: fetch + rebase + push عادی
+            git fetch origin main 2>/dev/null || true
+            git rebase origin/main 2>/dev/null || { git rebase --abort 2>/dev/null || true; }
+
+            if git push origin main 2>/dev/null; then
+              echo "✅ push موفق در تلاش $i"
+              exit 0
+            fi
+
+            # تلاش ۲: force push
+            echo "⚠️ push عادی ناموفق، تلاش force push..."
+            if git push --force origin main 2>/dev/null; then
+              echo "✅ force push موفق در تلاش $i"
+              exit 0
+            fi
+
+            # تلاش ۳ (آخرین راه‌حل): reset روی remote و بازسازی commit
+            echo "⚠️ تلاش نهایی: reset و بازسازی..."
+            git fetch origin main 2>/dev/null || true
+            git stash 2>/dev/null || true
+            git reset --hard origin/main 2>/dev/null || true
+            git stash pop 2>/dev/null || true
+            git add -A 2>/dev/null || true
+            git commit -m "$MSG" 2>/dev/null || true
+
+            sleep 3
+          done
+          echo "❌ تمام تلاش‌ها ناموفق بود"
+          exit 1
+          PUSHEOF
+          chmod +x /usr/local/bin/force_push.sh
 
       - name: نصب Java 17
         uses: actions/setup-java@v4
@@ -99,7 +148,6 @@ jobs:
                   return Response('Unauthorized', 401,
                       {'WWW-Authenticate': 'Basic realm="Flutter API"'})
 
-          # مستندات و تمام endpointها (بدون تغییر)
           @app.route('/')
           @app.route('/docs')
           def docs():
@@ -515,99 +563,115 @@ jobs:
 
           echo "TUNNEL_URL=$TUNNEL_URL" >> $GITHUB_ENV
 
-      - name: به‌روزرسانی README با لینک اولیه
+      - name: به‌روزرسانی README با لینک (اجباری)
+        if: always()
         run: |
           echo "${{ env.TUNNEL_URL }}" > README.md
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add README.md
-          git commit -m "🔗 لینک API [skip ci]" || true
-          git pull --rebase origin main && git push || echo "⚠️ push اولیه ناموفق (در ادامه دوباره تلاش می‌شود)"
+          /usr/local/bin/force_push.sh "🔗 لینک API [skip ci]" || true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: زنده نگه‌داشتن نشست و نگهبانی تونل
+      - name: زنده نگه‌داشتن نشست + نگهبانی تونل + آپلود لاگ
         run: |
-          set +e  # جلوگیری از توقف اسکریپت روی خطاهای غیرمنتظره
-
+          set +e
           DURATION=${{ github.event.inputs.session_minutes }}
           END_TIME=$(date -d "$DURATION minutes" +%s)
           TUNNEL_URL="${{ env.TUNNEL_URL }}"
-          echo "⏳ سرور تا $DURATION دقیقه فعال خواهد ماند"
-
-          # تأخیر اولیه برای اطمینان از آماده‌سازی کامل تونل و DNS
+          START_TIME_GLOBAL=$(date +%s)
+          LAST_UPLOAD=0
+          echo "⏳ سرور تا $DURATION دقیقه فعال است"
           sleep 10
 
           while [ $(date +%s) -lt $END_TIME ]; do
-            REMAINING=$((END_TIME - $(date +%s)))
-            echo "[$(date +%H:%M:%S)] زمان باقی‌مانده: $((REMAINING/60)) دقیقه"
+            NOW=$(date +%s)
+            REMAINING=$((END_TIME - NOW))
+            echo "[$(date +%H:%M:%S)] باقی‌مانده: $((REMAINING/60)) دقیقه"
 
-            # بررسی سلامت تونل از بیرون (با curl)
+            # ---- بررسی سلامت تونل ----
             HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "$TUNNEL_URL/api/status" 2>/dev/null || echo "000")
             if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "401" ]; then
-              echo "❌ تونل پاسخ نمی‌دهد (کد $HTTP_CODE) - راه‌اندازی مجدد..."
-
-              # کشتن پروسه‌های قبلی cloudflared
+              echo "❌ تونل پاسخ نمی‌دهد ($HTTP_CODE) - راه‌اندازی مجدد..."
               pkill cloudflared || true
               sleep 2
-
-              # راه‌اندازی دوباره (با مسیر کامل)
               cloudflared tunnel --url http://localhost:5000 --no-autoupdate > cloudflare.log 2>&1 &
               sleep 8
-
-              # استخراج آدرس جدید
               NEW_URL=$(grep -oP 'https://[a-zA-Z0-9.-]+\.trycloudflare\.com' cloudflare.log | head -n1)
               if [ -n "$NEW_URL" ]; then
                 echo "✅ آدرس جدید: $NEW_URL"
-                if [ "$NEW_URL" != "$TUNNEL_URL" ]; then
-                  TUNNEL_URL=$NEW_URL
-                  echo "$NEW_URL" > README.md
-                  git config user.name "github-actions[bot]"
-                  git config user.email "github-actions[bot]@users.noreply.github.com"
-                  git add README.md
-                  git commit -m "🔄 به‌روزرسانی لینک تونل [skip ci]" || true
-                  git pull --rebase origin main && git push || echo "⚠️ push لینک جدید ناموفق"
-                fi
-              else
-                echo "⚠️ نتوانستیم آدرس جدید را از لاگ بخوانیم"
+                TUNNEL_URL=$NEW_URL
+                echo "$NEW_URL" > README.md
+                /usr/local/bin/force_push.sh "🔄 به‌روزرسانی لینک تونل [skip ci]" || true
               fi
-            else
-              # یک درخواست ساده برای فعال نگه‌داشتن تونل
-              curl -s -o /dev/null "$TUNNEL_URL/api/status" 2>/dev/null || true
+            fi
+
+            # ---- آپلود لاگ هر ۵ دقیقه ----
+            NOW=$(date +%s)
+            if [ $((NOW - LAST_UPLOAD)) -ge 300 ]; then
+              echo "[$(date +%H:%M:%S)] 📦 ساخت و آپلود log.txt..."
+              {
+                echo "=========================================="
+                echo "⏰ $(date '+%Y-%m-%d %H:%M:%S')"
+                echo "🌐 TUNNEL_URL: $TUNNEL_URL"
+                echo "⏱️  آپ‌تایم: $((NOW - START_TIME_GLOBAL)) ثانیه"
+                echo "=========================================="
+                echo "------ api_server.log ------"
+                tail -n 500 api_server.log 2>/dev/null
+                echo ""
+                echo "------ cloudflare.log ------"
+                tail -n 200 cloudflare.log 2>/dev/null
+                echo ""
+                echo "------ پروسه‌ها ------"
+                ps aux | grep -E "python3|cloudflared" | grep -v grep
+                echo ""
+                echo "------ دیسک ------"
+                df -h
+                echo ""
+                echo "------ API status ------"
+                curl -s --max-time 5 "$TUNNEL_URL/api/status" 2>/dev/null
+                echo ""
+                echo "------ build status ------"
+                curl -s --max-time 5 -u "${{ secrets.RDP_USERNAME }}:${{ secrets.RDP_PASSWORD }}" \
+                  "$TUNNEL_URL/api/build" 2>/dev/null | head -c 2000
+              } > log.txt 2>&1
+
+              mkdir -p logs_archive
+              cp log.txt "logs_archive/log_$(date +%Y%m%d_%H%M%S).txt" 2>/dev/null || true
+              # نگه‌داشتن فقط ۲۰ آرشیو آخر
+              ls -1t logs_archive/log_*.txt 2>/dev/null | tail -n +21 | xargs -r rm -f
+
+              if /usr/local/bin/force_push.sh "📋 لاگ خودکار $(date '+%H:%M:%S') [skip ci]"; then
+                echo "✅ لاگ آپلود شد"
+                LAST_UPLOAD=$NOW
+              else
+                echo "❌ آپلود لاگ شکست خورد - تلاش بعدی"
+              fi
             fi
 
             sleep 30
           done
-          echo "زمان به پایان رسید."
+
+          # ---- آپلود نهایی ----
+          echo "📤 آپلود لاگ نهایی..."
+          {
+            echo "=== لاگ نهایی $(date) ==="
+            echo "------ api_server.log ------"
+            cat api_server.log 2>/dev/null
+            echo ""
+            echo "------ cloudflare.log ------"
+            cat cloudflare.log 2>/dev/null
+          } > log.txt 2>&1
+          /usr/local/bin/force_push.sh "📋 لاگ نهایی [skip ci]" || true
+          echo "پایان."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: کامیت تغییرات پروژه فلاتر (ذخیره برای دفعات بعد)
+      - name: کامیت اجباری تغییرات پروژه
         if: always()
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
           if [ -d "$PROJECT_DIR" ]; then
-            if git diff --quiet "$PROJECT_DIR/" && [ -z "$(git ls-files --others --exclude-standard "$PROJECT_DIR/")" ]; then
-              echo "بدون تغییر"
-            else
-              git add "$PROJECT_DIR/"
-              git commit -m "ذخیره تغییرات پروژه [skip ci]" || echo "⚠️ commit ناموفق (ممکن است تغییر تکراری باشد)"
-
-              # همگام‌سازی با remote برای جلوگیری از rejected push
-              echo "🔄 دریافت آخرین تغییرات remote..."
-              git fetch origin main
-
-              if git rebase origin/main; then
-                echo "✅ rebase موفق"
-              else
-                echo "⚠️ rebase ناموفق، تلاش برای merge..."
-                git rebase --abort
-                git merge origin/main --no-edit || echo "⚠️ merge نیز ناموفق. push انجام نمی‌شود اما فایل‌ها در مخزن محلی ذخیره شده‌اند."
-              fi
-
-              git push origin main || echo "⚠️ push ناموفق (در اجرای بعدی workflow مجدداً تلاش می‌شود)"
-            fi
+            git add "$PROJECT_DIR/" 2>/dev/null || true
+            git add log.txt logs_archive/ 2>/dev/null || true
+            /usr/local/bin/force_push.sh "💾 ذخیره پروژه و لاگ‌ها [skip ci]" || true
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
