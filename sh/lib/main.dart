@@ -2203,7 +2203,8 @@ class RoomSession extends ChangeNotifier {
   StreamSubscription? _sub;
   Timer? _pingTimer;
 
-  void Function(String msg, {Color? color, int seconds})? onToast;
+  // 👇 اصلاح نوع seconds به int? برای رفع خطای null safety
+  void Function(String msg, {Color? color, int? seconds})? onToast;
   VoidCallback? onFatalClose;
 
   bool get isPlayer => _l(_gf(room, 'players')).contains(me);
