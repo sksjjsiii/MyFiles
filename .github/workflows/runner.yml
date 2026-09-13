@@ -1,0 +1,230 @@
+name: runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      previous_run:
+        description: 'Run ID of previous run to cancel'
+        required: false
+        default: '0'
+      start_at:
+        description: 'Unix timestamp (seconds) to begin work'
+        required: false
+        default: '0'
+  schedule:
+    # فقط safety-net روزانه؛ اگه زنجیره شکست، این از سر می‌گیره
+    - cron: '0 3 * * *'
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360        # سقف مجاز GitHub-hosted
+
+    steps:
+      # ─────────────────────────────────────────────────
+      # 0) چک سلامتی زنجیره (فقط وقتی با کرون اجرا شده)
+      # ─────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Chain health check
+        id: check
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          COUNT=$(gh run list \
+            --workflow=runner.yml \
+            --repo "${{ github.repository }}" \
+            --limit 20 \
+            --json databaseId,status \
+          | python3 -c "import sys,json; d=json.load(sys.stdin); print(len([r for r in d if r['status']!='completed' and str(r['databaseId'])!='${{ github.run_id }}']))")
+          echo "Active sibling runs: $COUNT"
+          if [ "$COUNT" -gt 0 ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ─────────────────────────────────────────────────
+      # 1) اگه start_at داده شده، تا آن لحظه صبر کن
+      #    (اجرای بعدی با 2 دقیقه بافر قبل از مرگ فعلی شروع می‌شود)
+      # ─────────────────────────────────────────────────
+      - name: Wait until start_at
+        if: steps.check.outputs.skip != 'true'
+        env:
+          START_AT: ${{ inputs.start_at }}
+        run: |
+          if [ -z "$START_AT" ] || [ "$START_AT" = "0" ]; then
+            echo "No delay — starting immediately"; exit 0
+          fi
+          DELAY=$(( START_AT - $(date +%s) ))
+          if [ "$DELAY" -gt 0 ]; then
+            echo "Sleeping ${DELAY}s until $(date -u -d @"$START_AT")"
+            sleep "$DELAY"
+          fi
+          echo "Ready at $(date -u)"
+
+      # ─────────────────────────────────────────────────
+      # 2) نصب وابستگی‌های sh.py
+      # ─────────────────────────────────────────────────
+      - name: Install dependencies
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          python3 -m pip install --quiet --disable-pip-version-check \
+            fastapi uvicorn "pydantic<2"
+
+      # ─────────────────────────────────────────────────
+      # 3) زمان‌بندی اجرای بعدی (self-retrigger)
+      # ─────────────────────────────────────────────────
+      - name: Schedule next run
+        if: steps.check.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref_name }}
+          CUR: ${{ github.run_id }}
+        run: |
+          NEXT=$(( $(date +%s) + 6*3600 - 120 ))
+          echo "Next start_at = $NEXT ($(date -u -d @"$NEXT"))"
+          for i in 1 2 3 4 5; do
+            if gh workflow run runner.yml \
+                 --repo "$REPO" --ref "$REF" \
+                 -f start_at="$NEXT" -f previous_run="$CUR"; then
+              echo "✓ Next run triggered (attempt $i)"; exit 0
+            fi
+            echo "attempt $i failed; retry in 15s"; sleep 15
+          done
+          echo "✗ FATAL: could not trigger next run"; exit 1
+
+      # ─────────────────────────────────────────────────
+      # 4) تنظیم git برای پوش کردن url.txt
+      # ─────────────────────────────────────────────────
+      - name: Configure git
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          git config user.name "runner-bot"
+          git config user.email "runner-bot@users.noreply.github.com"
+
+      # ─────────────────────────────────────────────────
+      # 5) اجرای sh.py + تونل Cloudflare + نگهبانی + کنسل قبلی
+      # ─────────────────────────────────────────────────
+      - name: Run server + tunnel + guard
+        if: steps.check.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          RDP_PASSWORD: ${{ secrets.RDP_PASSWORD }}
+          DB_PATH: /tmp/paskar_db.json
+          REF_NAME: ${{ github.ref_name }}
+          PREV: ${{ inputs.previous_run }}
+        run: |
+          set +e
+
+          # ---- نصب cloudflared ----
+          curl -sL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
+            -o /usr/local/bin/cloudflared
+          chmod +x /usr/local/bin/cloudflared
+
+          # ---- استارت سرور sh.py ----
+          echo "▶ Starting sh.py ..."
+          python3 sh.py > /tmp/api_server.log 2>&1 &
+          SERVER_PID=$!
+          echo "server pid=$SERVER_PID"
+          sleep 6
+
+          # ---- helper: استارت تونل و برگرداندن URL ----
+          start_tunnel() {
+            pkill cloudflared 2>/dev/null
+            sleep 2
+            : > /tmp/cloudflare.log
+            cloudflared tunnel --url http://localhost:8000 --no-autoupdate \
+              > /tmp/cloudflare.log 2>&1 &
+            for i in $(seq 1 40); do
+              sleep 2
+              local u
+              u=$(grep -oP 'https://[a-zA-Z0-9.-]+\.trycloudflare\.com' \
+                    /tmp/cloudflare.log | head -n1)
+              if [ -n "$u" ]; then
+                echo "$u"; return 0
+              fi
+              if ! pgrep cloudflared > /dev/null; then
+                return 1
+              fi
+            done
+            return 1
+          }
+
+          # ---- helper: اگر URL عوض شده، url.txt را push کن ----
+          push_url() {
+            local url="$1"
+            if [ -f url.txt ] && [ "$(cat url.txt 2>/dev/null)" = "$url" ]; then
+              return 0
+            fi
+            echo "$url" > url.txt
+            git add url.txt
+            git commit -m "update tunnel url [skip ci]" -q
+            for i in 1 2 3; do
+              if git push -q origin "HEAD:$REF_NAME"; then
+                echo "✓ url.txt pushed"
+                return 0
+              fi
+              git pull --rebase -q origin "$REF_NAME" || true
+              sleep 3
+            done
+            echo "✗ push url.txt failed"
+            return 1
+          }
+
+          # ---- تونل اولیه ----
+          TUNNEL_URL=$(start_tunnel)
+          if [ -z "$TUNNEL_URL" ]; then
+            echo "✗ Initial tunnel failed"
+            cat /tmp/cloudflare.log
+            exit 1
+          fi
+          echo "✅ Tunnel: $TUNNEL_URL"
+          push_url "$TUNNEL_URL"
+
+          # ---- حالا که خودمان زنده‌ایم، اجرای قبلی را کنسل کن ----
+          if [ -n "$PREV" ] && [ "$PREV" != "0" ]; then
+            echo "Cancelling previous run $PREV ..."
+            gh run cancel "$PREV" --repo "${{ github.repository }}" || true
+          fi
+
+          # ---- نگهبانی سرور + تونل (بی‌وقفه) ----
+          echo "🛡️  Guard loop started at $(date -u)"
+          while true; do
+            # سرور زنده است؟
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+              echo "[$(date -u)] ⚠ sh.py died → restarting"
+              python3 sh.py > /tmp/api_server.log 2>&1 &
+              SERVER_PID=$!
+              sleep 6
+            fi
+
+            # تونل زنده است؟
+            NEED_RESTART=0
+            if ! pgrep cloudflared > /dev/null; then
+              NEED_RESTART=1
+            else
+              CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+                       --max-time 10 "$TUNNEL_URL/" || echo "000")
+              if [ "$CODE" = "000" ]; then
+                NEED_RESTART=1
+              fi
+            fi
+
+            if [ "$NEED_RESTART" = "1" ]; then
+              echo "[$(date -u)] ⚠ tunnel down → restarting"
+              NEW_URL=$(start_tunnel)
+              if [ -n "$NEW_URL" ]; then
+                TUNNEL_URL="$NEW_URL"
+                echo "✅ New URL: $TUNNEL_URL"
+                push_url "$TUNNEL_URL"
+              fi
+            fi
+
+            sleep 30
+          done
