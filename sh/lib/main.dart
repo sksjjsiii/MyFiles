@@ -1,5 +1,5 @@
 // ============================================================================
-// 🎴 PASKAR — کلاینت پیشرفته بازی‌های پاسور ایرانی (فایل واحد)
+// 🎴 PASKAR v2.1 — کلاینت پیشرفته بازی‌های پاسور ایرانی
 // چهاربرگ (یازده) | هفت خبیث | شلم | حکم
 // ============================================================================
 import 'dart:async';
@@ -8,6 +8,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:confetti/confetti.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -28,7 +29,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 // 1) ثوابت و کمکی‌ها
 // ============================================================================
 const String kFont = 'Vazir';
-const String kAppVersion = '2.0.1';
+const String kAppVersion = '2.1.0';
 
 class PColors {
   static const bg1 = Color(0xFF0B1220);
@@ -46,6 +47,13 @@ class PColors {
   static const felt2 = Color(0xFF0A3D28);
   static const text = Color(0xFFEDF2FA);
   static const sub = Color(0xFF93A3C0);
+
+  // Light theme colors
+  static const lBg1 = Color(0xFFF5F7FB);
+  static const lBg2 = Color(0xFFEEF2F9);
+  static const lPanel = Color(0xFFFFFFFF);
+  static const lText = Color(0xFF1A2340);
+  static const lSub = Color(0xFF5A6B8A);
 }
 
 class SuitInfo {
@@ -71,23 +79,67 @@ class GameMeta {
   final String type, name, icon, desc;
   final int minPlayers, maxPlayers;
   final Color color;
+  final List<String> rules;
   const GameMeta({
     required this.type, required this.name, required this.icon, required this.desc,
     required this.minPlayers, required this.maxPlayers, required this.color,
+    required this.rules,
   });
   static const Map<String, GameMeta> all = {
     'chahar_barg': GameMeta(
-        type: 'chahar_barg', name: 'چهاربرگ', icon: '🎯',
-        desc: 'یازده‌برگ؛ بگیر و ببر!', minPlayers: 2, maxPlayers: 4, color: PColors.teal),
+      type: 'chahar_barg', name: 'چهاربرگ', icon: '🎯',
+      desc: 'یازده‌برگ؛ بگیر و ببر!',
+      minPlayers: 2, maxPlayers: 4, color: PColors.teal,
+      rules: [
+        '🎯 هر بازیکن ۴ کارت می‌گیرد و ۴ کارت روی میز می‌رود',
+        '🃏 سرباز (J) همه کارت‌های غیر از شاه و بی‌بی را جمع می‌کند',
+        '👑 شاه فقط شاه، بی‌بی فقط بی‌بی را می‌گیرد',
+        '🔢 سایر کارت‌ها باید مجموعشان ۱۱ شود (مثلاً ۷+۴)',
+        '✨ آخرین کسی که گرفته، کارت‌های باقیمانده میز را می‌برد',
+        '🏆 کسی که بیشترین کارت را جمع کرده برنده است',
+      ],
+    ),
     'haft_khabis': GameMeta(
-        type: 'haft_khabis', name: 'هفت خبیث', icon: '🎴',
-        desc: 'اونو ایرانی با کارت‌های خبیث', minPlayers: 2, maxPlayers: 6, color: PColors.purple),
+      type: 'haft_khabis', name: 'هفت خبیث', icon: '🎴',
+      desc: 'اونو ایرانی با کارت‌های خبیث',
+      minPlayers: 2, maxPlayers: 6, color: PColors.purple,
+      rules: [
+        '🎴 هر بازیکن ۷ کارت می‌گیرد',
+        '🎲 باید کارتی بازی کنی که با کارت رویی هم‌خال یا هم‌عدد باشد',
+        '7️⃣ هفت: نفر بعدی ۲ کارت می‌کشد (مگر خودش هفت بازی کند)',
+        '2️⃣ دو: نفر بعدی ۲ کارت می‌کشد',
+        '8️⃣ هشت: نوبت نفر بعدی می‌پرد',
+        '🅰 تک: جهت بازی عوض می‌شود + یک نفر می‌پرد',
+        '🔟 ده: می‌توانی هر خالی را اعلام کنی',
+        '🏆 اولین کسی که کارت‌هایش تمام شود برنده است',
+      ],
+    ),
     'shelem': GameMeta(
-        type: 'shelem', name: 'شلم', icon: '💎',
-        desc: 'مزایده و حکم‌بازی تیمی', minPlayers: 4, maxPlayers: 4, color: PColors.blue),
+      type: 'shelem', name: 'شلم', icon: '💎',
+      desc: 'مزایده و حکم‌بازی تیمی',
+      minPlayers: 4, maxPlayers: 4, color: PColors.blue,
+      rules: [
+        '💎 بازی تیمی ۴ نفره (۲ تیم)',
+        '💰 فاز مزایده: پیشنهاد ۱۰۰ تا ۱۶۵ امتیاز',
+        '👑 بالاترین پیشنهاددهنده حاکم می‌شود و حکم را انتخاب می‌کند',
+        '🎯 امتیاز کارت‌ها: آس=۱۰، ده=۱۰، پنج=۵',
+        '⚖ تیم حاکم باید حداقل به اندازه پیشنهادش امتیاز بگیرد',
+        '🏆 اولین تیمی که به امتیاز هدف برسد برنده است',
+      ],
+    ),
     'hokm': GameMeta(
-        type: 'hokm', name: 'حکم', icon: '👑',
-        desc: 'کلاسیک تیمی ایرانی', minPlayers: 4, maxPlayers: 4, color: PColors.gold),
+      type: 'hokm', name: 'حکم', icon: '👑',
+      desc: 'کلاسیک تیمی ایرانی',
+      minPlayers: 4, maxPlayers: 4, color: PColors.gold,
+      rules: [
+        '👑 بازی تیمی ۴ نفره',
+        '🎴 هر بازیکن ۱۳ کارت می‌گیرد',
+        '♠ نفر اول حاکم است و حکم را انتخاب می‌کند',
+        '🎯 باید از خال شروع‌کننده بازی کنی (اگر داری)',
+        '🏆 هر دست ۴ کارتی، یک «تریک» است',
+        '🎖 تیمی که ۷ تریک بگیرد برنده بازی است',
+      ],
+    ),
   };
   static GameMeta of(String? t) => all[t] ?? all['chahar_barg']!;
 }
@@ -99,7 +151,17 @@ const List<String> kAvatars = [
   '♥️', '🎯', '🏆', '👑', '🚀', '🌙', '⚡', '🍀', '🎲', '🧠', '🗿', '🫠',
 ];
 
-// ---- JSON helpers (تحمل‌پذیر نسبت به کلیدهای دارای فاصله) ----
+const List<Map<String, dynamic>> kDailyRewards = [
+  {'day': 1, 'icon': '💰', 'title': '۱۰ سکه', 'desc': 'خوش‌آمد'},
+  {'day': 2, 'icon': '🎁', 'title': 'جعبه شانس', 'desc': 'روز دوم'},
+  {'day': 3, 'icon': '💎', 'title': '۱ جم', 'desc': 'روز سوم'},
+  {'day': 4, 'icon': '🏆', 'title': 'نشان برنز', 'desc': 'روز چهارم'},
+  {'day': 5, 'icon': '💰', 'title': '۵۰ سکه', 'desc': 'روز پنجم'},
+  {'day': 6, 'icon': '🎭', 'title': 'آواتار خاص', 'desc': 'روز ششم'},
+  {'day': 7, 'icon': '👑', 'title': 'تاج طلایی', 'desc': 'هفته اول'},
+];
+
+// ---- JSON helpers ----
 String _s(dynamic v, [String d = '']) => v == null ? d : v.toString();
 int _i(dynamic v, [int d = 0]) => v is int ? v : (v is num ? v.toInt() : (int.tryParse('$v') ?? d));
 double _df(dynamic v, [double d = 0]) => v is num ? v.toDouble() : (double.tryParse('$v') ?? d);
@@ -133,17 +195,9 @@ String timeAgo(String? iso) {
   }
 }
 
-String hhmm(String? iso) {
-  try {
-    return DateFormat('HH:mm').format(DateTime.parse(iso!).toLocal());
-  } catch (_) {
-    return '';
-  }
-}
-
 final GlobalKey<ScaffoldMessengerState> rootMessenger = GlobalKey<ScaffoldMessengerState>();
 
-void toast(String msg, {Color? color}) {
+void toast(String msg, {Color? color, int seconds = 3}) {
   rootMessenger.currentState?.hideCurrentSnackBar();
   rootMessenger.currentState?.showSnackBar(SnackBar(
     content: Text(msg, style: const TextStyle(fontFamily: kFont, fontSize: 13)),
@@ -151,7 +205,7 @@ void toast(String msg, {Color? color}) {
     behavior: SnackBarBehavior.floating,
     margin: const EdgeInsets.all(12),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-    duration: const Duration(seconds: 3),
+    duration: Duration(seconds: seconds),
   ));
 }
 
@@ -175,8 +229,8 @@ Future<bool> confirmDialog(BuildContext context, String title, String msg,
 }
 
 Future<String?> askTextDialog(BuildContext context, String title, String hint,
-    {bool obscure = false}) async {
-  final ctrl = TextEditingController();
+    {bool obscure = false, String? initial}) async {
+  final ctrl = TextEditingController(text: initial ?? '');
   final r = await showDialog<String>(
     context: context,
     builder: (c) => AlertDialog(
@@ -184,6 +238,7 @@ Future<String?> askTextDialog(BuildContext context, String title, String hint,
       content: TextField(
         controller: ctrl,
         obscureText: obscure,
+        autofocus: true,
         style: const TextStyle(fontFamily: kFont),
         decoration: InputDecoration(hintText: hint, hintTextDirection: ui.TextDirection.rtl),
       ),
@@ -199,10 +254,11 @@ Future<String?> askTextDialog(BuildContext context, String title, String hint,
   return (r == null || r.isEmpty) ? null : r;
 }
 
-void showSheet(BuildContext context, Widget child) {
+void showSheet(BuildContext context, Widget child, {bool dismissible = true}) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
+    isDismissible: dismissible,
     backgroundColor: Colors.transparent,
     builder: (ctx) => Container(
       decoration: const BoxDecoration(
@@ -252,7 +308,8 @@ class UserModel {
 // ============================================================================
 class ApiError implements Exception {
   final String message;
-  ApiError(this.message);
+  final int? code;
+  ApiError(this.message, [this.code]);
   @override
   String toString() => message;
 }
@@ -286,7 +343,9 @@ class ApiService {
           return true;
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('fetchBaseUrl failed: $e');
+    }
     return baseUrl.isNotEmpty;
   }
 
@@ -312,14 +371,10 @@ class ApiService {
       }
     }
     switch (code) {
-      case 401:
-        return 'نشست معتبر نیست؛ دوباره وارد شوید';
-      case 403:
-        return 'API Key نامعتبر است. از تنظیمات اصلاح کنید';
-      case 404:
-        return 'یافت نشد';
-      case 400:
-        return 'درخواست نامعتبر است';
+      case 401: return 'نشست معتبر نیست؛ دوباره وارد شوید';
+      case 403: return 'API Key نامعتبر است. از تنظیمات اصلاح کنید';
+      case 404: return 'یافت نشد';
+      case 400: return 'درخواست نامعتبر است';
     }
     return 'خطای سرور ($code)';
   }
@@ -344,12 +399,12 @@ class ApiService {
         return _req(method, path, body: body, query: query, auth: auth, retry: false);
       }
       throw ApiError('پاسخ سرور طول کشید؛ دوباره تلاش کن');
-    } catch (_) {
+    } catch (e) {
       if (retry) {
         await _maybeRefetch();
         return _req(method, path, body: body, query: query, auth: auth, retry: false);
       }
-      throw ApiError('اتصال به سرور برقرار نشد. اینترنت یا آدرس سرور را بررسی کن');
+      throw ApiError('اتصال به سرور برقرار نشد: $e');
     }
     Map<String, dynamic>? data;
     try {
@@ -358,7 +413,7 @@ class ApiService {
       data = null;
     }
     if (r.statusCode >= 200 && r.statusCode < 300) return data ?? {};
-    throw ApiError(_extractError(data, r.statusCode));
+    throw ApiError(_extractError(data, r.statusCode), r.statusCode);
   }
 
   // ---- Auth ----
@@ -416,20 +471,27 @@ class ApiService {
       _req('GET', '/api/rooms/$id/chat', query: {'limit': '$limit'});
   Future<Map<String, dynamic>> gameHistory(String id) => _req('GET', '/api/rooms/$id/history');
 
-  // ---- WebSocket URLs ----
-  String _wsBase() {
-    final u = Uri.parse(baseUrl);
-    final scheme = u.scheme == 'https' ? 'wss' : 'ws';
-    return '$scheme://${u.authority}';
+  // ---- WebSocket URLs (با ساخت ایمن Uri) ----
+  Uri _wsUri(String path, Map<String, String> params) {
+    final baseUri = Uri.parse(baseUrl);
+    final scheme = baseUri.scheme == 'https' ? 'wss' : 'ws';
+    final port = baseUri.hasPort ? baseUri.port : (scheme == 'wss' ? 443 : 80);
+    return Uri(
+      scheme: scheme,
+      host: baseUri.host,
+      port: port,
+      path: path,
+      queryParameters: {
+        ...params,
+        'username': username ?? '',
+        'api_key': apiKey,
+        'token': session ?? '',
+      },
+    );
   }
 
-  String wsRoomUrl(String roomId) =>
-      '${_wsBase()}/ws/room/$roomId?username=${Uri.encodeComponent(username ?? '')}'
-      '&api_key=${Uri.encodeComponent(apiKey)}&token=${Uri.encodeComponent(session ?? '')}';
-
-  String wsUserUrl() =>
-      '${_wsBase()}/ws/user?username=${Uri.encodeComponent(username ?? '')}'
-      '&api_key=${Uri.encodeComponent(apiKey)}&token=${Uri.encodeComponent(session ?? '')}';
+  Uri wsRoomUri(String roomId) => _wsUri('/ws/room/$roomId', {});
+  Uri wsUserUri() => _wsUri('/ws/user', {});
 }
 
 class SecureStore {
@@ -463,16 +525,21 @@ class AppState extends ChangeNotifier {
   final ApiService api;
 
   bool booted = false;
-  bool needsSetup = true; // برای اولین اجرا
+  bool needsSetup = true;
   UserModel? me;
   bool haptics = true;
-  bool soundOn = true; // قابلیت جدید: Sound Toggle
+  bool soundOn = true;
   bool notifOn = true;
+  bool darkMode = true;
   bool serverOk = false;
   int pingMs = -1;
   int onlineCount = 0;
   List<Map> notifications = [];
   Map achDefs = {};
+  Set<String> favoriteRooms = {};
+  int dailyStreak = 0;
+  DateTime? lastDailyClaim;
+  int coins = 0;
 
   String get baseUrl => api.baseUrl;
 
@@ -491,28 +558,80 @@ class AppState extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<void> boot() async {
+  Future<void> _loadPrefs() async {
     final p = api.prefs;
     haptics = p.getBool('haptics') ?? true;
-    soundOn = p.getBool('sound') ?? true; // قابلیت جدید
+    soundOn = p.getBool('sound') ?? true;
     notifOn = p.getBool('notif') ?? true;
-    
-    // بررسی API Key ذخیره شده
+    darkMode = p.getBool('dark_mode') ?? true;
+    coins = p.getInt('coins') ?? 0;
+    dailyStreak = p.getInt('daily_streak') ?? 0;
+    final lastStr = p.getString('last_daily_claim');
+    if (lastStr != null) {
+      try { lastDailyClaim = DateTime.parse(lastStr); } catch (_) {}
+    }
+    final favs = p.getStringList('favorite_rooms') ?? [];
+    favoriteRooms = favs.toSet();
+  }
+
+  Future<void> _saveFavorites() async {
+    await api.prefs.setStringList('favorite_rooms', favoriteRooms.toList());
+  }
+
+  void toggleFavorite(String roomId) {
+    if (favoriteRooms.contains(roomId)) {
+      favoriteRooms.remove(roomId);
+    } else {
+      favoriteRooms.add(roomId);
+    }
+    _saveFavorites();
+    notifyListeners();
+  }
+
+  bool canClaimDaily() {
+    if (lastDailyClaim == null) return true;
+    final now = DateTime.now();
+    return now.year != lastDailyClaim!.year ||
+        now.month != lastDailyClaim!.month ||
+        now.day != lastDailyClaim!.day;
+  }
+
+  Future<void> claimDaily() async {
+    if (!canClaimDaily()) return;
+    final now = DateTime.now();
+    if (lastDailyClaim != null &&
+        now.difference(lastDailyClaim!).inDays == 1) {
+      dailyStreak++;
+    } else if (lastDailyClaim != null) {
+      dailyStreak = 1;
+    } else {
+      dailyStreak = 1;
+    }
+    lastDailyClaim = now;
+    final dayIdx = ((dailyStreak - 1) % 7);
+    coins += (dayIdx + 1) * 10;
+    await api.prefs.setInt('coins', coins);
+    await api.prefs.setInt('daily_streak', dailyStreak);
+    await api.prefs.setString('last_daily_claim', now.toIso8601String());
+    notifyListeners();
+  }
+
+  Future<void> boot() async {
+    await _loadPrefs();
     final savedKey = await SecureStore.read('apiKey');
     if (savedKey != null && savedKey.isNotEmpty) {
       api.apiKey = savedKey;
-      needsSetup = false; // API Key موجود است، نیازی به Setup نیست
+      needsSetup = false;
     } else {
-      needsSetup = true; // اولین اجرا، نیاز به Setup
+      needsSetup = true;
     }
-    
-    final manual = p.getString('manual_base');
+    final manual = api.prefs.getString('manual_base');
     if (manual != null && manual.isNotEmpty) {
       api.baseUrl = manual;
     } else {
       await api.fetchBaseUrl();
       if (api.baseUrl.isEmpty) {
-        final c = p.getString('base_url');
+        final c = api.prefs.getString('base_url');
         if (c != null && c.isNotEmpty) api.baseUrl = c;
       }
     }
@@ -525,7 +644,8 @@ class AppState extends ChangeNotifier {
       try {
         final d = await api.me();
         me = UserModel.from(_m(d['user']));
-      } catch (_) {
+      } catch (e) {
+        debugPrint('Session restore failed: $e');
         api.session = null;
         api.username = null;
       }
@@ -546,9 +666,10 @@ class AppState extends ChangeNotifier {
       serverOk = true;
       pingMs = sw.elapsedMilliseconds;
       onlineCount = _i(_gf(d, 'online'));
-    } catch (_) {
+    } catch (e) {
       serverOk = false;
       pingMs = -1;
+      debugPrint('Ping failed: $e');
     }
     notifyListeners();
   }
@@ -587,9 +708,7 @@ class AppState extends ChangeNotifier {
     } catch (_) {}
     _uws = null;
     if (!silent) {
-      try {
-        await api.logout();
-      } catch (_) {}
+      try { await api.logout(); } catch (_) {}
     }
     api.session = null;
     me = null;
@@ -633,7 +752,7 @@ class AppState extends ChangeNotifier {
     } catch (_) {}
   }
 
-  // ---- WebSocket کاربر (اعلان‌ها) ----
+  // ---- WebSocket کاربر ----
   void connectUserWs() {
     _uwsStopped = false;
     _uwsTries = 0;
@@ -643,8 +762,10 @@ class AppState extends ChangeNotifier {
   Future<void> _openUserWs() async {
     if (_uwsStopped || api.session == null) return;
     try {
-      final ch = WebSocketChannel.connect(Uri.parse(api.wsUserUrl()));
-      await ch.ready;
+      final url = api.wsUserUri();
+      debugPrint('🔌 UserWS: $url');
+      final ch = WebSocketChannel.connect(url);
+      await ch.ready.timeout(const Duration(seconds: 15));
       _uws = ch;
       _uwsTries = 0;
       _uwsSub = ch.stream.listen((raw) {
@@ -652,13 +773,17 @@ class AppState extends ChangeNotifier {
           final m = jsonDecode(raw);
           if (m is Map) _onUserMsg(m);
         } catch (_) {}
-      }, onDone: _userWsClosed, onError: (_) => _userWsClosed());
-    } catch (_) {
-      _userWsClosed();
+      }, onDone: () {
+        _userWsClosed(ch.closeCode, ch.closeReason);
+      }, onError: (e) {
+        _userWsClosed(null, e.toString());
+      });
+    } catch (e) {
+      _userWsClosed(null, e.toString());
     }
   }
 
-  void _userWsClosed() {
+  void _userWsClosed([int? code, String? reason]) {
     _uwsSub?.cancel();
     _uwsSub = null;
     _uws = null;
@@ -681,12 +806,20 @@ class AppState extends ChangeNotifier {
                 ? '✅ دوستی قبول شد'
                 : _s(_gf(msg, 'title'), '🎮 نتیجه بازی');
         toast(title);
+        buzz(40);
       }
     } else if (t == 'achievement') {
       final info = _m(_gf(msg, 'info'));
       if (notifOn) toast('🏅 دستاورد جدید: ${_s(_gf(info, 'title'))}', color: PColors.goldDark);
       refreshMe();
+      buzz(80);
     }
+    notifyListeners();
+  }
+
+  void setDarkMode(bool v) {
+    darkMode = v;
+    api.prefs.setBool('dark_mode', v);
     notifyListeners();
   }
 }
@@ -715,74 +848,107 @@ Future<void> main() async {
 class PaskarApp extends StatelessWidget {
   const PaskarApp({super.key});
 
-  ThemeData _theme() {
-    return ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.dark,
-      fontFamily: kFont,
-      scaffoldBackgroundColor: PColors.bg1,
-      colorScheme: const ColorScheme.dark(
-        primary: PColors.gold,
-        secondary: PColors.green,
-        surface: PColors.panel,
-        error: PColors.red,
-      ),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        titleTextStyle: TextStyle(
-            fontFamily: kFont, fontSize: 17, fontWeight: FontWeight.w800, color: PColors.text),
-      ),
-      dialogTheme: DialogThemeData(
-        backgroundColor: PColors.panel,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        titleTextStyle: TextStyle(fontFamily: kFont, fontSize: 16, color: PColors.text),
-      ),
-      snackBarTheme: const SnackBarThemeData(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: PColors.panel2,
-        contentTextStyle: TextStyle(fontFamily: kFont),
-      ),
-      dividerColor: Colors.white10,
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: Colors.white.withOpacity(0.05),
-        hintStyle: const TextStyle(color: PColors.sub, fontSize: 13),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: PColors.gold, width: 1.4),
+  ThemeData _theme(bool dark) {
+    if (dark) {
+      return ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.dark,
+        fontFamily: kFont,
+        scaffoldBackgroundColor: PColors.bg1,
+        colorScheme: const ColorScheme.dark(
+          primary: PColors.gold,
+          secondary: PColors.green,
+          surface: PColors.panel,
+          error: PColors.red,
         ),
-      ),
-      switchTheme: SwitchThemeData(
-        thumbColor: WidgetStateProperty.resolveWith((s) =>
-            s.contains(WidgetState.selected) ? PColors.gold : Colors.white54),
-        trackColor: WidgetStateProperty.resolveWith((s) =>
-            s.contains(WidgetState.selected) ? PColors.goldDark.withOpacity(.5) : Colors.white12),
-      ),
-    );
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.transparent, elevation: 0, centerTitle: true,
+          titleTextStyle: TextStyle(fontFamily: kFont, fontSize: 17, fontWeight: FontWeight.w800, color: PColors.text),
+        ),
+        dialogTheme: DialogThemeData(
+          backgroundColor: PColors.panel,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          titleTextStyle: const TextStyle(fontFamily: kFont, fontSize: 16, color: PColors.text),
+        ),
+        snackBarTheme: const SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: PColors.panel2,
+          contentTextStyle: TextStyle(fontFamily: kFont),
+        ),
+        dividerColor: Colors.white10,
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true, fillColor: Colors.white.withOpacity(0.05),
+          hintStyle: const TextStyle(color: PColors.sub, fontSize: 13),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: PColors.gold, width: 1.4),
+          ),
+        ),
+        switchTheme: SwitchThemeData(
+          thumbColor: WidgetStateProperty.resolveWith((s) =>
+              s.contains(WidgetState.selected) ? PColors.gold : Colors.white54),
+          trackColor: WidgetStateProperty.resolveWith((s) =>
+              s.contains(WidgetState.selected) ? PColors.goldDark.withOpacity(.5) : Colors.white12),
+        ),
+      );
+    } else {
+      return ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.light,
+        fontFamily: kFont,
+        scaffoldBackgroundColor: PColors.lBg1,
+        colorScheme: const ColorScheme.light(
+          primary: PColors.goldDark,
+          secondary: PColors.green,
+          surface: PColors.lPanel,
+          error: PColors.red,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.transparent, elevation: 0, centerTitle: true,
+          titleTextStyle: TextStyle(fontFamily: kFont, fontSize: 17, fontWeight: FontWeight.w800, color: PColors.lText),
+        ),
+        dialogTheme: DialogThemeData(
+          backgroundColor: PColors.lPanel,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          titleTextStyle: const TextStyle(fontFamily: kFont, fontSize: 16, color: PColors.lText),
+        ),
+        dividerColor: Colors.black12,
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true, fillColor: PColors.lBg2,
+          hintStyle: const TextStyle(color: PColors.lSub, fontSize: 13),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: PColors.goldDark, width: 1.4),
+          ),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'پاسور',
-      debugShowCheckedModeBanner: false,
-      theme: _theme(),
-      scaffoldMessengerKey: rootMessenger,
-      builder: (context, child) => Directionality(
-        textDirection: ui.TextDirection.rtl,
-        child: Builder(builder: (ctx) => child ?? const SizedBox.shrink()),
-      ),
-      home: const SplashPage(),
-    );
+    return Consumer<AppState>(builder: (context, app, _) {
+      return MaterialApp(
+        title: 'پاسور',
+        debugShowCheckedModeBanner: false,
+        theme: _theme(app.darkMode),
+        scaffoldMessengerKey: rootMessenger,
+        builder: (context, child) => Directionality(
+          textDirection: ui.TextDirection.rtl,
+          child: Builder(builder: (ctx) => child ?? const SizedBox.shrink()),
+        ),
+        home: const SplashPage(),
+      );
+    });
   }
 }
 
 // ============================================================================
-// 5.5) صفحه Setup (اولین اجرا - ورود API Key)
+// 5.5) صفحه Setup
 // ============================================================================
 class SetupPage extends StatefulWidget {
   const SetupPage({super.key});
@@ -795,17 +961,11 @@ class _SetupPageState extends State<SetupPage> {
   bool _busy = false;
 
   @override
-  void dispose() {
-    _keyCtrl.dispose();
-    super.dispose();
-  }
+  void dispose() { _keyCtrl.dispose(); super.dispose(); }
 
   Future<void> _save() async {
     final key = _keyCtrl.text.trim();
-    if (key.isEmpty) {
-      toast('API Key را وارد کن', color: PColors.red);
-      return;
-    }
+    if (key.isEmpty) return toast('API Key را وارد کن', color: PColors.red);
     setState(() => _busy = true);
     try {
       final app = context.read<AppState>();
@@ -814,12 +974,11 @@ class _SetupPageState extends State<SetupPage> {
       app.needsSetup = false;
       await app.ping();
       if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const AuthPage()),
-        );
+        toast('✅ API Key ذخیره شد', color: PColors.green);
+        Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const AuthPage()));
       }
     } catch (e) {
-      toast('خطا در ذخیره: $e', color: PColors.red);
+      toast('خطا: $e', color: PColors.red);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -852,7 +1011,7 @@ class _SetupPageState extends State<SetupPage> {
                   const Text('🔐 API Key سرور',
                       style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
                   const SizedBox(height: 6),
-                  const Text('این کلید برای احراز هویت در سرور لازم است.',
+                  const Text('این کلید برای احراز هویت لازم است.',
                       style: TextStyle(fontSize: 11, color: PColors.sub)),
                   const SizedBox(height: 14),
                   TextField(
@@ -870,18 +1029,6 @@ class _SetupPageState extends State<SetupPage> {
                     icon: Icons.check_circle_outline,
                     loading: _busy,
                     onPressed: _save,
-                  ),
-                  const SizedBox(height: 12),
-                  Center(
-                    child: TextButton.icon(
-                      onPressed: () async {
-                        final u = Uri.parse('https://github.com/sksjjsiii/MyFiles/blob/main/README.md');
-                        if (await canLaunchUrl(u)) await launchUrl(u, mode: LaunchMode.externalApplication);
-                      },
-                      icon: const Icon(Icons.help_outline, size: 16),
-                      label: const Text('راهنمای دریافت API Key',
-                          style: TextStyle(fontSize: 11, color: PColors.blue)),
-                    ),
                   ),
                 ]),
               ),
@@ -917,10 +1064,7 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
   }
 
   @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
+  void dispose() { _pulse.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
@@ -928,7 +1072,6 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
       if (app.booted && !_navigated) {
         _navigated = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          // اگر نیاز به Setup باشد، به SetupPage برو
           if (app.needsSetup) {
             Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const SetupPage()));
           } else if (app.authed) {
@@ -957,27 +1100,19 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: const RadialGradient(colors: [PColors.gold, PColors.goldDark]),
-                      boxShadow: [
-                        BoxShadow(
-                            color: PColors.gold.withOpacity(.35), blurRadius: 40, spreadRadius: 6)
-                      ],
+                      boxShadow: [BoxShadow(color: PColors.gold.withOpacity(.35), blurRadius: 40, spreadRadius: 6)],
                     ),
-                    child: const Center(
-                        child: Text('🎴', style: TextStyle(fontSize: 56))),
+                    child: const Center(child: Text('🎴', style: TextStyle(fontSize: 56))),
                   ),
                 ),
               ),
               const SizedBox(height: 26),
-              const Text('پاسور',
-                  style: TextStyle(fontSize: 34, fontWeight: FontWeight.w900, color: PColors.gold)),
+              const Text('پاسور', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w900, color: PColors.gold)),
               const SizedBox(height: 6),
               Text(
-                app.needsSetup
-                    ? 'آماده‌سازی اولیه...'
-                    : app.baseUrl.isEmpty
-                        ? 'دریافت آدرس سرور...'
-                        : app.serverOk
-                            ? 'سرور متصل • ${fa(app.onlineCount)} آنلاین'
+                app.needsSetup ? 'آماده‌سازی اولیه...'
+                    : app.baseUrl.isEmpty ? 'دریافت آدرس سرور...'
+                        : app.serverOk ? 'سرور متصل • ${fa(app.onlineCount)} آنلاین'
                             : 'در حال اتصال به سرور...',
                 style: const TextStyle(color: PColors.sub, fontSize: 13),
               ),
@@ -985,8 +1120,7 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
               SizedBox(
                 width: 170,
                 child: Shimmer.fromColors(
-                  baseColor: Colors.white12,
-                  highlightColor: PColors.gold.withOpacity(.6),
+                  baseColor: Colors.white12, highlightColor: PColors.gold.withOpacity(.6),
                   child: Container(height: 5, decoration: BoxDecoration(
                       color: Colors.white, borderRadius: BorderRadius.circular(8))),
                 ),
@@ -1012,10 +1146,7 @@ class _AuthPageState extends State<AuthPage> with SingleTickerProviderStateMixin
   late final TabController _tab = TabController(length: 2, vsync: this);
 
   @override
-  void dispose() {
-    _tab.dispose();
-    super.dispose();
-  }
+  void dispose() { _tab.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
@@ -1032,8 +1163,7 @@ class _AuthPageState extends State<AuthPage> with SingleTickerProviderStateMixin
               const SizedBox(height: 8),
               const Text('🎴', style: TextStyle(fontSize: 54)),
               const SizedBox(height: 4),
-              const Text('پاسور',
-                  style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: PColors.gold)),
+              const Text('پاسور', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: PColors.gold)),
               const Text('چهاربرگ • هفت خبیث • شلم • حکم',
                   style: TextStyle(color: PColors.sub, fontSize: 12)),
               const SizedBox(height: 22),
@@ -1041,12 +1171,10 @@ class _AuthPageState extends State<AuthPage> with SingleTickerProviderStateMixin
                 padding: const EdgeInsets.all(18),
                 child: Column(children: [
                   Container(
-                    decoration: BoxDecoration(
-                        color: PColors.bg1, borderRadius: BorderRadius.circular(14)),
+                    decoration: BoxDecoration(color: PColors.bg1, borderRadius: BorderRadius.circular(14)),
                     child: TabBar(
                       controller: _tab,
-                      indicator: BoxDecoration(
-                          color: PColors.gold, borderRadius: BorderRadius.circular(12)),
+                      indicator: BoxDecoration(color: PColors.gold, borderRadius: BorderRadius.circular(12)),
                       labelColor: Colors.black,
                       unselectedLabelColor: PColors.sub,
                       labelStyle: const TextStyle(fontFamily: kFont, fontWeight: FontWeight.w800),
@@ -1056,10 +1184,7 @@ class _AuthPageState extends State<AuthPage> with SingleTickerProviderStateMixin
                   const SizedBox(height: 16),
                   SizedBox(
                     height: 330,
-                    child: TabBarView(controller: _tab, children: const [
-                      _LoginForm(),
-                      _RegisterForm(),
-                    ]),
+                    child: TabBarView(controller: _tab, children: const [_LoginForm(), _RegisterForm()]),
                   ),
                 ]),
               ),
@@ -1117,9 +1242,7 @@ class _LoginFormState extends State<_LoginForm> {
           decoration: const InputDecoration(hintText: 'نام کاربری', prefixIcon: Icon(Icons.person_outline))),
       const SizedBox(height: 12),
       TextField(
-        controller: _p,
-        obscureText: _obscure,
-        style: const TextStyle(fontFamily: kFont),
+        controller: _p, obscureText: _obscure, style: const TextStyle(fontFamily: kFont),
         onSubmitted: (_) => _submit(),
         decoration: InputDecoration(
           hintText: 'رمز عبور (اختیاری)',
@@ -1132,10 +1255,8 @@ class _LoginFormState extends State<_LoginForm> {
       const Spacer(),
       GoldBtn(text: 'ورود به بازی', icon: Icons.login_rounded, loading: _busy, onPressed: _submit),
       const SizedBox(height: 8),
-      Center(
-        child: Text('ورود یعنی پذیرش قوانین اتاق‌ها 🙂',
-            style: TextStyle(color: PColors.sub.withOpacity(.7), fontSize: 11)),
-      ),
+      Center(child: Text('ورود یعنی پذیرش قوانین اتاق‌ها 🙂',
+          style: TextStyle(color: PColors.sub.withOpacity(.7), fontSize: 11))),
     ]);
   }
 }
@@ -1160,10 +1281,8 @@ class _RegisterFormState extends State<_RegisterForm> {
     setState(() => _busy = true);
     try {
       await app.register(
-          username: uname,
-          password: _p.text.isEmpty ? null : _p.text,
-          avatar: _avatar,
-          bio: _bio.text.trim());
+          username: uname, password: _p.text.isEmpty ? null : _p.text,
+          avatar: _avatar, bio: _bio.text.trim());
       if (mounted) {
         app.buzz(80);
         toast('🎉 خوش اومدی $uname!', color: PColors.green);
@@ -1256,11 +1375,11 @@ void showConnectionSheet(BuildContext context, AppState app) {
           const Spacer(),
           if (app.api.baseUrl.isNotEmpty)
             Flexible(child: Text(app.api.baseUrl,
-                style: const TextStyle(fontSize: 10, color: PColors.sub), overflow: TextOverflow.ellipsis,
-                textDirection: ui.TextDirection.ltr)),
+                style: const TextStyle(fontSize: 10, color: PColors.sub),
+                overflow: TextOverflow.ellipsis, textDirection: ui.TextDirection.ltr)),
         ]),
         const SizedBox(height: 14),
-        Text('آدرس سرور (Base URL) — خودکار از گیت‌هاب دریافت می‌شود:',
+        Text('آدرس سرور (Base URL) — خودکار از گیت‌هاب:',
             style: TextStyle(color: PColors.sub, fontSize: 12)),
         const SizedBox(height: 6),
         TextField(controller: baseCtrl, textDirection: ui.TextDirection.ltr,
@@ -1310,22 +1429,13 @@ void showConnectionSheet(BuildContext context, AppState app) {
           if (ctx.mounted) Navigator.pop(ctx);
           toast('ذخیره شد', color: PColors.green);
         }),
-        const SizedBox(height: 8),
-        Center(child: TextButton(
-          onPressed: () async {
-            final u = Uri.parse(ApiService.baseUrlSource);
-            if (await canLaunchUrl(u)) await launchUrl(u, mode: LaunchMode.externalApplication);
-          },
-          child: const Text('منبع آدرس سرور (لینک ثابت) ↗',
-              style: TextStyle(fontSize: 11, color: PColors.blue)),
-        )),
       ]),
     );
   }));
 }
 
 // ============================================================================
-// 8) پوسته اصلی + ناوبری
+// 8) پوسته اصلی
 // ============================================================================
 class MainShellPage extends StatefulWidget {
   const MainShellPage({super.key});
@@ -1344,13 +1454,19 @@ class _MainShellPageState extends State<MainShellPage> {
     _pingTimer = Timer.periodic(const Duration(seconds: 45), (_) {
       if (mounted) context.read<AppState>().ping();
     });
+    // نمایش daily reward اگر قابل دریافت باشد
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final app = context.read<AppState>();
+      if (app.canClaimDaily()) {
+        Future.delayed(const Duration(milliseconds: 800), () {
+          if (mounted) showDailyRewardSheet(context);
+        });
+      }
+    });
   }
 
   @override
-  void dispose() {
-    _pingTimer?.cancel();
-    super.dispose();
-  }
+  void dispose() { _pingTimer?.cancel(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
@@ -1368,6 +1484,20 @@ class _MainShellPageState extends State<MainShellPage> {
             ),
           ),
           actions: [
+            // Daily reward
+            if (app.canClaimDaily())
+              Stack(children: [
+                IconButton(
+                  icon: const Icon(Icons.card_giftcard, color: PColors.gold, size: 22),
+                  onPressed: () => showDailyRewardSheet(context),
+                ),
+                Positioned(
+                  top: 6, right: 6,
+                  child: Container(width: 8, height: 8,
+                      decoration: const BoxDecoration(color: PColors.red, shape: BoxShape.circle)),
+                ),
+              ]),
+            // Connection
             GestureDetector(
               onTap: () async {
                 await app.ping();
@@ -1406,10 +1536,7 @@ class _MainShellPageState extends State<MainShellPage> {
           ],
         ),
         body: IndexedStack(index: _idx, children: const [
-          RoomsPage(),
-          LeaderboardPage(),
-          FriendsPage(),
-          ProfilePage(),
+          RoomsPage(), LeaderboardPage(), FriendsPage(), ProfilePage(),
         ]),
         bottomNavigationBar: Container(
           margin: const EdgeInsets.all(14),
@@ -1461,7 +1588,82 @@ class _MainShellPageState extends State<MainShellPage> {
 }
 
 // ============================================================================
-// 9) اتاق‌ها
+// Daily Reward Sheet
+// ============================================================================
+void showDailyRewardSheet(BuildContext context) {
+  final app = context.read<AppState>();
+  final canClaim = app.canClaimDaily();
+  final currentDayIdx = canClaim
+      ? ((app.dailyStreak) % 7)
+      : (((app.dailyStreak - 1).clamp(0, 999)) % 7);
+  showSheet(context, StatefulBuilder(builder: (ctx, setSt) {
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      Center(child: Container(width: 40, height: 4,
+          decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(4)))),
+      const SizedBox(height: 14),
+      const Text('🎁 پاداش روزانه',
+          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: PColors.gold)),
+      const SizedBox(height: 4),
+      Text('🔥 ${fa(app.dailyStreak)} روز پیاپی',
+          style: const TextStyle(color: PColors.sub, fontSize: 12)),
+      const SizedBox(height: 14),
+      Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center, children: [
+        for (int i = 0; i < kDailyRewards.length; i++) ...[
+          Builder(builder: (_) {
+            final r = kDailyRewards[i];
+            final claimed = i < (app.dailyStreak % 7) || (!canClaim && i <= currentDayIdx);
+            final isCurrent = i == currentDayIdx && canClaim;
+            return Container(
+              width: 80,
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isCurrent ? PColors.gold.withOpacity(.2) : PColors.bg1,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isCurrent ? PColors.gold : (claimed ? PColors.green : Colors.white10),
+                  width: isCurrent ? 2 : 1,
+                ),
+              ),
+              child: Column(children: [
+                Text(r['icon'], style: const TextStyle(fontSize: 24)),
+                const SizedBox(height: 3),
+                Text('روز ${fa(r['day'])}',
+                    style: const TextStyle(fontSize: 10, color: PColors.sub)),
+                const SizedBox(height: 2),
+                Text(r['title'],
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800,
+                        color: claimed ? PColors.green : PColors.text)),
+                if (claimed) const Icon(Icons.check_circle, size: 12, color: PColors.green),
+              ]),
+            );
+          }),
+        ],
+      ]),
+      const SizedBox(height: 14),
+      if (canClaim)
+        GoldBtn(
+          text: 'دریافت پاداش امروز',
+          icon: Icons.card_giftcard,
+          onPressed: () {
+            app.claimDaily();
+            app.buzz(100);
+            setSt(() {});
+            final reward = kDailyRewards[currentDayIdx];
+            toast('🎉 دریافت شد: ${reward['title']}', color: PColors.green, seconds: 4);
+            Future.delayed(const Duration(seconds: 2), () {
+              if (ctx.mounted) Navigator.pop(ctx);
+            });
+          },
+        )
+      else
+        const GhostBtn(text: '✅ پاداش امروز گرفته شده'),
+    ]);
+  }));
+}
+
+// ============================================================================
+// 9) اتاق‌ها (با جستجو و علاقه‌مندی)
 // ============================================================================
 class RoomsPage extends StatefulWidget {
   const RoomsPage({super.key});
@@ -1471,6 +1673,9 @@ class RoomsPage extends StatefulWidget {
 
 class _RoomsPageState extends State<RoomsPage> {
   String? _filter;
+  String _query = '';
+  bool _onlyFavorites = false;
+  bool _onlyAvailable = false;
   List<Map> _rooms = [];
   bool _loading = true;
   Timer? _timer;
@@ -1479,14 +1684,11 @@ class _RoomsPageState extends State<RoomsPage> {
   void initState() {
     super.initState();
     _load();
-    _timer = Timer.periodic(const Duration(seconds: 20), (_) => _load(silent: true));
+    _timer = Timer.periodic(const Duration(seconds: 15), (_) => _load(silent: true));
   }
 
   @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
+  void dispose() { _timer?.cancel(); super.dispose(); }
 
   Future<void> _load({bool silent = false}) async {
     if (!silent) setState(() => _loading = true);
@@ -1519,17 +1721,73 @@ class _RoomsPageState extends State<RoomsPage> {
         Navigator.push(context, MaterialPageRoute(builder: (_) => RoomPage(roomId: rid)));
       }
     } on ApiError catch (e) {
-      toast(e.message, color: PColors.red);
+      toast('❌ ${e.message}', color: PColors.red);
     }
+  }
+
+  Future<void> _quickMatch() async {
+    final available = _rooms.where((r) {
+      final players = _l(_gf(r, 'players')).length;
+      final max = _i(_gf(r, 'max_players'), 4);
+      final status = _s(_gf(r, 'status'));
+      return status == 'waiting' && players < max && !_b(_gf(r, 'has_password'));
+    }).toList();
+    if (available.isEmpty) {
+      return toast('🎲 اتاق آماده‌ای پیدا نشد. یکی بساز!', color: PColors.blue);
+    }
+    available.shuffle();
+    await _join(available.first);
+  }
+
+  List<Map> get _filtered {
+    return _rooms.where((r) {
+      final name = _s(_gf(r, 'name')).toLowerCase();
+      final host = _s(_gf(r, 'host')).toLowerCase();
+      final rid = _s(_gf(r, 'room_id'));
+      final app = context.read<AppState>();
+      if (_query.isNotEmpty &&
+          !name.contains(_query.toLowerCase()) &&
+          !host.contains(_query.toLowerCase())) {
+        return false;
+      }
+      if (_onlyFavorites && !app.favoriteRooms.contains(rid)) return false;
+      if (_onlyAvailable) {
+        final players = _l(_gf(r, 'players')).length;
+        final max = _i(_gf(r, 'max_players'), 4);
+        final status = _s(_gf(r, 'status'));
+        if (status != 'waiting' || players >= max) return false;
+      }
+      return true;
+    }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
+    final filtered = _filtered;
     return Stack(children: [
       RefreshIndicator(
         onRefresh: _load,
         color: PColors.gold,
         child: CustomScrollView(slivers: [
+          // Search
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
+              child: TextField(
+                onChanged: (v) => setState(() => _query = v),
+                style: const TextStyle(fontFamily: kFont),
+                decoration: InputDecoration(
+                  hintText: '🔍 جستجوی اتاق...',
+                  isDense: true,
+                  suffixIcon: _query.isNotEmpty
+                      ? IconButton(icon: const Icon(Icons.close, size: 17),
+                          onPressed: () => setState(() => _query = ''))
+                      : null,
+                ),
+              ),
+            ),
+          ),
+          // Chips
           SliverToBoxAdapter(
             child: SizedBox(
               height: 52,
@@ -1544,20 +1802,49 @@ class _RoomsPageState extends State<RoomsPage> {
               ),
             ),
           ),
+          // Filters
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Row(children: [
+                FilterChip(
+                  label: const Text('⭐ مورد علاقه', style: TextStyle(fontSize: 10.5)),
+                  selected: _onlyFavorites,
+                  selectedColor: PColors.gold.withOpacity(.3),
+                  onSelected: (v) => setState(() => _onlyFavorites = v),
+                ),
+                const SizedBox(width: 6),
+                FilterChip(
+                  label: const Text('🟢 آزاد', style: TextStyle(fontSize: 10.5)),
+                  selected: _onlyAvailable,
+                  selectedColor: PColors.green.withOpacity(.3),
+                  onSelected: (v) => setState(() => _onlyAvailable = v),
+                ),
+                const Spacer(),
+                GhostBtn(text: '🎲 بازی سریع', onPressed: _quickMatch),
+              ]),
+            ),
+          ),
           if (_loading)
             const SliverFillRemaining(
                 child: Center(child: SpinKitFadingCircle(color: PColors.gold, size: 40)))
-          else if (_rooms.isEmpty)
-            const SliverFillRemaining(
-              child: EmptyState(emoji: '🪑', title: 'اتاقی پیدا نشد',
-                  sub: 'اولین اتاق را بساز و دوستانت را دعوت کن!'),
+          else if (filtered.isEmpty)
+            SliverFillRemaining(
+              child: EmptyState(
+                emoji: _onlyFavorites ? '⭐' : '🪑',
+                title: _onlyFavorites ? 'اتاق مورد علاقه‌ای نداری' : 'اتاقی پیدا نشد',
+                sub: _onlyFavorites ? 'اتاق‌ها را با ⭐ نشان‌دار کن' : 'اولین اتاق را بساز!',
+              ),
             )
           else
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(14, 4, 14, 90),
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 90),
               sliver: SliverList.builder(
-                itemCount: _rooms.length,
-                itemBuilder: (c, i) => RoomCard(room: _rooms[i], onJoin: () => _join(_rooms[i])),
+                itemCount: filtered.length,
+                itemBuilder: (c, i) => RoomCard(
+                  room: filtered[i],
+                  onJoin: () => _join(filtered[i]),
+                ),
               ),
             ),
         ]),
@@ -1615,6 +1902,9 @@ class RoomCard extends StatelessWidget {
     final max = _i(_gf(room, 'max_players'), 4);
     final status = _s(_gf(room, 'status'), 'waiting');
     final full = players.length >= max;
+    final rid = _s(_gf(room, 'room_id'));
+    final app = context.watch<AppState>();
+    final isFav = app.favoriteRooms.contains(rid);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
@@ -1625,15 +1915,28 @@ class RoomCard extends StatelessWidget {
           child: Glass(
             padding: const EdgeInsets.all(14),
             child: Row(children: [
-              Container(
-                width: 52, height: 52,
-                decoration: BoxDecoration(
-                  color: meta.color.withOpacity(.18),
-                  borderRadius: BorderRadius.circular(15),
-                  border: Border.all(color: meta.color.withOpacity(.5)),
+              Stack(children: [
+                Container(
+                  width: 52, height: 52,
+                  decoration: BoxDecoration(
+                    color: meta.color.withOpacity(.18),
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: meta.color.withOpacity(.5)),
+                  ),
+                  child: Center(child: Text(meta.icon, style: const TextStyle(fontSize: 24))),
                 ),
-                child: Center(child: Text(meta.icon, style: const TextStyle(fontSize: 24))),
-              ),
+                Positioned(
+                  top: -4, right: -4,
+                  child: GestureDetector(
+                    onTap: () => app.toggleFavorite(rid),
+                    child: Icon(
+                      isFav ? Icons.star_rounded : Icons.star_outline_rounded,
+                      color: isFav ? PColors.gold : Colors.white24,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ]),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1648,8 +1951,12 @@ class RoomCard extends StatelessWidget {
                           child: Icon(Icons.visibility_off_rounded, size: 13, color: PColors.sub)),
                   ]),
                   const SizedBox(height: 3),
-                  Text('میزبان: ${_s(_gf(room, 'host'))}',
-                      style: const TextStyle(fontSize: 11, color: PColors.sub)),
+                  GestureDetector(
+                    onTap: () => showUserProfile(context, _s(_gf(room, 'host'))),
+                    child: Text('میزبان: ${_s(_gf(room, 'host'))}',
+                        style: const TextStyle(fontSize: 11, color: PColors.blue,
+                            decoration: TextDecoration.underline)),
+                  ),
                   const SizedBox(height: 5),
                   Row(children: [
                     Icon(Icons.people_rounded, size: 13, color: meta.color),
@@ -1757,8 +2064,11 @@ class _CreateRoomSheetState extends State<CreateRoomSheet> {
         Center(child: Container(width: 40, height: 4,
             decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(4)))),
         const SizedBox(height: 14),
-        const Text('➕ ساخت اتاق جدید',
-            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+        Row(children: [
+          const Text('➕ ساخت اتاق جدید', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+          const Spacer(),
+          GhostBtn(text: '📖 قوانین', onPressed: () => showGameRules(context, _game)),
+        ]),
         const SizedBox(height: 14),
         TextField(controller: _name, style: const TextStyle(fontFamily: kFont),
             decoration: const InputDecoration(hintText: 'نام اتاق', prefixIcon: Icon(Icons.door_front_door_outlined))),
@@ -1839,8 +2149,30 @@ class _CreateRoomSheetState extends State<CreateRoomSheet> {
   }
 }
 
+void showGameRules(BuildContext context, String gameType) {
+  final meta = GameMeta.of(gameType);
+  showSheet(context, Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Row(children: [
+      Text(meta.icon, style: const TextStyle(fontSize: 30)),
+      const SizedBox(width: 10),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(meta.name, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+        Text(meta.desc, style: const TextStyle(fontSize: 11, color: PColors.sub)),
+      ])),
+    ]),
+    const SizedBox(height: 16),
+    const Text('📖 قوانین بازی', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+    const SizedBox(height: 8),
+    for (final r in meta.rules)
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Text(r, style: const TextStyle(fontSize: 12.5, height: 1.5)),
+      ),
+  ]));
+}
+
 // ============================================================================
-// 10) نشست اتاق (WebSocket + وضعیت بازی)
+// 10) نشست اتاق (WebSocket بهبودیافته)
 // ============================================================================
 class RoomSession extends ChangeNotifier {
   RoomSession({required this.api, required this.roomId, required this.me, required this.buzz});
@@ -1854,9 +2186,10 @@ class RoomSession extends ChangeNotifier {
   List<Map> chat = [];
   Map? gameState;
   Map? myState;
-  String mode = 'lobby'; // lobby | playing | finished
+  String mode = 'lobby';
   bool connected = false;
   String connInfo = 'در حال اتصال...';
+  String lastError = '';
   final Set<String> online = {};
   final Set<String> typing = {};
   final Map<String, Timer> _typingTimers = {};
@@ -1869,9 +2202,8 @@ class RoomSession extends ChangeNotifier {
   WebSocketChannel? _ws;
   StreamSubscription? _sub;
   Timer? _pingTimer;
-  Timer? _tickFallback;
 
-  void Function(String msg, {Color? color})? onToast;
+  void Function(String msg, {Color? color, int seconds})? onToast;
   VoidCallback? onFatalClose;
 
   bool get isPlayer => _l(_gf(room, 'players')).contains(me);
@@ -1888,44 +2220,129 @@ class RoomSession extends ChangeNotifier {
         mode = st == 'playing' ? 'playing' : st == 'finished' ? 'finished' : 'lobby';
       }
       _notify();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('loadInitial failed: $e');
+    }
   }
 
   Future<void> connect() async {
     if (closedByUser || disposed) return;
     connInfo = 'در حال اتصال به اتاق...';
+    lastError = '';
     _notify();
     try {
-      final ch = WebSocketChannel.connect(Uri.parse(api.wsRoomUrl(roomId)));
-      await ch.ready;
+      // بررسی مقدماتی
+      if (api.baseUrl.isEmpty) throw Exception('آدرس سرور تنظیم نشده');
+      if (api.session == null || api.username == null) {
+        throw Exception('نشست شما معتبر نیست. لطفاً دوباره وارد شوید.');
+      }
+      if (api.apiKey.isEmpty || api.apiKey == ApiService.defaultApiKey) {
+        throw Exception('API Key تنظیم نشده است');
+      }
+
+      final url = api.wsRoomUri(roomId);
+      debugPrint('🔌 WS connecting: $url');
+      
+      final ch = WebSocketChannel.connect(url);
+      
+      // Timeout برای اتصال
+      try {
+        await ch.ready.timeout(const Duration(seconds: 15));
+      } on TimeoutException {
+        try { ch.sink.close(); } catch (_) {}
+        throw Exception('سرور پاسخ نداد (timeout پس از ۱۵ ثانیه). اتصال اینترنت یا سرور را بررسی کن.');
+      }
+
       _ws = ch;
       connected = true;
       _tries = 0;
       connInfo = '';
-      _sub = ch.stream.listen(_onData, onDone: _closed, onError: (_) => _closed());
+      lastError = '';
+      _sub = ch.stream.listen(
+        _onData,
+        onDone: () {
+          final code = ch.closeCode;
+          final reason = ch.closeReason;
+          debugPrint('🔌 WS closed: code=$code reason=$reason');
+          _closed(code, reason);
+        },
+        onError: (e, st) {
+          debugPrint('🔌 WS error: $e');
+          _closed(null, e.toString());
+        },
+        cancelOnError: false,
+      );
       _pingTimer?.cancel();
       _pingTimer = Timer.periodic(const Duration(seconds: 25), (_) => _send({'type': 'ping'}));
       _notify();
-    } catch (_) {
-      _closed();
+    } catch (e) {
+      debugPrint('🔌 WS connect failed: $e');
+      _closed(null, e.toString());
     }
   }
 
-  void _closed() {
+  String _translateCloseReason(int? code, String? reason) {
+    if (reason != null && reason.isNotEmpty) {
+      // ترجمه‌های رایج
+      if (reason.toLowerCase().contains('invalid api key')) {
+        return 'API Key نامعتبر است. از تنظیمات اصلاح کنید.';
+      }
+      if (reason.toLowerCase().contains('invalid session')) {
+        return 'نشست شما منقضی شده. دوباره وارد شوید.';
+      }
+      if (reason.toLowerCase().contains('room not found')) {
+        return 'اتاق پیدا نشد. ممکن است حذف شده باشد.';
+      }
+      if (reason.toLowerCase().contains('not in room')) {
+        return 'شما در این اتاق عضو نیستید.';
+      }
+      return reason;
+    }
+    if (code == null) return 'اتصال برقرار نشد';
+    switch (code) {
+      case 1000: return 'اتصال به صورت عادی بسته شد';
+      case 1001: return 'سرور در حال ترک است';
+      case 1006: return 'اتصال به طور غیرعادی قطع شد (شبکه را چک کن)';
+      case 1008: return 'دسترسی غیرمجاز (Policy Violation)';
+      case 1011: return 'خطای داخلی سرور';
+      case 1012: return 'سرور در حال راه‌اندازی مجدد';
+      case 1013: return 'بعداً دوباره تلاش کن';
+      default: return 'قطع شد با کد $code';
+    }
+  }
+
+  void _closed([int? closeCode, String? closeReason]) {
     _sub?.cancel();
     _sub = null;
     _ws = null;
     connected = false;
     _pingTimer?.cancel();
     if (disposed || closedByUser) return;
+
+    final friendlyMsg = _translateCloseReason(closeCode, closeReason);
+    lastError = friendlyMsg;
+
+    // اگر کد 1008 بود (policy violation)، تلاش مجدد فایده ندارد
+    if (closeCode == 1008) {
+      connInfo = '❌ $friendlyMsg';
+      onToast?.call('❌ خطا در اتصال: $friendlyMsg', color: PColors.red, seconds: 6);
+      _notify();
+      // پس از 3 ثانیه از اتاق خارج شو
+      Future.delayed(const Duration(seconds: 3), () {
+        if (!disposed) onFatalClose?.call();
+      });
+      return;
+    }
+
     if (_tries < 10) {
       _tries++;
-      connInfo = 'اتصال قطع شد؛ تلاش دوباره ${fa(_tries)}...';
+      connInfo = 'تلاش ${fa(_tries)} از ۱۰ • $friendlyMsg';
       _notify();
-      Future.delayed(Duration(seconds: math.min(2 * _tries, 8)), connect);
+      final delay = math.min(2 * _tries, 10);
+      Future.delayed(Duration(seconds: delay), connect);
     } else {
-      connInfo = 'اتصال برقرار نشد 😕';
-      onToast?.call('اتصال به اتاق برقرار نشد', color: PColors.red);
+      connInfo = '❌ $friendlyMsg';
+      onToast?.call('❌ اتصال برقرار نشد: $friendlyMsg', color: PColors.red, seconds: 8);
       _notify();
     }
   }
@@ -1934,7 +2351,8 @@ class RoomSession extends ChangeNotifier {
     Map msg;
     try {
       msg = jsonDecode(raw);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('WS JSON parse error: $e');
       return;
     }
     final t = _s(_gf(msg, 'type'));
@@ -1953,6 +2371,7 @@ class RoomSession extends ChangeNotifier {
         break;
       case 'typing':
         final u = _s(_gf(msg, 'username'));
+        if (u == me) break;
         typing.add(u);
         _typingTimers[u]?.cancel();
         _typingTimers[u] = Timer(const Duration(seconds: 3), () {
@@ -1964,8 +2383,7 @@ class RoomSession extends ChangeNotifier {
       case 'emote':
         final id = _emoteId++;
         emotes.add({
-          'id': id,
-          'emoji': _s(_gf(msg, 'emoji'), '👍'),
+          'id': id, 'emoji': _s(_gf(msg, 'emoji'), '👍'),
           'username': _s(_gf(msg, 'username')),
         });
         Future.delayed(const Duration(milliseconds: 2600), () {
@@ -2025,7 +2443,10 @@ class RoomSession extends ChangeNotifier {
         onFatalClose?.call();
         break;
       case 'error':
-        onToast?.call(_s(_gf(msg, 'message'), 'خطا'), color: PColors.red);
+        onToast?.call('❌ ${_s(_gf(msg, 'message'), 'خطا')}', color: PColors.red);
+        break;
+      case 'pong':
+        // heartbeat ok
         break;
       default:
         break;
@@ -2041,11 +2462,19 @@ class RoomSession extends ChangeNotifier {
     if (connected && _ws != null) {
       try {
         _ws!.sink.add(jsonEncode(m));
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('WS send error: $e');
+      }
     }
   }
 
-  void sendChat(String text) => _send({'type': 'chat', 'message': text});
+  void sendChat(String text, {String? to}) {
+    if (to != null) {
+      _send({'type': 'whisper', 'to': to, 'message': text});
+    } else {
+      _send({'type': 'chat', 'message': text});
+    }
+  }
   void sendTyping() => _send({'type': 'typing'});
   void sendEmote(String e) {
     _send({'type': 'emote', 'emoji': e});
@@ -2058,18 +2487,15 @@ class RoomSession extends ChangeNotifier {
   }
 
   void playCard(int i, {String? suit}) => _send({
-        'type': 'game_action',
-        'action': 'play_card',
+        'type': 'game_action', 'action': 'play_card',
         'data': {'card_index': i, if (suit != null) 'suit': suit},
       });
   void bid(dynamic amount) => _send({
-        'type': 'game_action',
-        'action': 'bid',
+        'type': 'game_action', 'action': 'bid',
         'data': {'amount': amount},
       });
   void selectHokm(String suit) => _send({
-        'type': 'game_action',
-        'action': 'select_hokm',
+        'type': 'game_action', 'action': 'select_hokm',
         'data': {'suit': suit},
       });
   void autoPlay() => _send({'type': 'game_action', 'action': 'auto'});
@@ -2085,22 +2511,15 @@ class RoomSession extends ChangeNotifier {
 
   Future<void> leave() async {
     closedByUser = true;
-    try {
-      await api.leaveRoom(roomId);
-    } catch (_) {}
+    try { await api.leaveRoom(roomId); } catch (_) {}
     _teardown();
   }
 
   void _teardown() {
     _pingTimer?.cancel();
-    _tickFallback?.cancel();
     _sub?.cancel();
-    for (final t in _typingTimers.values) {
-      t.cancel();
-    }
-    try {
-      _ws?.sink.close();
-    } catch (_) {}
+    for (final t in _typingTimers.values) t.cancel();
+    try { _ws?.sink.close(); } catch (_) {}
   }
 
   @override
@@ -2112,7 +2531,7 @@ class RoomSession extends ChangeNotifier {
 }
 
 // ============================================================================
-// 11) صفحه اتاق (لابی + بازی)
+// 11) صفحه اتاق
 // ============================================================================
 class RoomPage extends StatefulWidget {
   final String roomId;
@@ -2130,12 +2549,10 @@ class _RoomPageState extends State<RoomPage> {
     super.initState();
     app = Provider.of<AppState>(context, listen: false);
     session = RoomSession(
-      api: app.api,
-      roomId: widget.roomId,
-      me: app.api.username ?? '',
-      buzz: app.buzz,
+      api: app.api, roomId: widget.roomId,
+      me: app.api.username ?? '', buzz: app.buzz,
     );
-    session.onToast = (m, {color}) => toast(m, color: color);
+    session.onToast = (m, {color, seconds}) => toast(m, color: color, seconds: seconds ?? 3);
     session.onFatalClose = () {
       if (mounted) Navigator.of(context).pop();
     };
@@ -2146,8 +2563,7 @@ class _RoomPageState extends State<RoomPage> {
   Future<bool> _exit() async {
     if (session.mode == 'playing') {
       final ok = await confirmDialog(context, 'خروج از بازی',
-          'اگر الان خارج شوی، بازی بدون تو ادامه پیدا می‌کند. مطمئنی؟',
-          ok: 'خروج');
+          'اگر الان خارج شوی، بازی بدون تو ادامه پیدا می‌کند. مطمئنی؟', ok: 'خروج');
       if (!ok) return false;
     }
     await session.leave();
@@ -2155,10 +2571,7 @@ class _RoomPageState extends State<RoomPage> {
   }
 
   @override
-  void dispose() {
-    session.dispose();
-    super.dispose();
-  }
+  void dispose() { session.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
@@ -2173,20 +2586,20 @@ class _RoomPageState extends State<RoomPage> {
               leading: IconButton(
                 icon: const Icon(Icons.logout_rounded, color: PColors.red),
                 onPressed: () async {
-                  if (await _exit()) {
-                    if (mounted) Navigator.of(context).pop();
-                  }
+                  if (await _exit() && mounted) Navigator.of(context).pop();
                 },
               ),
               title: Row(mainAxisSize: MainAxisSize.min, children: [
                 Text(meta.icon),
                 const SizedBox(width: 6),
-                Flexible(
-                  child: Text(_s(_gf(s.room, 'name'), 'اتاق'),
-                      overflow: TextOverflow.ellipsis),
-                ),
+                Flexible(child: Text(_s(_gf(s.room, 'name'), 'اتاق'), overflow: TextOverflow.ellipsis)),
               ]),
               actions: [
+                IconButton(
+                  tooltip: 'قوانین بازی',
+                  icon: const Icon(Icons.menu_book_outlined, size: 21, color: PColors.gold),
+                  onPressed: () => showGameRules(context, _s(_gf(s.room, 'game_type'))),
+                ),
                 IconButton(
                   tooltip: 'تاریخچه بازی‌ها',
                   icon: const Icon(Icons.history_rounded, size: 21),
@@ -2232,16 +2645,25 @@ class _RoomPageState extends State<RoomPage> {
                   Positioned(
                     top: 6, left: 16, right: 16,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       decoration: BoxDecoration(
-                          color: PColors.red.withOpacity(.15),
+                          color: PColors.red.withOpacity(.18),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: PColors.red.withOpacity(.4))),
-                      child: Row(children: [
-                        const SizedBox(width: 14, height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: PColors.red)),
-                        const SizedBox(width: 10),
-                        Text(s.connInfo, style: const TextStyle(fontSize: 11.5)),
+                          border: Border.all(color: PColors.red.withOpacity(.5))),
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        Row(children: [
+                          const SizedBox(width: 14, height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: PColors.red)),
+                          const SizedBox(width: 10),
+                          Expanded(child: Text(s.connInfo,
+                              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700))),
+                        ]),
+                        if (s.lastError.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text('🔍 تشخیص: ${s.lastError}',
+                                style: const TextStyle(fontSize: 10, color: PColors.sub)),
+                          ),
                       ]),
                     ),
                   ),
@@ -2254,7 +2676,6 @@ class _RoomPageState extends State<RoomPage> {
   }
 }
 
-// ---------------- لابی ----------------
 class LobbyView extends StatelessWidget {
   const LobbyView({super.key});
 
@@ -2380,10 +2801,10 @@ class LobbyView extends StatelessWidget {
     final isHost = p == _s(_gf(s.room, 'host'));
     return InkWell(
       borderRadius: BorderRadius.circular(13),
+      onTap: () => showUserProfile(context, p),
       onLongPress: (s.isHost && !isMe)
           ? () async {
-              final ok = await confirmDialog(context, 'اخراج بازیکن', '$p از اتاق اخراج شود؟',
-                  ok: 'اخراج');
+              final ok = await confirmDialog(context, 'اخراج بازیکن', '$p از اتاق اخراج شود؟', ok: 'اخراج');
               if (!ok) return;
               try {
                 await s.api.kickPlayer(s.roomId, p);
@@ -2408,12 +2829,14 @@ class LobbyView extends StatelessWidget {
             child: Row(children: [
               Flexible(child: Text(p, overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5,
-                      color: isMe ? PColors.gold : PColors.text))),
+                      color: isMe ? PColors.gold : PColors.blue,
+                      decoration: TextDecoration.underline))),
               if (isMe)
                 const Padding(padding: EdgeInsets.only(right: 5),
                     child: Text('(من)', style: TextStyle(fontSize: 10, color: PColors.gold))),
               if (isHost)
-                const Padding(padding: EdgeInsets.only(right: 5), child: Text('👑', style: TextStyle(fontSize: 11))),
+                const Padding(padding: EdgeInsets.only(right: 5),
+                    child: Text('👑', style: TextStyle(fontSize: 11))),
             ]),
           ),
           Icon(isReady ? Icons.check_circle : Icons.cancel_outlined,
@@ -2427,7 +2850,6 @@ class LobbyView extends StatelessWidget {
   }
 }
 
-// ---------------- زمین بازی ----------------
 class GameBoard extends StatefulWidget {
   const GameBoard({super.key});
   @override
@@ -2515,9 +2937,7 @@ class _GameBoardState extends State<GameBoard> {
         child: ConfettiWidget(
           confettiController: _confetti,
           blastDirectionality: BlastDirectionality.explosive,
-          shouldLoop: false,
-          numberOfParticles: 35,
-          gravity: 0.18,
+          shouldLoop: false, numberOfParticles: 35, gravity: 0.18,
           colors: const [PColors.gold, PColors.green, PColors.red, PColors.blue, Colors.white],
         ),
       ),
@@ -2542,8 +2962,7 @@ class _GameBoardState extends State<GameBoard> {
 
   void _pickSuitForPlay(RoomSession s, int i) {
     showSheet(context, Column(mainAxisSize: MainAxisSize.min, children: [
-      const Text('🎴 با ده، خال اعلامی را انتخاب کن',
-          style: TextStyle(fontWeight: FontWeight.w800)),
+      const Text('🎴 با ده، خال اعلامی را انتخاب کن', style: TextStyle(fontWeight: FontWeight.w800)),
       const SizedBox(height: 14),
       Row(children: [
         for (final e in kSuits.entries)
@@ -2575,7 +2994,6 @@ class _GameBoardState extends State<GameBoard> {
     ]));
   }
 
-  // ---------- میز هر بازی ----------
   Widget _tableArea(Map st, String gt, RoomSession s) {
     switch (gt) {
       case 'chahar_barg':
@@ -2623,7 +3041,7 @@ class _GameBoardState extends State<GameBoard> {
             ],
           ]),
           const SizedBox(height: 12),
-          if (top.isEmpty)
+          if (top.isEmpty || top.isEmpty)
             PlayingCardView.faceDown(width: 66, height: 94)
           else
             PlayingCardView(card: top, width: 66, height: 94),
@@ -2810,7 +3228,7 @@ class _ScoreBar extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(color: PColors.panel, borderRadius: BorderRadius.circular(12)),
-            child: const Text('VS', style: const TextStyle(fontWeight: FontWeight.w900, color: PColors.gold)),
+            child: const Text('VS', style: TextStyle(fontWeight: FontWeight.w900, color: PColors.gold)),
           ),
           const SizedBox(width: 8),
           _teamBox('تیم حریف', t2, _i(_gf(scores, 'team2')), turn, PColors.red),
@@ -2844,8 +3262,7 @@ class _ScoreBar extends StatelessWidget {
                         fontWeight: FontWeight.w700)),
                 const SizedBox(width: 6),
                 Text(
-                  gt == 'chahar_barg'
-                      ? '🏅${fa(_i(_gf(scores, p)))}'
+                  gt == 'chahar_barg' ? '🏅${fa(_i(_gf(scores, p)))}'
                       : '🂠${fa(_i(_gf(hands, p)))}',
                   style: const TextStyle(fontSize: 11),
                 ),
@@ -3002,8 +3419,7 @@ class _HandArea extends StatelessWidget {
                   itemCount: hand.length,
                   separatorBuilder: (_, __) => const SizedBox(width: 7),
                   itemBuilder: (c, i) => PlayingCardView(
-                    card: hand[i],
-                    width: 56, height: 82,
+                    card: hand[i], width: 56, height: 82,
                     selected: myTurn && selected == i,
                     dimmed: !myTurn,
                     onTap: myTurn ? () => onCardTap(i, hand[i]) : null,
@@ -3049,22 +3465,15 @@ class _ResultOverlay extends StatelessWidget {
             Text('بازی ${meta.name} ${_s(_gf(s.room, 'name'))}',
                 style: const TextStyle(fontSize: 11, color: PColors.sub)),
             const SizedBox(height: 18),
-            GoldBtn(
-              text: 'بازگشت به لابی',
-              icon: Icons.meeting_room_outlined,
-              onPressed: s.backToLobby,
-            ),
+            GoldBtn(text: 'بازگشت به لابی', icon: Icons.meeting_room_outlined,
+                onPressed: s.backToLobby),
             const SizedBox(height: 8),
             if (s.isHost)
               GoldBtn(
-                text: '🔄 شروع دوباره',
-                color: PColors.green,
+                text: '🔄 شروع دوباره', color: PColors.green,
                 onPressed: () async {
-                  try {
-                    await s.api.startGame(s.roomId);
-                  } on ApiError catch (e) {
-                    toast(e.message, color: PColors.red);
-                  }
+                  try { await s.api.startGame(s.roomId); }
+                  on ApiError catch (e) { toast(e.message, color: PColors.red); }
                 },
               ),
           ]),
@@ -3075,7 +3484,7 @@ class _ResultOverlay extends StatelessWidget {
   }
 }
 
-// ---------------- چت و ایموجی ----------------
+// ---------------- چت و ایموجی (با پیام خصوصی و دستورات) ----------------
 class ChatBar extends StatefulWidget {
   const ChatBar({super.key});
   @override
@@ -3087,17 +3496,58 @@ class _ChatBarState extends State<ChatBar> {
   DateTime _lastTyping = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
+  void dispose() { _ctrl.dispose(); super.dispose(); }
 
   void _send(RoomSession s) {
     final t = _ctrl.text.trim();
     if (t.isEmpty) return;
+    // دستور whisper: @username message
+    if (t.startsWith('@')) {
+      final spaceIdx = t.indexOf(' ');
+      if (spaceIdx > 1) {
+        final to = t.substring(1, spaceIdx);
+        final msg = t.substring(spaceIdx + 1);
+        s.sendChat(msg, to: to);
+        _ctrl.clear();
+        s.buzz(15, 40);
+        return;
+      }
+    }
     s.sendChat(t);
     _ctrl.clear();
     s.buzz(15, 40);
+  }
+
+  void _showCommands(RoomSession s) {
+    showSheet(context, Column(mainAxisSize: MainAxisSize.min, children: [
+      const Text('💬 دستورات چت', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+      const SizedBox(height: 14),
+      _cmdRow('/help', 'نمایش این لیست'),
+      _cmdRow('/me <عمل>', 'انجام یک عمل (مثل /me خندید)'),
+      _cmdRow('/whisper <user> <msg>', 'پیام خصوصی'),
+      _cmdRow('@username <msg>', 'پیام خصوصی (میانبر)'),
+      _cmdRow('/roll', 'انداختن تاس'),
+      _cmdRow('/ready', 'آماده/ناآماده شدن'),
+      _cmdRow('/start', 'شروع بازی (فقط میزبان)'),
+      _cmdRow('/kick <user>', 'اخراج (فقط میزبان)'),
+    ]));
+  }
+
+  Widget _cmdRow(String cmd, String desc) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(color: PColors.gold.withOpacity(.15),
+              borderRadius: BorderRadius.circular(8)),
+          child: Text(cmd, textDirection: ui.TextDirection.ltr,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: PColors.gold)),
+        ),
+        const SizedBox(width: 8),
+        Expanded(child: Text(desc, style: const TextStyle(fontSize: 11.5))),
+      ]),
+    );
   }
 
   @override
@@ -3115,12 +3565,17 @@ class _ChatBarState extends State<ChatBar> {
                   style: const TextStyle(fontSize: 10, color: PColors.sub, fontStyle: FontStyle.italic)),
             ),
           Row(children: [
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.menu_book_outlined, size: 19, color: PColors.gold),
+              onPressed: () => _showCommands(s),
+            ),
             Expanded(
               child: TextField(
                 controller: _ctrl,
                 style: const TextStyle(fontFamily: kFont, fontSize: 13),
                 decoration: const InputDecoration(
-                  hintText: 'پیام... (/roll /me /help)',
+                  hintText: 'پیام یا @username...',
                   isDense: true,
                   contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                 ),
@@ -3235,10 +3690,7 @@ class _ChatListState extends State<ChatList> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    _jump();
-  }
+  void initState() { super.initState(); _jump(); }
 
   @override
   Widget build(BuildContext context) {
@@ -3251,6 +3703,7 @@ class _ChatListState extends State<ChatList> {
         final txt = _s(_gf(m, 'message'));
         final user = _s(_gf(m, 'username'));
         final priv = _b(_gf(m, 'private'));
+        final to = _s(_gf(m, 'to'));
         if (type == 'system') {
           return Center(
             child: Padding(
@@ -3267,8 +3720,12 @@ class _ChatListState extends State<ChatList> {
               style: const TextStyle(fontFamily: kFont, fontSize: 12, color: PColors.text),
               children: [
                 if (priv) const TextSpan(text: '🔒 ', style: TextStyle(fontSize: 10)),
-                TextSpan(text: '$user: ',
+                TextSpan(text: '$user',
                     style: const TextStyle(color: PColors.gold, fontWeight: FontWeight.w700)),
+                if (to.isNotEmpty)
+                  TextSpan(text: ' → $to',
+                      style: const TextStyle(color: PColors.blue, fontSize: 10)),
+                const TextSpan(text: ': '),
                 TextSpan(text: txt),
               ],
             ),
@@ -3391,8 +3848,7 @@ class TimerCircle extends StatelessWidget {
   Widget build(BuildContext context) {
     final danger = timeLeft <= 5;
     return CircularPercentIndicator(
-      radius: 23,
-      lineWidth: 4.5,
+      radius: 23, lineWidth: 4.5,
       percent: total <= 0 ? 0 : (timeLeft / total).clamp(0.0, 1.0),
       center: Text('${math.max(0, timeLeft.ceil())}',
           style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900,
@@ -3419,10 +3875,7 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
   bool _loading = true;
 
   @override
-  void initState() {
-    super.initState();
-    _load();
-  }
+  void initState() { super.initState(); _load(); }
 
   Future<void> _load() async {
     setState(() => _loading = true);
@@ -3469,8 +3922,7 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
                 ],
               )
             : RefreshIndicator(
-                onRefresh: _load,
-                color: PColors.gold,
+                onRefresh: _load, color: PColors.gold,
                 child: _rows.isEmpty
                     ? ListView(children: const [
                         SizedBox(height: 100),
@@ -3485,38 +3937,42 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
                           final played = _i(_gf(r, 'played'));
                           final rate = played == 0 ? 0.0 : wins / played;
                           final medal = i == 0 ? '🥇' : i == 1 ? '🥈' : i == 2 ? '🥉' : fa(i + 1);
-                          return Glass(
-                            margin: const EdgeInsets.only(bottom: 9),
-                            padding: const EdgeInsets.all(11),
-                            border: i < 3 ? Border.all(color: PColors.gold.withOpacity(.5)) : null,
-                            child: Row(children: [
-                              SizedBox(width: 34, child: Text(medal,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900))),
-                              AvatarView(emoji: _s(_gf(r, 'avatar'), '🙂'), size: 40),
-                              const SizedBox(width: 10),
-                              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                Text(_s(_gf(r, 'username')),
-                                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5)),
-                                const SizedBox(height: 4),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: LinearProgressIndicator(
-                                    value: rate, minHeight: 5,
-                                    backgroundColor: Colors.white10,
-                                    color: PColors.green,
+                          return GestureDetector(
+                            onTap: () => showUserProfile(context, _s(_gf(r, 'username'))),
+                            child: Glass(
+                              margin: const EdgeInsets.only(bottom: 9),
+                              padding: const EdgeInsets.all(11),
+                              border: i < 3 ? Border.all(color: PColors.gold.withOpacity(.5)) : null,
+                              child: Row(children: [
+                                SizedBox(width: 34, child: Text(medal,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900))),
+                                AvatarView(emoji: _s(_gf(r, 'avatar'), '🙂'), size: 40),
+                                const SizedBox(width: 10),
+                                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                  Text(_s(_gf(r, 'username')),
+                                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5,
+                                          color: PColors.blue, decoration: TextDecoration.underline)),
+                                  const SizedBox(height: 4),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: LinearProgressIndicator(
+                                      value: rate, minHeight: 5,
+                                      backgroundColor: Colors.white10,
+                                      color: PColors.green,
+                                    ),
                                   ),
-                                ),
-                              ])),
-                              const SizedBox(width: 10),
-                              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                                Text('${fa(wins)} برد',
-                                    style: const TextStyle(color: PColors.green,
-                                        fontSize: 12, fontWeight: FontWeight.w800)),
-                                Text('${fa(played)} بازی',
-                                    style: const TextStyle(color: PColors.sub, fontSize: 10.5)),
+                                ])),
+                                const SizedBox(width: 10),
+                                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                                  Text('${fa(wins)} برد',
+                                      style: const TextStyle(color: PColors.green,
+                                          fontSize: 12, fontWeight: FontWeight.w800)),
+                                  Text('${fa(played)} بازی',
+                                      style: const TextStyle(color: PColors.sub, fontSize: 10.5)),
+                                ]),
                               ]),
-                            ]),
+                            ),
                           );
                         },
                       ),
@@ -3533,8 +3989,7 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
         label: Text(label, style: TextStyle(fontFamily: kFont, fontSize: 12,
             color: sel ? Colors.black : PColors.text,
             fontWeight: sel ? FontWeight.w800 : FontWeight.normal)),
-        selected: sel,
-        selectedColor: PColors.gold,
+        selected: sel, selectedColor: PColors.gold,
         backgroundColor: PColors.panel,
         side: BorderSide(color: sel ? PColors.gold : Colors.white10),
         onSelected: (_) {
@@ -3565,17 +4020,11 @@ class _FriendsPageState extends State<FriendsPage> with SingleTickerProviderStat
   Timer? _deb;
 
   @override
-  void initState() {
-    super.initState();
-    _load();
-  }
+  void initState() { super.initState(); _load(); }
 
   @override
   void dispose() {
-    _tab.dispose();
-    _search.dispose();
-    _deb?.cancel();
-    super.dispose();
+    _tab.dispose(); _search.dispose(); _deb?.cancel(); super.dispose();
   }
 
   Future<void> _load() async {
@@ -3592,10 +4041,7 @@ class _FriendsPageState extends State<FriendsPage> with SingleTickerProviderStat
   void _onSearch(String q) {
     _deb?.cancel();
     if (q.trim().isEmpty) {
-      setState(() {
-        _hasQuery = false;
-        _results = [];
-      });
+      setState(() { _hasQuery = false; _results = []; });
       return;
     }
     _deb = Timer(const Duration(milliseconds: 500), () async {
@@ -3621,8 +4067,7 @@ class _FriendsPageState extends State<FriendsPage> with SingleTickerProviderStat
       Padding(
         padding: const EdgeInsets.fromLTRB(14, 4, 14, 6),
         child: TextField(
-          controller: _search,
-          style: const TextStyle(fontFamily: kFont),
+          controller: _search, style: const TextStyle(fontFamily: kFont),
           onChanged: _onSearch,
           decoration: InputDecoration(
             hintText: '🔍 جستجوی بازیکن برای دوستی...',
@@ -3631,10 +4076,7 @@ class _FriendsPageState extends State<FriendsPage> with SingleTickerProviderStat
                 ? IconButton(icon: const Icon(Icons.close, size: 17),
                     onPressed: () {
                       _search.clear();
-                      setState(() {
-                        _hasQuery = false;
-                        _results = [];
-                      });
+                      setState(() { _hasQuery = false; _results = []; });
                     })
                 : null,
           ),
@@ -3654,9 +4096,7 @@ class _FriendsPageState extends State<FriendsPage> with SingleTickerProviderStat
         Expanded(
           child: Column(children: [
             TabBar(
-              controller: _tab,
-              labelColor: PColors.gold,
-              unselectedLabelColor: PColors.sub,
+              controller: _tab, labelColor: PColors.gold, unselectedLabelColor: PColors.sub,
               labelStyle: const TextStyle(fontFamily: kFont, fontWeight: FontWeight.w800),
               indicatorColor: PColors.gold,
               tabs: [
@@ -3667,8 +4107,7 @@ class _FriendsPageState extends State<FriendsPage> with SingleTickerProviderStat
             Expanded(
               child: TabBarView(controller: _tab, children: [
                 RefreshIndicator(
-                  onRefresh: _load,
-                  color: PColors.gold,
+                  onRefresh: _load, color: PColors.gold,
                   child: _friends.isEmpty
                       ? ListView(children: const [
                           SizedBox(height: 80),
@@ -3682,8 +4121,7 @@ class _FriendsPageState extends State<FriendsPage> with SingleTickerProviderStat
                         ),
                 ),
                 RefreshIndicator(
-                  onRefresh: _load,
-                  color: PColors.gold,
+                  onRefresh: _load, color: PColors.gold,
                   child: _requests.isEmpty
                       ? ListView(children: const [
                           SizedBox(height: 80),
@@ -3732,17 +4170,23 @@ class _FriendsPageState extends State<FriendsPage> with SingleTickerProviderStat
       child: Row(children: [
         AvatarView(emoji: u.avatar, size: 42, online: u.online),
         const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Flexible(child: Text(u.username, overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5))),
-            if (u.online)
-              const Padding(padding: EdgeInsets.only(right: 5),
-                  child: Text('آنلاین', style: TextStyle(fontSize: 9.5, color: PColors.green))),
-          ]),
-          Text('${fa(u.wins)} برد • ${fa(u.friendsCount)} دوست',
-              style: const TextStyle(fontSize: 10.5, color: PColors.sub)),
-        ])),
+        Expanded(
+          child: GestureDetector(
+            onTap: () => showUserProfile(context, u.username),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Flexible(child: Text(u.username, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5,
+                        color: PColors.blue, decoration: TextDecoration.underline))),
+                if (u.online)
+                  const Padding(padding: EdgeInsets.only(right: 5),
+                      child: Text('آنلاین', style: TextStyle(fontSize: 9.5, color: PColors.green))),
+              ]),
+              Text('${fa(u.wins)} برد • ${fa(u.friendsCount)} دوست',
+                  style: const TextStyle(fontSize: 10.5, color: PColors.sub)),
+            ]),
+          ),
+        ),
         if (!isMe)
           isFriend
               ? IconButton(
@@ -3751,25 +4195,113 @@ class _FriendsPageState extends State<FriendsPage> with SingleTickerProviderStat
                   onPressed: () async {
                     try {
                       await app.api.friendRemove(u.username);
-                      toast('حذف شد');
-                      _load();
-                    } on ApiError catch (e) {
-                      toast(e.message, color: PColors.red);
-                    }
+                      toast('حذف شد'); _load();
+                    } on ApiError catch (e) { toast(e.message, color: PColors.red); }
                   })
               : searchable
                   ? GoldBtn(text: '+ دوستی', onPressed: () async {
                       try {
                         await app.api.friendRequest(u.username);
                         toast('✅ درخواست ارسال شد', color: PColors.green);
-                      } on ApiError catch (e) {
-                        toast(e.message, color: PColors.red);
-                      }
+                      } on ApiError catch (e) { toast(e.message, color: PColors.red); }
                     })
                   : const SizedBox.shrink(),
       ]),
     );
   }
+}
+
+// ============================================================================
+// نمایش پروفایل دیگران
+// ============================================================================
+void showUserProfile(BuildContext context, String username) {
+  final app = context.read<AppState>();
+  if (app.me?.username == username) return; // خود کاربر است، به ProfilePage برود
+  showSheet(context, FutureBuilder<Map<String, dynamic>>(
+    future: app.api.userProfile(username),
+    builder: (context, snap) {
+      if (!snap.hasData) {
+        return const Padding(padding: EdgeInsets.all(20),
+            child: Center(child: SpinKitFadingCircle(color: PColors.gold, size: 30)));
+      }
+      if (snap.hasError) {
+        return Padding(padding: const EdgeInsets.all(20),
+            child: Text('❌ خطا: ${snap.error}', style: const TextStyle(color: PColors.red)));
+      }
+      final u = UserModel.from(_m(_gf(snap.data, 'user')));
+      final perGame = _m(_gf(u.stats, 'per_game'));
+      return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          AvatarView(emoji: u.avatar, size: 60, online: u.online),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(u.username, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+            if (u.bio.isNotEmpty)
+              Text(u.bio, style: const TextStyle(fontSize: 11.5, color: PColors.sub)),
+            Text('عضویت: ${timeAgo(u.createdAt)}',
+                style: const TextStyle(fontSize: 10, color: PColors.sub)),
+          ])),
+        ]),
+        const SizedBox(height: 14),
+        Row(children: [
+          _miniStat('🎮', fa(u.played)),
+          const SizedBox(width: 6),
+          _miniStat('🏆', fa(u.wins)),
+          const SizedBox(width: 6),
+          _miniStat('⚡', '${fa((u.winRate * 100).round())}٪'),
+        ]),
+        const SizedBox(height: 12),
+        const Text('🕹 آمار هر بازی', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+        const SizedBox(height: 6),
+        for (final g in GameMeta.all.values)
+          Builder(builder: (_) {
+            final pg = _m(_gf(perGame, g.type));
+            final pl = _i(_gf(pg, 'played'));
+            final w = _i(_gf(pg, 'wins'));
+            if (pl == 0) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(children: [
+                Text(g.icon, style: const TextStyle(fontSize: 18)),
+                const SizedBox(width: 8),
+                Text(g.name, style: const TextStyle(fontSize: 12)),
+                const Spacer(),
+                Text('${fa(w)}/${fa(pl)}',
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: PColors.gold)),
+              ]),
+            );
+          }),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(
+            child: GoldBtn(
+              text: 'درخواست دوستی', icon: Icons.person_add_alt_1,
+              onPressed: () async {
+                try {
+                  await app.api.friendRequest(u.username);
+                  toast('✅ درخواست ارسال شد', color: PColors.green);
+                } on ApiError catch (e) { toast(e.message, color: PColors.red); }
+              },
+            ),
+          ),
+        ]),
+      ]);
+    },
+  ));
+}
+
+Widget _miniStat(String icon, String value) {
+  return Expanded(
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(color: PColors.bg1, borderRadius: BorderRadius.circular(10)),
+      child: Column(children: [
+        Text(icon, style: const TextStyle(fontSize: 16)),
+        const SizedBox(height: 2),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: PColors.gold)),
+      ]),
+    ),
+  );
 }
 
 // ============================================================================
@@ -3800,8 +4332,13 @@ class ProfilePage extends StatelessWidget {
                 Padding(padding: const EdgeInsets.only(top: 3),
                     child: Text(me.bio, style: const TextStyle(fontSize: 11.5, color: PColors.sub))),
               const SizedBox(height: 4),
-              Text('عضویت: ${timeAgo(me.createdAt)}',
-                  style: const TextStyle(fontSize: 10, color: PColors.sub)),
+              Row(children: [
+                Text('💰 ${fa(app.coins)} سکه',
+                    style: const TextStyle(fontSize: 11, color: PColors.gold)),
+                const SizedBox(width: 10),
+                Text('🔥 ${fa(app.dailyStreak)} روز',
+                    style: const TextStyle(fontSize: 11, color: PColors.red)),
+              ]),
             ])),
             IconButton(
               tooltip: 'ویرایش پروفایل',
@@ -3852,6 +4389,9 @@ class ProfilePage extends StatelessWidget {
           }),
         ],
         const SizedBox(height: 6),
+        _menuTile(context, Icons.card_giftcard, 'پاداش روزانه',
+            badge: app.canClaimDaily() ? '!' : '',
+            onTap: () => showDailyRewardSheet(context)),
         _menuTile(context, Icons.emoji_events_outlined, 'دستاوردها',
             badge: '${fa(me.achievements.length)}',
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AchievementsPage()))),
@@ -3965,8 +4505,7 @@ void showAboutSheet(BuildContext context) {
     const Text('پاسور', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: PColors.gold)),
     Text('نسخه $kAppVersion', style: const TextStyle(color: PColors.sub, fontSize: 12)),
     const SizedBox(height: 10),
-    const Text('سرور پیشرفته بازی‌های پاسور ایرانی',
-        style: TextStyle(fontSize: 13)),
+    const Text('سرور پیشرفته بازی‌های پاسور ایرانی', style: TextStyle(fontSize: 13)),
     const Text('چهاربرگ • هفت خبیث • شلم • حکم',
         style: TextStyle(fontSize: 11.5, color: PColors.sub)),
     const SizedBox(height: 14),
@@ -4005,16 +4544,13 @@ class AchievementsPage extends StatelessWidget {
           final unlocked = mine.contains(key.toString().trim());
           return Glass(
             padding: const EdgeInsets.all(13),
-            gradient: unlocked
-                ? LinearGradient(colors: [PColors.gold.withOpacity(.16), PColors.panel])
-                : null,
+            gradient: unlocked ? LinearGradient(colors: [PColors.gold.withOpacity(.16), PColors.panel]) : null,
             border: unlocked ? Border.all(color: PColors.gold.withOpacity(.55)) : null,
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
                 Text(unlocked ? '🏅' : '🔒', style: const TextStyle(fontSize: 22)),
                 const Spacer(),
-                if (unlocked)
-                  const Icon(Icons.check_circle, color: PColors.green, size: 17),
+                if (unlocked) const Icon(Icons.check_circle, color: PColors.green, size: 17),
               ]),
               const SizedBox(height: 6),
               Text(_s(_gf(info, 'title')),
@@ -4074,9 +4610,7 @@ class NotificationsPage extends StatelessWidget {
                 final type = _s(_gf(n, 'type'));
                 final icon = type == 'game_result'
                     ? (won ? '🏆' : '🎮')
-                    : type == 'friend_request'
-                        ? '🤝'
-                        : '📣';
+                    : type == 'friend_request' ? '🤝' : '📣';
                 return Glass(
                   margin: const EdgeInsets.only(bottom: 9),
                   padding: const EdgeInsets.all(12),
@@ -4101,7 +4635,7 @@ class NotificationsPage extends StatelessWidget {
 }
 
 // ============================================================================
-// 18) تنظیمات
+// 18) تنظیمات (با تم تیره/روشن)
 // ============================================================================
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -4147,6 +4681,14 @@ class SettingsPage extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
             child: Column(children: [
               SwitchListTile(
+                value: app.darkMode,
+                onChanged: (v) => app.setDarkMode(v),
+                title: const Text('حالت تاریک', style: TextStyle(fontSize: 13.5)),
+                subtitle: const Text('تم تیره/روشن اپلیکیشن', style: TextStyle(fontSize: 11)),
+                secondary: Icon(app.darkMode ? Icons.dark_mode : Icons.light_mode,
+                    size: 21, color: PColors.gold),
+              ),
+              SwitchListTile(
                 value: app.haptics,
                 onChanged: (v) async {
                   app.haptics = v;
@@ -4158,7 +4700,6 @@ class SettingsPage extends StatelessWidget {
                 subtitle: const Text('بازخورد لمسی هنگام بازی', style: TextStyle(fontSize: 11)),
                 secondary: const Icon(Icons.vibration_rounded, size: 21, color: PColors.gold),
               ),
-              // قابلیت جدید: Sound Toggle
               SwitchListTile(
                 value: app.soundOn,
                 onChanged: (v) async {
@@ -4230,8 +4771,7 @@ class Glass extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: margin,
-      padding: padding,
+      margin: margin, padding: padding,
       decoration: BoxDecoration(
         color: gradient == null ? color : null,
         gradient: gradient,
@@ -4254,8 +4794,7 @@ class GoldBtn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: double.infinity,
-      height: 48,
+      width: double.infinity, height: 48,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: color ?? PColors.gold,

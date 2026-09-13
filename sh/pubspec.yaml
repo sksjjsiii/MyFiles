@@ -1,7 +1,7 @@
 name: paskar
-description: کلاینت پیشرفته بازی‌های پاسور ایرانی — چهاربرگ، هفت خبیث، شلم، حکم
+description: کلاینت پیشرفته بازی‌های پاسور ایرانی
 publish_to: "none"
-version: 2.0.1+1
+version: 2.1.0+2
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
