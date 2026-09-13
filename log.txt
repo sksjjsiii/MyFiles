@@ -1,21 +1,9 @@
 ==========================================
-⏰ 2026-09-13 20:41:45
+⏰ 2026-09-13 20:46:50
 🌐 TUNNEL_URL: https://dividend-quotations-jim-laid.trycloudflare.com
-⏱️  آپ‌تایم: 8544 ثانیه
+⏱️  آپ‌تایم: 8849 ثانیه
 ==========================================
 ------ api_server.log ------
-127.0.0.1 - - [13/Sep/2026 18:27:09] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [13/Sep/2026 18:27:16] "POST /api/files/upload?dest=assets/fonts/Vazir.ttf HTTP/1.1" 200 -
-127.0.0.1 - - [13/Sep/2026 18:27:16] "GET /api/files/assets/fonts HTTP/1.1" 200 -
-127.0.0.1 - - [13/Sep/2026 18:27:39] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [13/Sep/2026 18:28:02] "GET /api/files/assets HTTP/1.1" 200 -
-127.0.0.1 - - [13/Sep/2026 18:28:03] "GET /api/files HTTP/1.1" 200 -
-127.0.0.1 - - [13/Sep/2026 18:28:06] "GET /api/files/lib HTTP/1.1" 200 -
-127.0.0.1 - - [13/Sep/2026 18:28:07] "GET /api/files/lib/main.dart HTTP/1.1" 200 -
-127.0.0.1 - - [13/Sep/2026 18:28:09] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [13/Sep/2026 18:28:29] "PUT /api/files/lib/main.dart HTTP/1.1" 200 -
-127.0.0.1 - - [13/Sep/2026 18:28:29] "GET /api/files/lib HTTP/1.1" 200 -
-127.0.0.1 - - [13/Sep/2026 18:28:32] "GET /api/build HTTP/1.1" 200 -
 127.0.0.1 - - [13/Sep/2026 18:28:33] "POST /api/build HTTP/1.1" 200 -
 127.0.0.1 - - [13/Sep/2026 18:28:33] "GET /api/build HTTP/1.1" 200 -
 127.0.0.1 - - [13/Sep/2026 18:28:37] "GET /api/build HTTP/1.1" 200 -
@@ -504,6 +492,18 @@
 127.0.0.1 - - [13/Sep/2026 20:40:44] "GET /api/status HTTP/1.1" 401 -
 127.0.0.1 - - [13/Sep/2026 20:41:15] "GET /api/status HTTP/1.1" 401 -
 127.0.0.1 - - [13/Sep/2026 20:41:45] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 20:41:45] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 20:41:45] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [13/Sep/2026 20:42:17] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 20:42:47] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 20:43:17] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 20:43:48] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 20:44:18] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 20:44:48] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 20:45:19] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 20:45:49] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 20:46:19] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 20:46:50] "GET /api/status HTTP/1.1" 401 -
 
 ------ cloudflare.log ------
 2026-09-13T18:19:15Z INF Thank you for trying Cloudflare Tunnel. Doing so, without a Cloudflare account, is a quick way to experiment and try it out. However, be aware that these account-less Tunnels have no uptime guarantee, are subject to the Cloudflare Online Services Terms of Use (https://www.cloudflare.com/website-terms/), and Cloudflare reserves the right to investigate your use of Tunnels for violations of such terms. If you intend to use Tunnels in production you should use a pre-created named tunnel by following: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps
@@ -554,9 +554,9 @@
 ------ پروسه‌ها ------
 root         768  0.0  0.1  32540 21220 ?        Ss   18:15   0:00 /usr/bin/python3 /usr/bin/networkd-dispatcher --run-startup-triggers
 root         804  0.0  0.1  39472 30888 ?        Ss   18:15   0:00 /usr/bin/python3 -u /usr/sbin/waagent -daemon
-root        1161  0.0  0.2 454656 38436 ?        Sl   18:15   0:04 /usr/bin/python3 -u bin/WALinuxAgent-2.16.0.2-py3.12.egg -run-exthandlers
+root        1161  0.0  0.2 454656 38436 ?        Sl   18:15   0:05 /usr/bin/python3 -u bin/WALinuxAgent-2.16.0.2-py3.12.egg -run-exthandlers
 runner      2855  0.0  0.2 272040 45528 ?        S    18:19   0:02 python3 api_server.py
-runner      2863  0.0  0.2 1295604 44592 ?       Sl   18:19   0:07 cloudflared tunnel --url http://localhost:5000 --no-autoupdate
+runner      2863  0.0  0.3 1295604 59000 ?       Sl   18:19   0:07 cloudflared tunnel --url http://localhost:5000 --no-autoupdate
 
 ------ دیسک ------
 Filesystem       Size  Used Avail Use% Mounted on
