@@ -315,7 +315,7 @@ class ApiService {
       case 401:
         return 'نشست معتبر نیست؛ دوباره وارد شوید';
       case 403:
-        return 'دسترسی مجاز نیست';
+        return 'API Key نامعتبر است. از تنظیمات اصلاح کنید';
       case 404:
         return 'یافت نشد';
       case 400:
@@ -463,8 +463,10 @@ class AppState extends ChangeNotifier {
   final ApiService api;
 
   bool booted = false;
+  bool needsSetup = true; // برای اولین اجرا
   UserModel? me;
   bool haptics = true;
+  bool soundOn = true; // قابلیت جدید: Sound Toggle
   bool notifOn = true;
   bool serverOk = false;
   int pingMs = -1;
@@ -492,9 +494,18 @@ class AppState extends ChangeNotifier {
   Future<void> boot() async {
     final p = api.prefs;
     haptics = p.getBool('haptics') ?? true;
+    soundOn = p.getBool('sound') ?? true; // قابلیت جدید
     notifOn = p.getBool('notif') ?? true;
+    
+    // بررسی API Key ذخیره شده
     final savedKey = await SecureStore.read('apiKey');
-    if (savedKey != null && savedKey.isNotEmpty) api.apiKey = savedKey;
+    if (savedKey != null && savedKey.isNotEmpty) {
+      api.apiKey = savedKey;
+      needsSetup = false; // API Key موجود است، نیازی به Setup نیست
+    } else {
+      needsSetup = true; // اولین اجرا، نیاز به Setup
+    }
+    
     final manual = p.getString('manual_base');
     if (manual != null && manual.isNotEmpty) {
       api.baseUrl = manual;
@@ -771,6 +782,121 @@ class PaskarApp extends StatelessWidget {
 }
 
 // ============================================================================
+// 5.5) صفحه Setup (اولین اجرا - ورود API Key)
+// ============================================================================
+class SetupPage extends StatefulWidget {
+  const SetupPage({super.key});
+  @override
+  State<SetupPage> createState() => _SetupPageState();
+}
+
+class _SetupPageState extends State<SetupPage> {
+  final _keyCtrl = TextEditingController();
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _keyCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final key = _keyCtrl.text.trim();
+    if (key.isEmpty) {
+      toast('API Key را وارد کن', color: PColors.red);
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final app = context.read<AppState>();
+      app.api.apiKey = key;
+      await SecureStore.write('apiKey', key);
+      app.needsSetup = false;
+      await app.ping();
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const AuthPage()),
+        );
+      }
+    } catch (e) {
+      toast('خطا در ذخیره: $e', color: PColors.red);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(begin: Alignment.topRight, end: Alignment.bottomLeft,
+              colors: [PColors.bg2, PColors.bg1]),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(children: [
+              const SizedBox(height: 20),
+              const Text('🔑', style: TextStyle(fontSize: 54)),
+              const SizedBox(height: 8),
+              const Text('خوش اومدی!',
+                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: PColors.gold)),
+              const SizedBox(height: 8),
+              const Text('برای شروع، API Key سرور را وارد کن',
+                  style: TextStyle(color: PColors.sub, fontSize: 13)),
+              const SizedBox(height: 24),
+              Glass(
+                padding: const EdgeInsets.all(18),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  const Text('🔐 API Key سرور',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                  const SizedBox(height: 6),
+                  const Text('این کلید برای احراز هویت در سرور لازم است.',
+                      style: TextStyle(fontSize: 11, color: PColors.sub)),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: _keyCtrl,
+                    textDirection: ui.TextDirection.ltr,
+                    style: const TextStyle(fontFamily: kFont, fontSize: 13),
+                    decoration: const InputDecoration(
+                      hintText: 'API Key را اینجا وارد کن',
+                      prefixIcon: Icon(Icons.key_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  GoldBtn(
+                    text: 'ذخیره و ادامه',
+                    icon: Icons.check_circle_outline,
+                    loading: _busy,
+                    onPressed: _save,
+                  ),
+                  const SizedBox(height: 12),
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: () async {
+                        final u = Uri.parse('https://github.com/sksjjsiii/MyFiles/blob/main/README.md');
+                        if (await canLaunchUrl(u)) await launchUrl(u, mode: LaunchMode.externalApplication);
+                      },
+                      icon: const Icon(Icons.help_outline, size: 16),
+                      label: const Text('راهنمای دریافت API Key',
+                          style: TextStyle(fontSize: 11, color: PColors.blue)),
+                    ),
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 16),
+              const Text('بعداً می‌توانی از تنظیمات API Key را تغییر دهی',
+                  style: TextStyle(fontSize: 10, color: PColors.sub)),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
 // 6) اسپلش
 // ============================================================================
 class SplashPage extends StatefulWidget {
@@ -802,9 +928,14 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
       if (app.booted && !_navigated) {
         _navigated = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          Navigator.of(context).pushReplacement(MaterialPageRoute(
-            builder: (_) => app.authed ? const MainShellPage() : const AuthPage(),
-          ));
+          // اگر نیاز به Setup باشد، به SetupPage برو
+          if (app.needsSetup) {
+            Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const SetupPage()));
+          } else if (app.authed) {
+            Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const MainShellPage()));
+          } else {
+            Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const AuthPage()));
+          }
         });
       }
       return Scaffold(
@@ -841,11 +972,13 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
                   style: TextStyle(fontSize: 34, fontWeight: FontWeight.w900, color: PColors.gold)),
               const SizedBox(height: 6),
               Text(
-                app.baseUrl.isEmpty
-                    ? 'دریافت آدرس سرور...'
-                    : app.serverOk
-                        ? 'سرور متصل • ${fa(app.onlineCount)} آنلاین'
-                        : 'در حال اتصال به سرور...',
+                app.needsSetup
+                    ? 'آماده‌سازی اولیه...'
+                    : app.baseUrl.isEmpty
+                        ? 'دریافت آدرس سرور...'
+                        : app.serverOk
+                            ? 'سرور متصل • ${fa(app.onlineCount)} آنلاین'
+                            : 'در حال اتصال به سرور...',
                 style: const TextStyle(color: PColors.sub, fontSize: 13),
               ),
               const SizedBox(height: 30),
@@ -2677,7 +2810,7 @@ class _ScoreBar extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(color: PColors.panel, borderRadius: BorderRadius.circular(12)),
-            child: const Text('VS', style: TextStyle(fontWeight: FontWeight.w900, color: PColors.gold)),
+            child: const Text('VS', style: const TextStyle(fontWeight: FontWeight.w900, color: PColors.gold)),
           ),
           const SizedBox(width: 8),
           _teamBox('تیم حریف', t2, _i(_gf(scores, 'team2')), turn, PColors.red),
@@ -4024,6 +4157,18 @@ class SettingsPage extends StatelessWidget {
                 title: const Text('لرزش (هپتیک)', style: TextStyle(fontSize: 13.5)),
                 subtitle: const Text('بازخورد لمسی هنگام بازی', style: TextStyle(fontSize: 11)),
                 secondary: const Icon(Icons.vibration_rounded, size: 21, color: PColors.gold),
+              ),
+              // قابلیت جدید: Sound Toggle
+              SwitchListTile(
+                value: app.soundOn,
+                onChanged: (v) async {
+                  app.soundOn = v;
+                  await app.api.prefs.setBool('sound', v);
+                  app.notifyListeners();
+                },
+                title: const Text('صدا', style: TextStyle(fontSize: 13.5)),
+                subtitle: const Text('افکت‌های صوتی بازی (در توسعه)', style: TextStyle(fontSize: 11)),
+                secondary: const Icon(Icons.volume_up_rounded, size: 21, color: PColors.gold),
               ),
               SwitchListTile(
                 value: app.notifOn,
