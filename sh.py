@@ -1,10 +1,7 @@
 """
 ============================================================
-🎴 سرور پیشرفته بازی‌های پاسور ایرانی
+🎴 سرور پیشرفته بازی‌های پاسور ایرانی  (نسخه اصلاح‌شده)
 پشتیبانی از: چهاربرگ (یازده) | هفت خبیث | شلم | حکم
-امکانات: احراز هویت، دوستان، اتاق خصوصی، تماشاچی، چت متنی/صوتی،
-          WebRTC، ژست، تایمر نوبت، دستاورد، لیدربورد، اعلان،
-          تاریخچه بازی، حالت آماده، دستورات چت، پنل ادمین و...
 ============================================================
 """
 
@@ -17,22 +14,42 @@ import asyncio
 import hashlib
 import hmac
 import time
-import base64
 import secrets
 import logging
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Dict, List, Optional, Set, Tuple, Any, Callable
+from typing import Dict, List, Optional, Set, Tuple, Any
 from collections import defaultdict, deque
 
 from fastapi import (
     FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException,
-    status, Query, Request, BackgroundTasks, Body, Path
+    status, Query, Request, Body
 )
 from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
-from pydantic import BaseModel, Field, validator
+from fastapi.responses import HTMLResponse
+from pydantic import BaseModel, Field
+
+# Pydantic v1/v2 compat
+try:
+    from pydantic import field_validator
+    _PYDANTIC_V2 = True
+except ImportError:
+    from pydantic import validator as field_validator
+    _PYDANTIC_V2 = False
+
+def _fv(field_name: str):
+    """Decorator shim برای سازگاری Pydantic v1/v2"""
+    if _PYDANTIC_V2:
+        def deco(fn):
+            return field_validator(field_name, mode="before")(classmethod(fn))
+        return deco
+    else:
+        def deco(fn):
+            return field_validator(field_name, allow_reuse=True)(fn)
+        return deco
+
 import uvicorn
 
 # ---------- Logging ----------
@@ -52,11 +69,11 @@ TURN_TIMEOUT = int(os.getenv("TURN_TIMEOUT", "30"))
 SESSION_TTL = timedelta(days=7)
 MAX_ROOMS_PER_USER = 20
 MAX_CHAT_HISTORY = 200
-RATE_LIMIT_WINDOW = 1.0  # seconds
-RATE_LIMIT_MAX = 20      # messages per window
+RATE_LIMIT_WINDOW = 1.0
+RATE_LIMIT_MAX = 20
 
 # ============================================================
-# PERSISTENCE (Simple JSON DB with periodic save)
+# PERSISTENCE
 # ============================================================
 class PersistentStore:
     def __init__(self, path: str):
@@ -81,16 +98,10 @@ class PersistentStore:
 
     def _default(self) -> dict:
         return {
-            "users": {},
-            "sessions": {},
-            "friends": {},
-            "friend_requests": {},
-            "rooms": {},
-            "chat_history": {},
-            "game_history": {},
-            "notifications": {},
-            "achievements": {},
-            "blocked": {},
+            "users": {}, "sessions": {},
+            "friends": {}, "friend_requests": {},
+            "rooms": {}, "chat_history": {}, "game_history": {},
+            "notifications": {}, "achievements": {}, "blocked": {},
         }
 
     def mark_dirty(self):
@@ -102,20 +113,36 @@ class PersistentStore:
             if self._dirty:
                 await self.save()
 
+    def _json_safe(self, obj):
+        if isinstance(obj, dict):
+            return {k: self._json_safe(v) for k, v in obj.items()}
+        if isinstance(obj, (set, frozenset)):
+            return sorted(list(obj), key=str)
+        if isinstance(obj, (list, tuple)):
+            return [self._json_safe(x) for x in obj]
+        if hasattr(obj, "__dict__") and not isinstance(obj, (str, int, float, bool, type(None))):
+            return None
+        return obj
+
     async def save(self):
         async with self.lock:
             try:
+                safe_rooms = {}
+                for rid, r in DB["rooms"].items():
+                    rr = {k: v for k, v in r.items() if k != "game_instance"}
+                    safe_rooms[rid] = self._json_safe(rr)
+
                 snapshot = {
-                    "users": DB["users"],
-                    "sessions": DB["sessions"],
-                    "friends": {k: list(v) for k, v in DB["friends"].items()},
-                    "friend_requests": {k: list(v) for k, v in DB["friend_requests"].items()},
-                    "rooms": DB["rooms"],
+                    "users": self._json_safe(DB["users"]),
+                    "sessions": self._json_safe(DB["sessions"]),
+                    "friends": {k: sorted(list(v), key=str) for k, v in DB["friends"].items()},
+                    "friend_requests": {k: sorted(list(v), key=str) for k, v in DB["friend_requests"].items()},
+                    "rooms": safe_rooms,
                     "chat_history": {k: v[-MAX_CHAT_HISTORY:] for k, v in DB["chat_history"].items()},
-                    "game_history": DB["game_history"],
+                    "game_history": self._json_safe(DB["game_history"]),
                     "notifications": {k: v[-100:] for k, v in DB["notifications"].items()},
-                    "achievements": {k: list(v) for k, v in DB["achievements"].items()},
-                    "blocked": {k: list(v) for k, v in DB["blocked"].items()},
+                    "achievements": {k: sorted(list(v), key=str) for k, v in DB["achievements"].items()},
+                    "blocked": {k: sorted(list(v), key=str) for k, v in DB["blocked"].items()},
                 }
                 tmp = self.path + ".tmp"
                 with open(tmp, "w", encoding="utf-8") as f:
@@ -131,22 +158,34 @@ class PersistentStore:
     async def stop(self):
         if self._save_task:
             self._save_task.cancel()
+            try:
+                await self._save_task
+            except asyncio.CancelledError:
+                pass
         await self.save()
 
 
 STORE = PersistentStore(DB_PATH)
 
-# Global in-memory DB (loaded from STORE on startup)
+# Global DB
 DB: dict = STORE._default()
-# Ensure sets become sets after load
+
 def _hydrate_sets():
     for k in ("friends", "friend_requests", "achievements", "blocked"):
         for user, lst in list(DB.get(k, {}).items()):
-            DB[k][user] = set(lst)
-_hydrate_sets()
+            DB[k][user] = set(lst or [])
+    for rid, r in list(DB.get("rooms", {}).items()):
+        if isinstance(r.get("ready"), list):
+            r["ready"] = set(r["ready"])
+        elif not isinstance(r.get("ready"), set):
+            r["ready"] = set()
+        r["game_instance"] = None
+        r.setdefault("status", "waiting")
+        r.setdefault("players", [])
+        r.setdefault("spectators", [])
 
 # ============================================================
-# PYDANTIC MODELS
+# MODELS
 # ============================================================
 class GameType(str, Enum):
     CHAHAR_BARG = "chahar_barg"
@@ -166,8 +205,8 @@ SUIT_FA = {
 }
 
 class Rank(str, Enum):
-    TWO="2"; THREE="3"; FOUR="4"; FIVE="5"; SIX="6"; SEVEN="7"
-    EIGHT="8"; NINE="9"; TEN="10"; JACK="J"; QUEEN="Q"; KING="K"; ACE="A"
+    TWO = "2"; THREE = "3"; FOUR = "4"; FIVE = "5"; SIX = "6"; SEVEN = "7"
+    EIGHT = "8"; NINE = "9"; TEN = "10"; JACK = "J"; QUEEN = "Q"; KING = "K"; ACE = "A"
 
 class RegisterReq(BaseModel):
     username: str = Field(..., min_length=2, max_length=32)
@@ -175,9 +214,10 @@ class RegisterReq(BaseModel):
     avatar: Optional[str] = None
     bio: Optional[str] = Field(None, max_length=200)
 
-    @validator("username")
-    def valid_username(cls, v):
-        v = v.strip()
+    @_fv("username")
+    @classmethod
+    def _check_username(cls, v):
+        v = (v or "").strip()
         if not all(c.isalnum() or c in "_-." for c in v):
             raise ValueError("نام کاربری فقط حروف/عدد/._- مجاز است")
         return v
@@ -196,22 +236,13 @@ class RoomCreateReq(BaseModel):
     chat_enabled: bool = True
     voice_enabled: bool = True
     turn_timeout: int = Field(TURN_TIMEOUT, ge=10, le=120)
-    target_score: Optional[int] = None  # شلم
+    target_score: Optional[int] = None
 
 class FriendReq(BaseModel):
     username: str
 
-class NotificationSendReq(BaseModel):
-    to: str
-    title: str
-    body: str = ""
-
-class WhisperReq(BaseModel):
-    to: str
-    message: str
-
 # ============================================================
-# CARD / DECK
+# CARDS
 # ============================================================
 class Card:
     __slots__ = ("suit", "rank")
@@ -228,14 +259,14 @@ class Card:
         return hash((self.suit, self.rank))
 
 RANK_ORDER = {
-    Rank.TWO:2, Rank.THREE:3, Rank.FOUR:4, Rank.FIVE:5, Rank.SIX:6,
-    Rank.SEVEN:7, Rank.EIGHT:8, Rank.NINE:9, Rank.TEN:10, Rank.JACK:11,
-    Rank.QUEEN:12, Rank.KING:13, Rank.ACE:14
+    Rank.TWO: 2, Rank.THREE: 3, Rank.FOUR: 4, Rank.FIVE: 5, Rank.SIX: 6,
+    Rank.SEVEN: 7, Rank.EIGHT: 8, Rank.NINE: 9, Rank.TEN: 10, Rank.JACK: 11,
+    Rank.QUEEN: 12, Rank.KING: 13, Rank.ACE: 14
 }
 RANK_NUM = {
-    Rank.ACE:1, Rank.TWO:2, Rank.THREE:3, Rank.FOUR:4, Rank.FIVE:5,
-    Rank.SIX:6, Rank.SEVEN:7, Rank.EIGHT:8, Rank.NINE:9, Rank.TEN:10,
-    Rank.JACK:11, Rank.QUEEN:12, Rank.KING:13
+    Rank.ACE: 1, Rank.TWO: 2, Rank.THREE: 3, Rank.FOUR: 4, Rank.FIVE: 5,
+    Rank.SIX: 6, Rank.SEVEN: 7, Rank.EIGHT: 8, Rank.NINE: 9, Rank.TEN: 10,
+    Rank.JACK: 11, Rank.QUEEN: 12, Rank.KING: 13
 }
 
 class Deck:
@@ -258,14 +289,13 @@ class BaseGame:
         self.players = players
         self.options = options or {}
         self.started_at = time.time()
-        self.moves: List[dict] = []   # for replay
+        self.moves: List[dict] = []
         self.finished = False
         self.winner: Optional[str] = None
         self.winners: List[str] = []
         self.current_turn: int = 0
         self.turn_deadline: Optional[float] = None
 
-    # ---- Helpers ----
     def _log(self, **kw):
         kw["t"] = time.time()
         self.moves.append(kw)
@@ -281,12 +311,20 @@ class BaseGame:
     def is_turn_expired(self) -> bool:
         return self.turn_deadline is not None and time.time() > self.turn_deadline
 
-    def public_state(self) -> dict: raise NotImplementedError
-    def personal_state(self, user: str) -> dict: return self.public_state()
-    def play_card(self, user: str, idx: int) -> dict: raise NotImplementedError
-    def auto_play(self, user: str) -> Optional[dict]: return None
+    def public_state(self) -> dict:
+        raise NotImplementedError
 
-# ---------- چهاربرگ (یازده) ----------
+    def personal_state(self, user: str) -> dict:
+        return self.public_state()
+
+    def play_card(self, user: str, idx: int) -> dict:
+        raise NotImplementedError
+
+    def auto_play(self, user: str) -> Optional[dict]:
+        return None
+
+
+# ---------- چهاربرگ ----------
 class ChaharBargGame(BaseGame):
     game_type = "chahar_barg"
     def __init__(self, players, options=None):
@@ -297,20 +335,19 @@ class ChaharBargGame(BaseGame):
         self.captured: Dict[str, List[Card]] = {p: [] for p in players}
         self.scores: Dict[str, int] = {p: 0 for p in players}
         self.last_capturer: Optional[str] = None
-        self.round = 1
 
     def start(self):
-        # 4 cards each
         for p in self.players:
             self.hands[p] = self.deck.deal(4)
-        # Table: 4 cards, no Jacks
+        non_jacks = [c for c in self.deck.cards if c.rank != Rank.JACK]
+        random.shuffle(non_jacks)
         table = []
-        while len(table) < 4 and self.deck.cards:
-            c = self.deck.deal(1)[0]
-            if c.rank == Rank.JACK:
-                self.deck.cards.insert(random.randint(0, len(self.deck.cards)-1), c)
-                continue
-            table.append(c)
+        for _ in range(4):
+            if non_jacks:
+                c = non_jacks.pop()
+                if c in self.deck.cards:
+                    self.deck.cards.remove(c)
+                table.append(c)
         self.table = table
         self.set_turn(0, self.options.get("turn_timeout", TURN_TIMEOUT))
         self._log(event="start", players=self.players)
@@ -334,21 +371,17 @@ class ChaharBargGame(BaseGame):
                 if tc.rank == Rank.QUEEN:
                     cap.append(self.table.pop(i)); break
         elif card.rank == Rank.SEVEN:
-            # 7 can take 4+3 / 3+4
-            # Try find a single 4 and single 3
-            i4 = next((i for i,t in enumerate(self.table) if RANK_NUM[t.rank]==4), None)
-            i3 = next((i for i,t in enumerate(self.table) if RANK_NUM[t.rank]==3 and i!=i4), None)
+            i4 = next((i for i, t in enumerate(self.table) if RANK_NUM[t.rank] == 4), None)
+            i3 = next((i for i, t in enumerate(self.table) if RANK_NUM[t.rank] == 3 and i != i4), None)
             if i4 is not None and i3 is not None:
-                # remove higher index first
                 idxs = sorted([i4, i3], reverse=True)
                 for i in idxs:
                     cap.append(self.table.pop(i))
         else:
             target = 11 - RANK_NUM[card.rank]
-            # Try pairs first
             best_pair = None
             for i in range(len(self.table)):
-                for j in range(i+1, len(self.table)):
+                for j in range(i + 1, len(self.table)):
                     a, b = self.table[i], self.table[j]
                     if a.rank in (Rank.KING, Rank.QUEEN, Rank.JACK): continue
                     if b.rank in (Rank.KING, Rank.QUEEN, Rank.JACK): continue
@@ -359,7 +392,6 @@ class ChaharBargGame(BaseGame):
                 i, j = sorted(best_pair, reverse=True)
                 cap.append(self.table.pop(i)); cap.append(self.table.pop(j))
             else:
-                # Single match
                 for i, tc in enumerate(self.table):
                     if tc.rank in (Rank.KING, Rank.QUEEN, Rank.JACK): continue
                     if RANK_NUM[tc.rank] == target:
@@ -380,9 +412,7 @@ class ChaharBargGame(BaseGame):
             self.last_capturer = user
         else:
             self.table.append(card)
-        # check end
-        if all(len(h)==0 for h in self.hands.values()) and not self.deck.cards:
-            # give remaining table to last capturer
+        if all(len(h) == 0 for h in self.hands.values()) and not self.deck.cards:
             if self.last_capturer and self.table:
                 self.captured[self.last_capturer].extend(self.table)
                 self.scores[self.last_capturer] += len(self.table)
@@ -391,24 +421,23 @@ class ChaharBargGame(BaseGame):
             if self.scores:
                 best = max(self.scores.values())
                 self.winners = [p for p, s in self.scores.items() if s == best]
-                self.winner = self.winners[0] if len(self.winners)==1 else None
+                self.winner = self.winners[0] if len(self.winners) == 1 else None
         self._log(user=user, card=card.to_dict(), captured=[c.to_dict() for c in cap])
         if not self.finished:
-            self.set_turn((self.current_turn+1) % len(self.players), self.options.get("turn_timeout", TURN_TIMEOUT))
+            self.set_turn((self.current_turn + 1) % len(self.players),
+                          self.options.get("turn_timeout", TURN_TIMEOUT))
         return {"ok": True}
 
     def auto_play(self, user: str) -> Optional[dict]:
         if user != self.players[self.current_turn]: return None
         hand = self.hands[user]
         if not hand: return None
-        # pick card that captures max
         best_i, best_n = 0, -1
         for i, c in enumerate(hand):
-            # simulate
-            saved_table = list(self.table)
+            saved = list(self.table)
             cap = self._capture_with_card(c)
             n = len(cap)
-            self.table = saved_table
+            self.table = saved
             if n > best_n:
                 best_n, best_i = n, i
         return self.play_card(user, best_i)
@@ -432,6 +461,7 @@ class ChaharBargGame(BaseGame):
         s["hand"] = [c.to_dict() for c in self.hands.get(user, [])]
         return s
 
+
 # ---------- هفت خبیث ----------
 class HaftKhabisGame(BaseGame):
     game_type = "haft_khabis"
@@ -443,16 +473,17 @@ class HaftKhabisGame(BaseGame):
         self.direction = 1
         self.pending_draw = 0
         self.pending_type: Optional[str] = None
-        self.declared_suit: Optional[Suit] = None  # after 10 or A played
+        self.declared_suit: Optional[Suit] = None
 
     def start(self):
         for p in self.players:
             self.hands[p] = self.deck.deal(7)
-        # first card: not special
-        while self.deck.cards:
-            c = self.deck.deal(1)[0]
-            if c.rank not in (Rank.ACE, Rank.TWO, Rank.SEVEN, Rank.EIGHT, Rank.TEN, Rank.JACK):
-                self.discard.append(c); break
+        special = {Rank.ACE, Rank.TWO, Rank.SEVEN, Rank.EIGHT, Rank.TEN, Rank.JACK}
+        candidates = [c for c in self.deck.cards if c.rank not in special]
+        if candidates:
+            c = random.choice(candidates)
+            self.deck.cards.remove(c)
+            self.discard.append(c)
         self.set_turn(0, self.options.get("turn_timeout", TURN_TIMEOUT))
         self._log(event="start")
 
@@ -478,14 +509,14 @@ class HaftKhabisGame(BaseGame):
         if not (0 <= idx < len(hand)): return {"error": "ایندکس نامعتبر"}
         card = hand[idx]
 
-        # handle 2-penalty
         if self.pending_draw > 0 and self.pending_type == "2":
             if card.rank != Rank.TWO:
                 drawn = self.deck.deal(min(self.pending_draw, len(self.deck.cards)))
                 self.hands[user].extend(drawn)
                 self.pending_draw = 0; self.pending_type = None
                 self._log(user=user, action="penalty_draw", drawn=[c.to_dict() for c in drawn])
-                self._advance(0); self.set_turn(self.current_turn, self.options.get("turn_timeout", TURN_TIMEOUT))
+                self._advance(0)
+                self.set_turn(self.current_turn, self.options.get("turn_timeout", TURN_TIMEOUT))
                 return {"ok": True, "drew": [c.to_dict() for c in drawn]}
 
         if self.pending_draw > 0 and self.pending_type == "7":
@@ -494,7 +525,8 @@ class HaftKhabisGame(BaseGame):
                 self.hands[user].extend(drawn)
                 self.pending_draw = 0; self.pending_type = None
                 self._log(user=user, action="penalty_draw7", drawn=[c.to_dict() for c in drawn])
-                self._advance(0); self.set_turn(self.current_turn, self.options.get("turn_timeout", TURN_TIMEOUT))
+                self._advance(0)
+                self.set_turn(self.current_turn, self.options.get("turn_timeout", TURN_TIMEOUT))
                 return {"ok": True, "drew": [c.to_dict() for c in drawn]}
 
         if not self._valid(card):
@@ -514,13 +546,10 @@ class HaftKhabisGame(BaseGame):
         elif card.rank == Rank.ACE:
             skip = 1
             self.direction *= -1
-        elif card.rank == Rank.JACK:
-            skip = 0  # jack is just wild
         elif card.rank == Rank.TEN:
-            # wild - player declares suit
             if declared_suit:
                 try: self.declared_suit = Suit(declared_suit)
-                except: pass
+                except Exception: pass
 
         if not hand:
             self.finished = True
@@ -531,30 +560,28 @@ class HaftKhabisGame(BaseGame):
             self._advance(skip)
             self.set_turn(self.current_turn, self.options.get("turn_timeout", TURN_TIMEOUT))
 
-        self._log(user=user, card=card.to_dict(), declared_suit=self.declared_suit.value if self.declared_suit else None)
+        self._log(user=user, card=card.to_dict(),
+                  declared_suit=self.declared_suit.value if self.declared_suit else None)
         return {"ok": True}
 
     def auto_play(self, user: str) -> Optional[dict]:
         if user != self.players[self.current_turn]: return None
         hand = self.hands[user]
         if not hand: return None
-        # find valid card with best priority
         valid = [i for i, c in enumerate(hand) if self._valid(c)]
         if not valid:
-            # draw
             if self.deck.cards:
                 c = self.deck.deal(1)[0]
                 self.hands[user].append(c)
-                self._advance(0); self.set_turn(self.current_turn, self.options.get("turn_timeout", TURN_TIMEOUT))
+                self._advance(0)
+                self.set_turn(self.current_turn, self.options.get("turn_timeout", TURN_TIMEOUT))
                 return {"drew": c.to_dict()}
             return None
-        # choose highest priority
         priority = {Rank.SEVEN: 10, Rank.TWO: 9, Rank.EIGHT: 8, Rank.ACE: 7, Rank.TEN: 5}
         best = max(valid, key=lambda i: priority.get(hand[i].rank, 0))
         card = hand[best]
         decl = None
         if card.rank == Rank.TEN:
-            # declare most common suit
             suits = [c.suit.value for c in hand if c.rank != Rank.TEN]
             if suits: decl = max(set(suits), key=suits.count)
         return self.play_card(user, best, decl)
@@ -581,11 +608,11 @@ class HaftKhabisGame(BaseGame):
         s["hand"] = [c.to_dict() for c in self.hands.get(user, [])]
         return s
 
+
 # ---------- شلم ----------
 class ShelemGame(BaseGame):
     """
-    شلم با امتیازدهی درخواستی:
-    A = 10، 10 = 10، 5 = 5، بقیه = 0
+    شلم با امتیازدهی: A=10، 10=10، 5=5
     مجموع هر دست = 100 امتیاز
     """
     game_type = "shelem"
@@ -599,14 +626,13 @@ class ShelemGame(BaseGame):
         self.hands: Dict[str, List[Card]] = {}
         self.teams = {"team1": [players[0], players[2]], "team2": [players[1], players[3]]}
         self.scores = {"team1": 0, "team2": 0}
-        self.round = 1
         self.target_score = (options or {}).get("target_score", 1000)
         self.hakem: Optional[str] = None
         self.hokm_suit: Optional[Suit] = None
         self.bids: Dict[str, Optional[int]] = {}
         self.current_bid_winner: Optional[str] = None
         self.current_bid: int = 0
-        self.phase: str = "bidding"  # bidding, playing, finished
+        self.phase: str = "bidding"
         self.trick: List[Tuple[str, Card]] = []
         self.tricks_won = {"team1": 0, "team2": 0}
         self.round_scores = {"team1": 0, "team2": 0}
@@ -617,7 +643,6 @@ class ShelemGame(BaseGame):
         for p in self.players:
             self.hands[p] = self.deck.deal(13)
         self.bids = {p: None for p in self.players}
-        # bidding starts with player 0
         self.set_turn(0, self.options.get("turn_timeout", TURN_TIMEOUT))
         self._log(event="start", phase="bidding")
 
@@ -634,12 +659,9 @@ class ShelemGame(BaseGame):
             self.current_bid_winner = user
         self.bids[user] = amount
 
-        # next bidder
         remaining = [p for p in self.players if self.bids[p] is None]
         if not remaining:
-            # bidding over
             if not self.current_bid_winner:
-                # nobody bid -> re-deal, redeal is complex; just set random hakem
                 self.current_bid_winner = self.players[0]
                 self.current_bid = 100
             self.hakem = self.current_bid_winner
@@ -648,7 +670,6 @@ class ShelemGame(BaseGame):
             self.phase = "select_hokm"
             return {"ok": True, "phase": "select_hokm", "hakem": self.hakem}
 
-        # next
         idx = self.players.index(user)
         self.set_turn((idx + 1) % 4, self.options.get("turn_timeout", TURN_TIMEOUT))
         self._log(user=user, bid=amount)
@@ -658,10 +679,10 @@ class ShelemGame(BaseGame):
         if self.phase != "select_hokm": return {"error": "فاز انتخاب حکم نیست"}
         if user != self.hakem: return {"error": "فقط حاکم می‌تواند حکم را انتخاب کند"}
         try: self.hokm_suit = Suit(suit)
-        except: return {"error": "خال نامعتبر"}
+        except Exception: return {"error": "خال نامعتبر"}
         self.phase = "playing"
-        # hakem starts playing
-        self.set_turn(self.players.index(self.hakem), self.options.get("turn_timeout", TURN_TIMEOUT))
+        self.set_turn(self.players.index(self.hakem),
+                      self.options.get("turn_timeout", TURN_TIMEOUT))
         self._log(user=user, action="hokm_selected", suit=suit)
         return {"ok": True}
 
@@ -683,9 +704,7 @@ class ShelemGame(BaseGame):
         return best_p
 
     def _valid_play(self, user: str, card: Card) -> Optional[str]:
-        if not self.trick:
-            # leading
-            return None
+        if not self.trick: return None
         lead = self.trick[0][1].suit
         hand = self.hands[user]
         has_lead = any(c.suit == lead for c in hand)
@@ -715,26 +734,24 @@ class ShelemGame(BaseGame):
             self.trick = []
             self._log(action="trick", winner=winner, pts=pts)
             if not any(self.hands[p] for p in self.players):
-                # round over
                 self._end_round()
             else:
-                self.set_turn(self.players.index(winner), self.options.get("turn_timeout", TURN_TIMEOUT))
+                self.set_turn(self.players.index(winner),
+                              self.options.get("turn_timeout", TURN_TIMEOUT))
             return {"ok": True}
         else:
-            idx = self.players.index(user)
-            self.set_turn((idx + 1) % 4, self.options.get("turn_timeout", TURN_TIMEOUT))
+            idx2 = self.players.index(user)
+            self.set_turn((idx2 + 1) % 4, self.options.get("turn_timeout", TURN_TIMEOUT))
             self._log(user=user, card=card.to_dict())
             return {"ok": True}
 
     def _end_round(self):
         bid_team = self.bid_team
         opp_team = "team2" if bid_team == "team1" else "team1"
-        # Add trick-based points to scores
         self.scores[bid_team] += self.round_scores[bid_team]
         self.scores[opp_team] += self.round_scores[opp_team]
         if self.round_scores[bid_team] < self.bid_amount:
-            # failed bid -> lose the bid amount
-            self.scores[bid_team] -= 2 * self.bid_amount  # heft (penalty)
+            self.scores[bid_team] -= 2 * self.bid_amount
             self._log(action="bid_failed")
         if self.scores["team1"] >= self.target_score or self.scores["team2"] >= self.target_score:
             self.finished = True
@@ -750,13 +767,18 @@ class ShelemGame(BaseGame):
                   bid_team=bid_team)
 
     def auto_play(self, user: str) -> Optional[dict]:
+        if self.phase == "bidding":
+            if user != self.players[self.current_turn]: return None
+            return self.place_bid(user, None)
+        if self.phase == "select_hokm":
+            if user != self.hakem: return None
+            return self.select_hokm(user, random.choice(list(Suit)).value)
         if self.phase != "playing": return None
         if user != self.players[self.current_turn]: return None
         hand = self.hands[user]
         if not hand: return None
         valid = [i for i, c in enumerate(hand) if self._valid_play(user, c) is None]
         if not valid: valid = list(range(len(hand)))
-        # simple: play lowest point card
         best = min(valid, key=lambda i: self._card_points(hand[i]))
         return self.play_card(user, best)
 
@@ -766,7 +788,6 @@ class ShelemGame(BaseGame):
             "players": self.players,
             "teams": self.teams,
             "phase": self.phase,
-            "round": self.round,
             "bids": self.bids,
             "current_bid": self.current_bid,
             "current_bid_winner": self.current_bid_winner,
@@ -789,6 +810,7 @@ class ShelemGame(BaseGame):
         s["hand"] = [c.to_dict() for c in self.hands.get(user, [])]
         return s
 
+
 # ---------- حکم ----------
 class HokmGame(BaseGame):
     game_type = "hokm"
@@ -799,30 +821,29 @@ class HokmGame(BaseGame):
         self.deck = Deck(); self.deck.shuffle()
         self.hands: Dict[str, List[Card]] = {}
         self.teams = {"team1": [players[0], players[2]], "team2": [players[1], players[3]]}
-        self.round = 1
         self.hakem = players[0]
         self.hokm_suit: Optional[Suit] = None
         self.tricks_won = {"team1": 0, "team2": 0}
         self.trick: List[Tuple[str, Card]] = []
         self.phase = "select_hokm"
         self.scores = {"team1": 0, "team2": 0}
-        self.team_hakem_index = 0  # 0 or 1 (which team is hakem)
 
     def start(self):
         for p in self.players:
             self.hands[p] = self.deck.deal(13)
         self.phase = "select_hokm"
-        self.set_turn(self.players.index(self.hakem), self.options.get("turn_timeout", TURN_TIMEOUT))
+        self.set_turn(self.players.index(self.hakem),
+                      self.options.get("turn_timeout", TURN_TIMEOUT))
         self._log(event="start", hakem=self.hakem)
 
     def select_hokm(self, user: str, suit: str) -> dict:
         if self.phase != "select_hokm": return {"error": "فاز انتخاب حکم نیست"}
         if user != self.hakem: return {"error": "فقط حاکم می‌تواند حکم را انتخاب کند"}
         try: self.hokm_suit = Suit(suit)
-        except: return {"error": "خال نامعتبر"}
+        except Exception: return {"error": "خال نامعتبر"}
         self.phase = "playing"
-        # hakem starts
-        self.set_turn(self.players.index(self.hakem), self.options.get("turn_timeout", TURN_TIMEOUT))
+        self.set_turn(self.players.index(self.hakem),
+                      self.options.get("turn_timeout", TURN_TIMEOUT))
         self._log(user=user, action="hokm_selected", suit=suit)
         return {"ok": True}
 
@@ -872,18 +893,21 @@ class HokmGame(BaseGame):
                 self.winner = self.winners[0]
                 self.scores["team1"] += 1 if self.tricks_won["team1"] >= 7 else 0
                 self.scores["team2"] += 1 if self.tricks_won["team2"] >= 7 else 0
-                # next round hakem switches to other team
             else:
-                self.set_turn(self.players.index(winner), self.options.get("turn_timeout", TURN_TIMEOUT))
+                self.set_turn(self.players.index(winner),
+                              self.options.get("turn_timeout", TURN_TIMEOUT))
             self._log(action="trick", winner=winner)
             return {"ok": True}
         else:
-            idx = self.players.index(user)
-            self.set_turn((idx + 1) % 4, self.options.get("turn_timeout", TURN_TIMEOUT))
+            idx2 = self.players.index(user)
+            self.set_turn((idx2 + 1) % 4, self.options.get("turn_timeout", TURN_TIMEOUT))
             self._log(user=user, card=card.to_dict())
             return {"ok": True}
 
     def auto_play(self, user: str) -> Optional[dict]:
+        if self.phase == "select_hokm":
+            if user != self.hakem: return None
+            return self.select_hokm(user, random.choice(list(Suit)).value)
         if user != self.players[self.current_turn]: return None
         hand = self.hands[user]
         if not hand: return None
@@ -898,7 +922,6 @@ class HokmGame(BaseGame):
             "players": self.players,
             "teams": self.teams,
             "phase": self.phase,
-            "round": self.round,
             "hakem": self.hakem,
             "hokm_suit": self.hokm_suit.value if self.hokm_suit else None,
             "tricks_won": self.tricks_won,
@@ -916,6 +939,7 @@ class HokmGame(BaseGame):
         s["hand"] = [c.to_dict() for c in self.hands.get(user, [])]
         return s
 
+
 GAME_CLASSES = {
     "chahar_barg": ChaharBargGame,
     "haft_khabis": HaftKhabisGame,
@@ -928,19 +952,12 @@ GAME_CLASSES = {
 # ============================================================
 class ConnectionManager:
     def __init__(self):
-        # room_id -> {username: ws}
         self.connections: Dict[str, Dict[str, WebSocket]] = {}
-        # username -> ws (for global notifications)
         self.user_sockets: Dict[str, WebSocket] = {}
-        # room_id -> set of spectators
         self.spectators: Dict[str, Set[str]] = defaultdict(set)
-        # username -> last message time (for rate limit)
         self.msg_times: Dict[str, deque] = defaultdict(lambda: deque(maxlen=RATE_LIMIT_MAX))
-        # username -> online status
         self.online: Set[str] = set()
-        # room_id -> turn timer task
         self.turn_tasks: Dict[str, asyncio.Task] = {}
-        # typing users per room
         self.typing: Dict[str, Set[str]] = defaultdict(set)
 
     async def connect_user(self, username: str, ws: WebSocket):
@@ -998,15 +1015,14 @@ MANAGER = ConnectionManager()
 # ACHIEVEMENTS
 # ============================================================
 ACHIEVEMENTS = {
-    "first_win":    {"title": "🏆 اولین پیروزی", "desc": "اولین بازی خودت را ببر"},
+    "first_win": {"title": "🏆 اولین پیروزی", "desc": "اولین بازی خودت را ببر"},
     "chahar_master": {"title": "🎯 استاد چهاربرگ", "desc": "۱۰ بازی چهاربرگ ببر"},
-    "hokm_king":     {"title": "👑 پادشاه حکم",   "desc": "۱۰ بازی حکم ببر"},
-    "shelem_pro":    {"title": "💎 حرفه‌ای شلم",   "desc": "۱۰ بازی شلم ببر"},
-    "haft_champ":    {"title": "🎴 قهرمان هفت خبیث", "desc": "۱۰ بازی هفت خبیث ببر"},
-    "social":        {"title": "🤝 اجتماعی",       "desc": "۵ دوست اضافه کن"},
-    "chatty":        {"title": "💬 پرحرف",         "desc": "۱۰۰ پیام چت بفرست"},
-    "veteran":       {"title": "🎖️ کهنه‌کار",      "desc": "۵۰ بازی انجام بده"},
-    "chahar_sweep":  {"title": "🧹 جاروب",         "desc": "در یک دست چهاربرگ ۵۲ امتیاز بگیر"},
+    "hokm_king": {"title": "👑 پادشاه حکم", "desc": "۱۰ بازی حکم ببر"},
+    "shelem_pro": {"title": "💎 حرفه‌ای شلم", "desc": "۱۰ بازی شلم ببر"},
+    "haft_champ": {"title": "🎴 قهرمان هفت خبیث", "desc": "۱۰ بازی هفت خبیث ببر"},
+    "social": {"title": "🤝 اجتماعی", "desc": "۵ دوست اضافه کن"},
+    "chatty": {"title": "💬 پرحرف", "desc": "۱۰۰ پیام چت بفرست"},
+    "veteran": {"title": "🎖️ کهنه‌کار", "desc": "۵۰ بازی انجام بده"},
 }
 
 def grant_achievement(username: str, key: str):
@@ -1014,9 +1030,12 @@ def grant_achievement(username: str, key: str):
     s = DB["achievements"].setdefault(username, set())
     if key in s: return False
     s.add(key); STORE.mark_dirty()
-    asyncio.create_task(MANAGER.notify_user(username, {
-        "type": "achievement", "key": key, "info": ACHIEVEMENTS[key]
-    }))
+    try:
+        asyncio.create_task(MANAGER.notify_user(username, {
+            "type": "achievement", "key": key, "info": ACHIEVEMENTS[key]
+        }))
+    except RuntimeError:
+        pass
     return True
 
 # ============================================================
@@ -1036,53 +1055,42 @@ def verify_password(pw: str, salt: str, hashed: str) -> bool:
 
 def make_session(username: str) -> str:
     token = secrets.token_urlsafe(32)
-    DB["sessions"][token] = {"user": username, "expires": (datetime.utcnow() + SESSION_TTL).isoformat()}
+    DB["sessions"][token] = {
+        "user": username,
+        "expires": (datetime.utcnow() + SESSION_TTL).isoformat()
+    }
     STORE.mark_dirty()
     return token
 
-def clean_sessions():
-    now = datetime.utcnow()
-    for t, s in list(DB["sessions"].items()):
-        try:
-            if datetime.fromisoformat(s["expires"]) < now:
-                del DB["sessions"][t]
-        except Exception:
-            del DB["sessions"][t]
-
 # ============================================================
-# APP + AUTH
+# AUTH
 # ============================================================
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
-async def require_api_key(api_key: Optional[str] = None):
+async def require_api_key(api_key: Optional[str] = Depends(api_key_header)):
     if not api_key or api_key != API_KEY:
         raise HTTPException(status_code=403, detail="Invalid or missing API Key")
-
-async def require_user(
-    api_key: Optional[str] = Depends(api_key_header),
-    x_session: Optional[str] = None,
-):
-    if not api_key or api_key != API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid API Key")
-    return True
+    return api_key
 
 def get_user_from_session(request: Request):
-    """Extract user from session token header"""
     token = request.headers.get("X-Session")
-    if not token: raise HTTPException(status_code=401, detail="No session")
+    if not token:
+        raise HTTPException(status_code=401, detail="No session")
     s = DB["sessions"].get(token)
-    if not s: raise HTTPException(status_code=401, detail="Invalid session")
+    if not s:
+        raise HTTPException(status_code=401, detail="Invalid session")
     try:
         if datetime.fromisoformat(s["expires"]) < datetime.utcnow():
             del DB["sessions"][token]
             raise HTTPException(status_code=401, detail="Session expired")
-    except HTTPException: raise
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid session")
     return s["user"]
 
 # ============================================================
-# FASTAPI APP
+# APP
 # ============================================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -1100,7 +1108,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="🎴 Paskar Advanced Server",
     description="سرور پیشرفته بازی‌های پاسور ایرانی",
-    version="2.0.0",
+    version="2.0.1",
     lifespan=lifespan,
 )
 app.add_middleware(
@@ -1110,7 +1118,7 @@ app.add_middleware(
 )
 
 # ============================================================
-# REST — HOME
+# HOME / HEALTH
 # ============================================================
 @app.get("/", response_class=HTMLResponse)
 async def home():
@@ -1119,7 +1127,6 @@ async def home():
     <body style="font-family:sans-serif;max-width:800px;margin:auto;padding:20px">
     <h1>🎴 سرور پیشرفته بازی‌های پاسور</h1>
     <p>وضعیت: <b style="color:green">فعال</b></p>
-    <h3>بازی‌ها</h3>
     <ul>
       <li>🎯 چهاربرگ (یازده)</li>
       <li>🎴 هفت خبیث</li>
@@ -1135,8 +1142,22 @@ async def health():
     return {"status": "ok", "time": now_iso(), "online": len(MANAGER.online)}
 
 # ============================================================
-# REST — AUTH
+# AUTH ROUTES
 # ============================================================
+def _public_user(uname: str) -> dict:
+    u = DB["users"].get(uname, {})
+    return {
+        "username": uname,
+        "avatar": u.get("avatar", "🙂"),
+        "bio": u.get("bio", ""),
+        "created_at": u.get("created_at"),
+        "last_seen": u.get("last_seen"),
+        "stats": u.get("stats", {}),
+        "online": uname in MANAGER.online,
+        "achievements": list(DB["achievements"].get(uname, set())),
+        "friends_count": len(DB["friends"].get(uname, set())),
+    }
+
 @app.post("/api/register", status_code=201)
 async def register(req: RegisterReq, _=Depends(require_api_key)):
     uname = req.username
@@ -1188,22 +1209,8 @@ async def logout(request: Request, _=Depends(require_api_key)):
         del DB["sessions"][token]; STORE.mark_dirty()
     return {"ok": True}
 
-def _public_user(uname: str) -> dict:
-    u = DB["users"].get(uname, {})
-    return {
-        "username": uname,
-        "avatar": u.get("avatar", "🙂"),
-        "bio": u.get("bio", ""),
-        "created_at": u.get("created_at"),
-        "last_seen": u.get("last_seen"),
-        "stats": u.get("stats", {}),
-        "online": uname in MANAGER.online,
-        "achievements": list(DB["achievements"].get(uname, set())),
-        "friends_count": len(DB["friends"].get(uname, set())),
-    }
-
 # ============================================================
-# REST — USERS
+# USERS
 # ============================================================
 @app.get("/api/users/me")
 async def me(request: Request, _=Depends(require_api_key)):
@@ -1220,8 +1227,8 @@ async def user_profile(username: str, _=Depends(require_api_key)):
 async def list_users(_=Depends(require_api_key), q: Optional[str] = None, limit: int = 50):
     names = list(DB["users"].keys())
     if q:
-        q = q.lower()
-        names = [n for n in names if q in n.lower()]
+        ql = q.lower()
+        names = [n for n in names if ql in n.lower()]
     names = names[:limit]
     return {"users": [_public_user(n) for n in names], "total": len(names)}
 
@@ -1237,7 +1244,7 @@ async def update_profile(request: Request, data: dict = Body(...), _=Depends(req
     return {"ok": True, "user": _public_user(uname)}
 
 # ============================================================
-# REST — FRIENDS
+# FRIENDS
 # ============================================================
 @app.get("/api/friends")
 async def list_friends(request: Request, _=Depends(require_api_key)):
@@ -1254,7 +1261,8 @@ async def friend_request(req: FriendReq, request: Request, _=Depends(require_api
     me = get_user_from_session(request)
     if req.username == me: raise HTTPException(400, "نمی‌توانی به خودت درخواست بدهی")
     if req.username not in DB["users"]: raise HTTPException(404, "کاربر یافت نشد")
-    if req.username in DB["friends"].get(me, set()): return {"ok": True, "message": "قبلاً دوست هستید"}
+    if req.username in DB["friends"].get(me, set()):
+        return {"ok": True, "message": "قبلاً دوست هستید"}
     DB["friend_requests"].setdefault(req.username, set()).add(me)
     STORE.mark_dirty()
     await MANAGER.notify_user(req.username, {
@@ -1271,7 +1279,6 @@ async def friend_accept(req: FriendReq, request: Request, _=Depends(require_api_
     DB["friends"].setdefault(me, set()).add(req.username)
     DB["friends"].setdefault(req.username, set()).add(me)
     STORE.mark_dirty()
-    # achievement
     if len(DB["friends"][me]) >= 5: grant_achievement(me, "social")
     if len(DB["friends"][req.username]) >= 5: grant_achievement(req.username, "social")
     await MANAGER.notify_user(req.username, {"type": "friend_accept", "user": me})
@@ -1293,7 +1300,7 @@ async def block_user(username: str, request: Request, _=Depends(require_api_key)
     return {"ok": True}
 
 # ============================================================
-# REST — NOTIFICATIONS
+# NOTIFICATIONS
 # ============================================================
 @app.get("/api/notifications")
 async def get_notifications(request: Request, _=Depends(require_api_key)):
@@ -1309,7 +1316,7 @@ async def mark_notifs_read(request: Request, _=Depends(require_api_key)):
     return {"ok": True}
 
 # ============================================================
-# REST — LEADERBOARD & STATS
+# LEADERBOARD / ACHIEVEMENTS
 # ============================================================
 @app.get("/api/leaderboard")
 async def leaderboard(_=Depends(require_api_key), game: Optional[str] = None, limit: int = 20):
@@ -1322,7 +1329,8 @@ async def leaderboard(_=Depends(require_api_key), game: Optional[str] = None, li
                             "wins": pg.get("wins", 0), "played": pg.get("played", 0)})
         else:
             entries.append({"username": uname, "avatar": u.get("avatar", "🙂"),
-                            "wins": stats.get("wins", 0), "played": stats.get("games_played", 0)})
+                            "wins": stats.get("wins", 0),
+                            "played": stats.get("games_played", 0)})
     entries.sort(key=lambda x: (-x["wins"], -x["played"]))
     return {"leaderboard": entries[:limit], "game": game}
 
@@ -1331,16 +1339,23 @@ async def list_achievements(_=Depends(require_api_key)):
     return {"achievements": ACHIEVEMENTS}
 
 # ============================================================
-# REST — ROOMS
+# ROOMS
 # ============================================================
 def _public_room(r: dict, viewer: Optional[str] = None) -> dict:
     rid = r["room_id"]
+    ready = r.get("ready")
+    if isinstance(ready, set):
+        ready_list = list(ready)
+    elif isinstance(ready, list):
+        ready_list = ready
+    else:
+        ready_list = []
     return {
         "room_id": rid,
         "name": r["name"],
         "game_type": r["game_type"],
         "host": r["host"],
-        "players": r["players"],
+        "players": list(r.get("players", [])),
         "spectators": list(MANAGER.spectators.get(rid, set())),
         "max_players": r["max_players"],
         "is_private": r["is_private"],
@@ -1349,21 +1364,22 @@ def _public_room(r: dict, viewer: Optional[str] = None) -> dict:
         "voice_enabled": r["voice_enabled"],
         "allow_spectators": r["allow_spectators"],
         "turn_timeout": r["turn_timeout"],
-        "status": r["status"],  # waiting, playing, finished
-        "ready": list(r.get("ready", set())),
+        "status": r.get("status", "waiting"),
+        "ready": ready_list,
         "created_at": r["created_at"],
         "target_score": r.get("target_score"),
     }
 
 @app.get("/api/rooms")
 async def list_rooms(request: Request, _=Depends(require_api_key),
-                     game: Optional[str] = None, include_private: bool = False):
+                     game: Optional[str] = None):
     me = get_user_from_session(request)
     rooms = []
     for rid, r in DB["rooms"].items():
-        if r["is_private"] and r["host"] != me and me not in r["players"]:
+        if r["is_private"] and r["host"] != me and me not in r.get("players", []):
             continue
-        if game and r["game_type"] != game: continue
+        if game and r["game_type"] != game:
+            continue
         rooms.append(_public_room(r, me))
     rooms.sort(key=lambda x: x["created_at"], reverse=True)
     return {"rooms": rooms, "total": len(rooms)}
@@ -1396,10 +1412,11 @@ async def create_room(req: RoomCreateReq, request: Request, _=Depends(require_ap
         "status": "waiting",
         "ready": {me},
         "created_at": now_iso(),
-        "game_state": None,
+        "game_instance": None,
     }
     DB["chat_history"][rid] = [{
-        "type": "system", "message": f"اتاق «{req.name}» توسط {me} ساخته شد",
+        "type": "system",
+        "message": f"اتاق «{req.name}» توسط {me} ساخته شد",
         "timestamp": now_iso()
     }]
     STORE.mark_dirty()
@@ -1409,17 +1426,22 @@ async def create_room(req: RoomCreateReq, request: Request, _=Depends(require_ap
 @app.get("/api/rooms/{room_id}")
 async def get_room(room_id: str, request: Request, _=Depends(require_api_key)):
     me = get_user_from_session(request)
-    if room_id not in DB["rooms"]: raise HTTPException(404, "اتاق یافت نشد")
+    if room_id not in DB["rooms"]:
+        raise HTTPException(404, "اتاق یافت نشد")
     return {"room": _public_room(DB["rooms"][room_id], me)}
 
 @app.post("/api/rooms/{room_id}/join")
-async def join_room(room_id: str, request: Request, password: Optional[str] = None, _=Depends(require_api_key)):
+async def join_room(room_id: str, request: Request,
+                    password: Optional[str] = None, _=Depends(require_api_key)):
     me = get_user_from_session(request)
     r = DB["rooms"].get(room_id)
-    if not r: raise HTTPException(404, "اتاق یافت نشد")
-    if me in r["players"]: return {"ok": True, "message": "قبلاً عضو هستید"}
+    if not r:
+        raise HTTPException(404, "اتاق یافت نشد")
+    if me in r["players"]:
+        return {"ok": True, "message": "قبلاً عضو هستید"}
     if r["password_hash"]:
-        if not password: raise HTTPException(401, "رمز اتاق لازم است")
+        if not password:
+            raise HTTPException(401, "رمز اتاق لازم است")
         salt, h = r["password_hash"].split(":")
         if not verify_password(password, salt, h):
             raise HTTPException(401, "رمز اشتباه است")
@@ -1429,7 +1451,10 @@ async def join_room(room_id: str, request: Request, password: Optional[str] = No
             await MANAGER.broadcast_room(room_id, {"type": "spectator_joined", "username": me})
             return {"ok": True, "as": "spectator"}
         raise HTTPException(400, "اتاق پر است")
-    r["players"].append(me); r["ready"].add(me)
+    r["players"].append(me)
+    if not isinstance(r.get("ready"), set):
+        r["ready"] = set(r.get("ready") or [])
+    r["ready"].add(me)
     DB["chat_history"].setdefault(room_id, []).append({
         "type": "system", "message": f"{me} به اتاق پیوست", "timestamp": now_iso()
     })
@@ -1443,19 +1468,20 @@ async def join_room(room_id: str, request: Request, password: Optional[str] = No
 async def leave_room(room_id: str, request: Request, _=Depends(require_api_key)):
     me = get_user_from_session(request)
     r = DB["rooms"].get(room_id)
-    if not r: return {"ok": True}
+    if not r:
+        return {"ok": True}
     if me in r["players"]:
         r["players"].remove(me)
-        r["ready"].discard(me)
+        if isinstance(r.get("ready"), set):
+            r["ready"].discard(me)
     MANAGER.spectators[room_id].discard(me)
     MANAGER.disconnect_room(room_id, me)
     if not r["players"]:
-        # delete empty room
         DB["rooms"].pop(room_id, None)
         DB["chat_history"].pop(room_id, None)
     STORE.mark_dirty()
     await MANAGER.broadcast_room(room_id, {
-        "type": "player_left", "username": me, "room": _public_room(r)
+        "type": "player_left", "username": me
     })
     return {"ok": True}
 
@@ -1463,8 +1489,10 @@ async def leave_room(room_id: str, request: Request, _=Depends(require_api_key))
 async def delete_room(room_id: str, request: Request, _=Depends(require_api_key)):
     me = get_user_from_session(request)
     r = DB["rooms"].get(room_id)
-    if not r: raise HTTPException(404, "اتاق یافت نشد")
-    if r["host"] != me: raise HTTPException(403, "فقط میزبان می‌تواند حذف کند")
+    if not r:
+        raise HTTPException(404, "اتاق یافت نشد")
+    if r["host"] != me:
+        raise HTTPException(403, "فقط میزبان می‌تواند حذف کند")
     await MANAGER.broadcast_room(room_id, {"type": "room_closed"})
     DB["rooms"].pop(room_id, None)
     DB["chat_history"].pop(room_id, None)
@@ -1475,9 +1503,14 @@ async def delete_room(room_id: str, request: Request, _=Depends(require_api_key)
 async def toggle_ready(room_id: str, request: Request, _=Depends(require_api_key)):
     me = get_user_from_session(request)
     r = DB["rooms"].get(room_id)
-    if not r or me not in r["players"]: raise HTTPException(404, "اتاق یافت نشد")
-    if me in r["ready"]: r["ready"].discard(me)
-    else: r["ready"].add(me)
+    if not r or me not in r["players"]:
+        raise HTTPException(404, "اتاق یافت نشد")
+    if not isinstance(r.get("ready"), set):
+        r["ready"] = set(r.get("ready") or [])
+    if me in r["ready"]:
+        r["ready"].discard(me)
+    else:
+        r["ready"].add(me)
     STORE.mark_dirty()
     await MANAGER.broadcast_room(room_id, {"type": "ready_update", "ready": list(r["ready"])})
     return {"ok": True, "ready": me in r["ready"]}
@@ -1486,114 +1519,128 @@ async def toggle_ready(room_id: str, request: Request, _=Depends(require_api_key
 async def kick_player(room_id: str, target: str, request: Request, _=Depends(require_api_key)):
     me = get_user_from_session(request)
     r = DB["rooms"].get(room_id)
-    if not r or r["host"] != me: raise HTTPException(403, "فقط میزبان می‌تواند اخراج کند")
+    if not r or r["host"] != me:
+        raise HTTPException(403, "فقط میزبان می‌تواند اخراج کند")
     if target in r["players"] and target != me:
-        r["players"].remove(target); r["ready"].discard(target)
+        r["players"].remove(target)
+        if isinstance(r.get("ready"), set):
+            r["ready"].discard(target)
         await MANAGER.send_room(room_id, target, {"type": "kicked", "by": me})
         await MANAGER.broadcast_room(room_id, {"type": "player_left", "username": target})
         STORE.mark_dirty()
     return {"ok": True}
 
-@app.post("/api/rooms/{room_id}/start")
-async def start_game(room_id: str, request: Request, _=Depends(require_api_key)):
-    me = get_user_from_session(request)
+async def _do_start_game(room_id: str, me: str):
     r = DB["rooms"].get(room_id)
-    if not r: raise HTTPException(404, "اتاق یافت نشد")
-    if me != r["host"]: raise HTTPException(403, "فقط میزبان می‌تواند بازی را شروع کند")
+    if not r:
+        raise HTTPException(404, "اتاق یافت نشد")
+    if me != r["host"]:
+        raise HTTPException(403, "فقط میزبان می‌تواند بازی را شروع کند")
     gt = r["game_type"]
-    players = r["players"]
+    players = list(r["players"])
     min_p = {"chahar_barg": 2, "haft_khabis": 2, "shelem": 4, "hokm": 4}[gt]
     if len(players) < min_p:
         raise HTTPException(400, f"بازی {gt} حداقل {min_p} بازیکن نیاز دارد")
-    # all ready?
-    if not set(players).issubset(r["ready"]):
+    if not set(players).issubset(set(r.get("ready", set()))):
         raise HTTPException(400, "همه بازیکنان باید آماده باشند")
     cls = GAME_CLASSES[gt]
     opts = {"turn_timeout": r["turn_timeout"]}
-    if gt == "shelem" and r.get("target_score"): opts["target_score"] = r["target_score"]
+    if gt == "shelem" and r.get("target_score"):
+        opts["target_score"] = r["target_score"]
     game = cls(players, opts)
     game.start()
     r["game_instance"] = game
-    r["game_state"] = game.public_state()
     r["status"] = "playing"
     r["started_at"] = now_iso()
-    # update stats
     for p in players:
         u = DB["users"].get(p)
         if u:
             st = u["stats"]
-            st["games_played"] += 1
-            st["per_game"].setdefault(gt, {"played": 0, "wins": 0})["played"] += 1
-            if st["games_played"] >= 50: grant_achievement(p, "veteran")
+            st["games_played"] = st.get("games_played", 0) + 1
+            st.setdefault("per_game", {}).setdefault(gt, {"played": 0, "wins": 0})
+            st["per_game"][gt]["played"] += 1
+            if st["games_played"] >= 50:
+                grant_achievement(p, "veteran")
     STORE.mark_dirty()
-    # broadcast
     await MANAGER.broadcast_room(room_id, {
         "type": "game_started", "game_type": gt,
         "state": game.public_state(),
     })
-    # send personal
     for p in players:
         await MANAGER.send_room(room_id, p, {
             "type": "personal_state", "state": game.personal_state(p)
         })
-    # start turn timer
     _start_turn_timer(room_id)
     return {"ok": True}
+
+@app.post("/api/rooms/{room_id}/start")
+async def start_game(room_id: str, request: Request, _=Depends(require_api_key)):
+    me = get_user_from_session(request)
+    return await _do_start_game(room_id, me)
 
 # ============================================================
 # TURN TIMER
 # ============================================================
 def _start_turn_timer(room_id: str):
     old = MANAGER.turn_tasks.get(room_id)
-    if old and not old.done(): old.cancel()
+    if old and not old.done():
+        old.cancel()
+
     async def _loop():
         try:
             while True:
                 await asyncio.sleep(1)
                 r = DB["rooms"].get(room_id)
-                if not r or r["status"] != "playing": break
+                if not r or r.get("status") != "playing":
+                    break
                 game = r.get("game_instance")
-                if not game or game.finished: break
-                # broadcast time left
+                if not game or game.finished:
+                    break
                 await MANAGER.broadcast_room(room_id, {
-                    "type": "tick", "time_left": game.time_left(),
+                    "type": "tick",
+                    "time_left": game.time_left(),
                     "current_turn": game.players[game.current_turn] if not game.finished else None
                 })
                 if game.is_turn_expired() and not game.finished:
                     cu = game.players[game.current_turn]
                     result = game.auto_play(cu)
                     await MANAGER.broadcast_room(room_id, {
-                        "type": "auto_played", "username": cu, "result": result,
+                        "type": "auto_played", "username": cu,
                         "state": game.public_state()
                     })
                     for p in game.players:
                         await MANAGER.send_room(room_id, p, {
-                            "type": "personal_state", "state": game.personal_state(p)
+                            "type": "personal_state",
+                            "state": game.personal_state(p)
                         })
                     if game.finished:
                         await _on_game_finished(room_id, game)
                         break
         except asyncio.CancelledError:
             pass
+        except Exception as e:
+            log.error(f"Turn timer error in {room_id}: {e}")
+
     MANAGER.turn_tasks[room_id] = asyncio.create_task(_loop())
 
 async def _on_game_finished(room_id: str, game: BaseGame):
     r = DB["rooms"].get(room_id)
-    if not r: return
+    if not r:
+        return
     r["status"] = "finished"
     r["finished_at"] = now_iso()
     gt = r["game_type"]
-    # Update stats
     for p in game.players:
         u = DB["users"].get(p)
-        if not u: continue
+        if not u:
+            continue
         won = p in game.winners
         if won:
-            u["stats"]["wins"] += 1
-            u["stats"]["per_game"].setdefault(gt, {"played": 0, "wins": 0})["wins"] += 1
+            u["stats"]["wins"] = u["stats"].get("wins", 0) + 1
+            u["stats"].setdefault("per_game", {}).setdefault(gt, {"played": 0, "wins": 0})
+            u["stats"]["per_game"][gt]["wins"] += 1
         else:
-            u["stats"]["losses"] += 1
-        # achievements
+            u["stats"]["losses"] = u["stats"].get("losses", 0) + 1
         if won:
             grant_achievement(p, "first_win")
             wins = u["stats"]["per_game"].get(gt, {}).get("wins", 0)
@@ -1601,7 +1648,6 @@ async def _on_game_finished(room_id: str, game: BaseGame):
                        "shelem": "shelem_pro", "haft_khabis": "haft_champ"}
             if wins >= 10 and gt in mapping:
                 grant_achievement(p, mapping[gt])
-    # save history
     hist = DB["game_history"].setdefault(room_id, [])
     hist.append({
         "game_type": gt,
@@ -1610,43 +1656,43 @@ async def _on_game_finished(room_id: str, game: BaseGame):
         "moves": game.moves[-200:],
         "finished_at": now_iso(),
     })
-    if len(hist) > 20: DB["game_history"][room_id] = hist[-20:]
+    if len(hist) > 20:
+        DB["game_history"][room_id] = hist[-20:]
     STORE.mark_dirty()
-    # notify all
     await MANAGER.broadcast_room(room_id, {
         "type": "game_over",
         "winners": game.winners,
         "state": game.public_state(),
     })
-    # save notification
     for p in game.players:
-        notif = {"type": "game_result", "room": room_id, "game_type": gt,
-                 "won": p in game.winners, "timestamp": now_iso(),
-                 "title": "🏆 بردی!" if p in game.winners else "😔 باختی",
-                 "body": f"بازی {gt} در اتاق {r['name']}"}
+        notif = {
+            "type": "game_result", "room": room_id, "game_type": gt,
+            "won": p in game.winners, "timestamp": now_iso(),
+            "title": "🏆 بردی!" if p in game.winners else "😔 باختی",
+            "body": f"بازی {gt} در اتاق {r['name']}"
+        }
         DB["notifications"].setdefault(p, []).append(notif)
         await MANAGER.notify_user(p, notif)
     STORE.mark_dirty()
 
 # ============================================================
-# REST — CHAT
+# CHAT / HISTORY
 # ============================================================
 @app.get("/api/rooms/{room_id}/chat")
-async def get_chat(room_id: str, request: Request, _=Depends(require_api_key), limit: int = 100):
-    me = get_user_from_session(request)
-    if room_id not in DB["rooms"]: raise HTTPException(404, "اتاق یافت نشد")
+async def get_chat(room_id: str, request: Request,
+                   _=Depends(require_api_key), limit: int = 100):
+    get_user_from_session(request)
+    if room_id not in DB["rooms"]:
+        raise HTTPException(404, "اتاق یافت نشد")
     return {"messages": DB["chat_history"].get(room_id, [])[-limit:]}
 
-# ============================================================
-# REST — HISTORY
-# ============================================================
 @app.get("/api/rooms/{room_id}/history")
 async def get_history(room_id: str, request: Request, _=Depends(require_api_key)):
     get_user_from_session(request)
     return {"history": DB["game_history"].get(room_id, [])}
 
 # ============================================================
-# WEBSOCKET — per-room
+# WEBSOCKET: ROOM
 # ============================================================
 @app.websocket("/ws/room/{room_id}")
 async def ws_room(websocket: WebSocket, room_id: str,
@@ -1669,7 +1715,6 @@ async def ws_room(websocket: WebSocket, room_id: str,
     await MANAGER.connect_room(room_id, username, websocket, spectator=is_spec)
     MANAGER.online.add(username)
 
-    # send current state
     try:
         await websocket.send_json({
             "type": "welcome", "room": _public_room(r, username),
@@ -1677,12 +1722,16 @@ async def ws_room(websocket: WebSocket, room_id: str,
         })
         if is_player and r.get("game_instance"):
             game = r["game_instance"]
-            await websocket.send_json({"type": "personal_state", "state": game.personal_state(username)})
-        # chat history
+            await websocket.send_json({
+                "type": "personal_state",
+                "state": game.personal_state(username)
+            })
         await websocket.send_json({
-            "type": "chat_history", "messages": DB["chat_history"].get(room_id, [])[-100:]
+            "type": "chat_history",
+            "messages": DB["chat_history"].get(room_id, [])[-100:]
         })
-    except Exception: pass
+    except Exception:
+        pass
 
     await MANAGER.broadcast_room(room_id, {
         "type": "user_online", "username": username, "spectator": is_spec
@@ -1703,27 +1752,24 @@ async def ws_room(websocket: WebSocket, room_id: str,
 
 async def _handle_ws_message(room_id: str, username: str, ws: WebSocket, msg: dict):
     r = DB["rooms"].get(room_id)
-    if not r: return
+    if not r:
+        return
     t = msg.get("type")
 
-    # ----- Rate limit -----
     if t in ("chat", "voice", "typing", "emote"):
         if MANAGER.is_rate_limited(username):
             await ws.send_json({"type": "error", "message": "خیلی سریع! کمی صبر کن"})
             return
 
-    # ----- Chat -----
     if t == "chat":
         text = (msg.get("message") or "").strip()[:500]
-        if not text: return
+        if not text:
+            return
         if not r["chat_enabled"]:
-            await ws.send_json({"type": "error", "message": "چت این اتاق غیرفعال است"}); return
-
-        # Commands
+            await ws.send_json({"type": "error", "message": "چت این اتاق غیرفعال است"})
+            return
         if text.startswith("/"):
             return await _handle_chat_command(room_id, username, ws, text, r)
-
-        # Mentions / whispers
         chat = {
             "type": "chat", "username": username, "message": text,
             "timestamp": now_iso(),
@@ -1731,18 +1777,19 @@ async def _handle_ws_message(room_id: str, username: str, ws: WebSocket, msg: di
         DB["chat_history"].setdefault(room_id, []).append(chat)
         if len(DB["chat_history"][room_id]) > MAX_CHAT_HISTORY:
             DB["chat_history"][room_id] = DB["chat_history"][room_id][-MAX_CHAT_HISTORY:]
-        # stats
         u = DB["users"].get(username)
         if u:
             u["stats"]["chat_messages"] = u["stats"].get("chat_messages", 0) + 1
-            if u["stats"]["chat_messages"] >= 100: grant_achievement(username, "chatty")
+            if u["stats"]["chat_messages"] >= 100:
+                grant_achievement(username, "chatty")
         STORE.mark_dirty()
         await MANAGER.broadcast_room(room_id, chat)
 
-    # ----- Whisper -----
     elif t == "whisper":
-        to = msg.get("to"); text = (msg.get("message") or "").strip()[:500]
-        if not to or not text: return
+        to = msg.get("to")
+        text = (msg.get("message") or "").strip()[:500]
+        if not to or not text:
+            return
         await MANAGER.send_room(room_id, to, {
             "type": "chat", "username": username, "message": text,
             "timestamp": now_iso(), "private": True, "to": to
@@ -1752,94 +1799,88 @@ async def _handle_ws_message(room_id: str, username: str, ws: WebSocket, msg: di
             "timestamp": now_iso(), "private": True, "to": to
         })
 
-    # ----- Typing -----
     elif t == "typing":
         MANAGER.typing[room_id].add(username)
-        await MANAGER.broadcast_room(room_id, {"type": "typing", "username": username}, exclude=username)
+        await MANAGER.broadcast_room(room_id, {"type": "typing", "username": username},
+                                     exclude=username)
 
-    # ----- Emote -----
     elif t == "emote":
         emoji = msg.get("emoji", "👍")
         await MANAGER.broadcast_room(room_id, {
             "type": "emote", "username": username, "emoji": emoji
         })
 
-    # ----- Voice (relay) -----
     elif t == "voice":
-        if not r["voice_enabled"]: return
+        if not r["voice_enabled"]:
+            return
         await MANAGER.broadcast_room(room_id, {
             "type": "voice", "username": username,
             "data": msg.get("data", ""),
             "mime": msg.get("mime", "audio/webm"),
         }, exclude=username)
 
-    # ----- WebRTC signaling for voice chat -----
     elif t in ("webrtc_offer", "webrtc_answer", "webrtc_ice"):
         target = msg.get("target")
-        if not target: return
+        if not target:
+            return
         await MANAGER.send_room(room_id, target, {
             "type": t, "from": username, "payload": msg.get("payload")
         })
 
-    # ----- Ready toggle via WS -----
     elif t == "ready":
-        if username not in r["players"]: return
-        if username in r["ready"]: r["ready"].discard(username)
-        else: r["ready"].add(username)
+        if username not in r["players"]:
+            return
+        if not isinstance(r.get("ready"), set):
+            r["ready"] = set(r.get("ready") or [])
+        if username in r["ready"]:
+            r["ready"].discard(username)
+        else:
+            r["ready"].add(username)
         STORE.mark_dirty()
         await MANAGER.broadcast_room(room_id, {"type": "ready_update", "ready": list(r["ready"])})
 
-    # ----- Game actions -----
     elif t == "game_action":
         game = r.get("game_instance")
         if not game or game.finished:
-            await ws.send_json({"type": "error", "message": "بازی فعال نیست"}); return
+            await ws.send_json({"type": "error", "message": "بازی فعال نیست"})
+            return
         if username not in game.players:
-            await ws.send_json({"type": "error", "message": "تماشاچی نمی‌تواند بازی کند"}); return
-
+            await ws.send_json({"type": "error", "message": "تماشاچی نمی‌تواند بازی کند"})
+            return
         action = msg.get("action")
         data = msg.get("data", {}) or {}
         result = None
-
-        if action == "play_card":
-            result = game.play_card(username, int(data.get("card_index", -1)))
-
-        elif action == "bid" and game.game_type == "shelem":
-            result = game.place_bid(username, data.get("amount"))
-
-        elif action == "select_hokm":
-            result = game.select_hokm(username, data.get("suit"))
-
-        elif action == "play_hokm":
-            result = game.play_card(username, int(data.get("card_index", -1)))
-
-        elif action == "auto":
-            result = game.auto_play(username)
-
-        elif action == "state":
-            result = {"ok": True}
-
+        try:
+            if action == "play_card":
+                result = game.play_card(username, int(data.get("card_index", -1)))
+            elif action == "bid" and game.game_type == "shelem":
+                result = game.place_bid(username, data.get("amount"))
+            elif action == "select_hokm":
+                result = game.select_hokm(username, data.get("suit"))
+            elif action == "play_hokm":
+                result = game.play_card(username, int(data.get("card_index", -1)))
+            elif action == "auto":
+                result = game.auto_play(username)
+            elif action == "state":
+                result = {"ok": True}
+        except Exception as e:
+            await ws.send_json({"type": "error", "message": str(e)})
+            return
         if result and result.get("error"):
             await ws.send_json({"type": "error", "message": result["error"]})
             return
-
-        # broadcast
         await MANAGER.broadcast_room(room_id, {
             "type": "game_update",
             "state": game.public_state(),
-            "action": action,
-            "by": username,
+            "action": action, "by": username,
         })
-        # personal
         for p in game.players:
             await MANAGER.send_room(room_id, p, {
                 "type": "personal_state", "state": game.personal_state(p)
             })
-        # finished?
         if game.finished:
             await _on_game_finished(room_id, game)
 
-    # ----- Ping -----
     elif t == "ping":
         await ws.send_json({"type": "pong", "t": time.time()})
 
@@ -1850,7 +1891,7 @@ async def _handle_chat_command(room_id: str, username: str, ws: WebSocket, text:
 
     if cmd == "/help":
         await ws.send_json({"type": "chat", "username": "system", "message":
-            "دستورات: /me <action> | /whisper <user> <msg> | /roll | /kick <user> (host) | /ready | /start (host)"})
+            "دستورات: /me | /whisper <user> <msg> | /roll | /kick <user> | /ready | /start"})
     elif cmd == "/me":
         action = " ".join(args)[:200]
         await MANAGER.broadcast_room(room_id, {
@@ -1858,57 +1899,56 @@ async def _handle_chat_command(room_id: str, username: str, ws: WebSocket, text:
             "message": f"* {username} {action}", "timestamp": now_iso()
         })
     elif cmd == "/whisper" and len(args) >= 2:
-        to, m = args[0], " ".join(args[1:])[:300]
+        to = args[0]
+        m = " ".join(args[1:])[:300]
         await MANAGER.send_room(room_id, to, {
-            "type": "chat", "username": username, "message": m, "private": True, "to": to
+            "type": "chat", "username": username, "message": m,
+            "private": True, "to": to
         })
-        await ws.send_json({"type": "chat", "username": username, "message": m, "private": True, "to": to})
+        await ws.send_json({
+            "type": "chat", "username": username, "message": m,
+            "private": True, "to": to
+        })
     elif cmd == "/roll":
         n = random.randint(1, 6)
         await MANAGER.broadcast_room(room_id, {
-            "type": "chat", "username": "system", "message": f"🎲 {username} تاس ریخت: {n}"
+            "type": "chat", "username": "system",
+            "message": f"🎲 {username} تاس ریخت: {n}"
         })
     elif cmd == "/kick" and args:
         if username == r["host"] and args[0] in r["players"]:
             target = args[0]
-            r["players"].remove(target); r["ready"].discard(target)
+            r["players"].remove(target)
+            if isinstance(r.get("ready"), set):
+                r["ready"].discard(target)
             await MANAGER.send_room(room_id, target, {"type": "kicked", "by": username})
             await MANAGER.broadcast_room(room_id, {"type": "player_left", "username": target})
             STORE.mark_dirty()
     elif cmd == "/ready":
         if username in r["players"]:
-            if username in r["ready"]: r["ready"].discard(username)
-            else: r["ready"].add(username)
+            if not isinstance(r.get("ready"), set):
+                r["ready"] = set(r.get("ready") or [])
+            if username in r["ready"]:
+                r["ready"].discard(username)
+            else:
+                r["ready"].add(username)
             STORE.mark_dirty()
-            await MANAGER.broadcast_room(room_id, {"type": "ready_update", "ready": list(r["ready"])})
+            await MANAGER.broadcast_room(room_id, {
+                "type": "ready_update", "ready": list(r["ready"])
+            })
     elif cmd == "/start":
         if username == r["host"]:
-            # fake a request, call internal logic
             try:
-                gt = r["game_type"]; players = r["players"]
-                min_p = {"chahar_barg": 2, "haft_khabis": 2, "shelem": 4, "hokm": 4}[gt]
-                if len(players) >= min_p and set(players).issubset(r["ready"]):
-                    cls = GAME_CLASSES[gt]
-                    opts = {"turn_timeout": r["turn_timeout"]}
-                    if gt == "shelem" and r.get("target_score"): opts["target_score"] = r["target_score"]
-                    game = cls(players, opts); game.start()
-                    r["game_instance"] = game; r["status"] = "playing"
-                    STORE.mark_dirty()
-                    await MANAGER.broadcast_room(room_id, {
-                        "type": "game_started", "game_type": gt, "state": game.public_state()
-                    })
-                    for p in players:
-                        await MANAGER.send_room(room_id, p, {
-                            "type": "personal_state", "state": game.personal_state(p)
-                        })
-                    _start_turn_timer(room_id)
+                await _do_start_game(room_id, username)
+            except HTTPException as he:
+                await ws.send_json({"type": "error", "message": he.detail})
             except Exception as e:
                 await ws.send_json({"type": "error", "message": str(e)})
     else:
         await ws.send_json({"type": "error", "message": f"دستور ناشناخته: {cmd}"})
 
 # ============================================================
-# WEBSOCKET — Global (notifications)
+# WEBSOCKET: USER (NOTIFICATIONS)
 # ============================================================
 @app.websocket("/ws/user")
 async def ws_user(websocket: WebSocket, username: str = Query(...),
@@ -1928,7 +1968,8 @@ async def ws_user(websocket: WebSocket, username: str = Query(...),
                 await websocket.send_json({"type": "pong"})
     except WebSocketDisconnect:
         pass
-    except Exception: pass
+    except Exception:
+        pass
     finally:
         MANAGER.disconnect_user(username)
 
@@ -1937,7 +1978,7 @@ async def ws_user(websocket: WebSocket, username: str = Query(...),
 # ============================================================
 @app.get("/api/admin/stats")
 async def admin_stats(request: Request, _=Depends(require_api_key)):
-    # Simple: any authenticated user; in production, restrict
+    get_user_from_session(request)
     return {
         "users": len(DB["users"]),
         "rooms": len(DB["rooms"]),
@@ -1951,7 +1992,7 @@ async def admin_stats(request: Request, _=Depends(require_api_key)):
 # ============================================================
 if __name__ == "__main__":
     print("\n" + "=" * 60)
-    print("🎴  Paskar Advanced Server")
+    print("🎴  Paskar Advanced Server (v2.0.1 — Fixed)")
     print("=" * 60)
     print(f"🔑  API Key prefix: {API_KEY[:8]}...")
     print(f"💾  DB path: {DB_PATH}")
