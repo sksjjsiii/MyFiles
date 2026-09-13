@@ -5,6 +5,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui' show TextDirection;
 
 import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
@@ -471,6 +472,9 @@ class AppState extends ChangeNotifier {
   List<Map> notifications = [];
   Map achDefs = {};
 
+  // Getter برای دسترسی آسان به baseUrl
+  String get baseUrl => api.baseUrl;
+
   WebSocketChannel? _uws;
   StreamSubscription? _uwsSub;
   Timer? _uwsRetry;
@@ -720,10 +724,10 @@ class PaskarApp extends StatelessWidget {
         titleTextStyle: TextStyle(
             fontFamily: kFont, fontSize: 17, fontWeight: FontWeight.w800, color: PColors.text),
       ),
-      dialogTheme: DialogTheme(
+      dialogTheme: const DialogThemeData(
         backgroundColor: PColors.panel,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        titleTextStyle: const TextStyle(fontFamily: kFont, fontSize: 16, color: PColors.text),
+        titleTextStyle: TextStyle(fontFamily: kFont, fontSize: 16, color: PColors.text),
       ),
       snackBarTheme: const SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
@@ -1105,7 +1109,7 @@ void showConnectionSheet(BuildContext context, AppState app) {
   showSheet(context, StatefulBuilder(builder: (ctx, setSt) {
     return SingleChildScrollView(
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Center(Container(width: 40, height: 4,
+        Center(child: Container(width: 40, height: 4,
             decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(4)))),
         const SizedBox(height: 16),
         const Text('⚙️ تنظیمات اتصال به سرور',
@@ -1258,7 +1262,7 @@ class _MainShellPageState extends State<MainShellPage> {
               icon: Stack(clipBehavior: Clip.none, children: [
                 const Icon(Icons.notifications_outlined, size: 23),
                 if (app.notifications.isNotEmpty)
-                  Positioned(-top: 0, right: -4, child: Container(
+                  Positioned(top: 0, right: -4, child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: const BoxDecoration(color: PColors.red, shape: BoxShape.circle),
                     child: Text('${fa(app.notifications.length)}',
@@ -1618,7 +1622,7 @@ class _CreateRoomSheetState extends State<CreateRoomSheet> {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Center(Container(width: 40, height: 4,
+        Center(child: Container(width: 40, height: 4,
             decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(4)))),
         const SizedBox(height: 14),
         const Text('➕ ساخت اتاق جدید',
@@ -2196,7 +2200,7 @@ class LobbyView extends StatelessWidget {
         if (s.isPlayer)
           GoldBtn(
             text: s.myReady ? '✅ آماده‌ام (لغو)' : 'آماده‌ام!',
-            icon: s.myReady ? Icons.check_circle : Icons.hand_back_left_outlined,
+            icon: s.myReady ? Icons.check_circle : Icons.back_hand_outlined,
             color: s.myReady ? PColors.green : PColors.gold,
             onPressed: s.wsToggleReady,
           ),
@@ -2674,7 +2678,7 @@ class _ScoreBar extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(color: PColors.panel, borderRadius: BorderRadius.circular(12)),
-            child: const Text('VS', style: TextStyle(fontWeight: FontWeight.w900, color: PColors.gold)),
+            child: const Text('VS', style: const TextStyle(fontWeight: FontWeight.w900, color: PColors.gold)),
           ),
           const SizedBox(width: 8),
           _teamBox('تیم حریف', t2, _i(_gf(scores, 'team2')), turn, PColors.red),
@@ -2932,7 +2936,7 @@ class _ResultOverlay extends StatelessWidget {
                 },
               ),
           ]),
-        ).animate(onPlay: (c) => c.play()).scale(begin: const Offset(.8, .8), end: const Offset(1, 1),
+        ).animate().scale(begin: const Offset(.8, .8), end: const Offset(1, 1),
             duration: const Duration(milliseconds: 300), curve: Curves.easeOutBack),
       ),
     );
@@ -3336,7 +3340,7 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
                 onRefresh: _load,
                 color: PColors.gold,
                 child: _rows.isEmpty
-                    ? const ListView(children: [
+                    ? ListView(children: const [
                         SizedBox(height: 100),
                         EmptyState(emoji: '🏜', title: 'هنوز کسی بازی نکرده', sub: 'اولین نفر باش!'),
                       ])
@@ -3534,7 +3538,7 @@ class _FriendsPageState extends State<FriendsPage> with SingleTickerProviderStat
                   onRefresh: _load,
                   color: PColors.gold,
                   child: _friends.isEmpty
-                      ? const ListView(children: [
+                      ? ListView(children: const [
                           SizedBox(height: 80),
                           EmptyState(emoji: '🤝', title: 'هنوز دوستی نداری',
                               sub: 'از جستجوی بالا بازیکن پیدا کن'),
@@ -3549,7 +3553,7 @@ class _FriendsPageState extends State<FriendsPage> with SingleTickerProviderStat
                   onRefresh: _load,
                   color: PColors.gold,
                   child: _requests.isEmpty
-                      ? const ListView(children: [
+                      ? ListView(children: const [
                           SizedBox(height: 80),
                           EmptyState(emoji: '📭', title: 'درخواستی نداری', sub: ''),
                         ])
