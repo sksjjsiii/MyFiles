@@ -1,21 +1,9 @@
 ==========================================
-⏰ 2026-09-13 00:16:03
+⏰ 2026-09-13 00:21:07
 🌐 TUNNEL_URL: https://cove-homepage-respiratory-bloomberg.trycloudflare.com
-⏱️  آپ‌تایم: 16443 ثانیه
+⏱️  آپ‌تایم: 16747 ثانیه
 ==========================================
 ------ api_server.log ------
-127.0.0.1 - - [12/Sep/2026 21:33:44] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 21:33:44] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 21:33:44] "GET /api/build HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 21:34:16] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 21:34:46] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 21:35:17] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 21:35:47] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 21:36:17] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 21:36:47] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 21:37:17] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 21:37:48] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 21:38:18] "GET /api/status HTTP/1.1" 401 -
 127.0.0.1 - - [12/Sep/2026 21:38:48] "GET /api/status HTTP/1.1" 401 -
 127.0.0.1 - - [12/Sep/2026 21:38:48] "GET /api/status HTTP/1.1" 401 -
 127.0.0.1 - - [12/Sep/2026 21:38:48] "GET /api/build HTTP/1.1" 200 -
@@ -504,6 +492,18 @@
 127.0.0.1 - - [13/Sep/2026 00:15:02] "GET /api/status HTTP/1.1" 401 -
 127.0.0.1 - - [13/Sep/2026 00:15:33] "GET /api/status HTTP/1.1" 401 -
 127.0.0.1 - - [13/Sep/2026 00:16:03] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 00:16:03] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 00:16:03] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [13/Sep/2026 00:16:35] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 00:17:05] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 00:17:35] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 00:18:06] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 00:18:36] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 00:19:06] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 00:19:36] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 00:20:07] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 00:20:37] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 00:21:07] "GET /api/status HTTP/1.1" 401 -
 
 ------ cloudflare.log ------
 2026-09-12T19:41:53Z INF Thank you for trying Cloudflare Tunnel. Doing so, without a Cloudflare account, is a quick way to experiment and try it out. However, be aware that these account-less Tunnels have no uptime guarantee, are subject to the Cloudflare Online Services Terms of Use (https://www.cloudflare.com/website-terms/), and Cloudflare reserves the right to investigate your use of Tunnels for violations of such terms. If you intend to use Tunnels in production you should use a pre-created named tunnel by following: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps
