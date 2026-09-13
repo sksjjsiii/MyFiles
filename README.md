@@ -1,1 +1,1 @@
-https://cove-homepage-respiratory-bloomberg.trycloudflare.com
+https://dividend-quotations-jim-laid.trycloudflare.com
