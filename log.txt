@@ -1,21 +1,9 @@
 ==========================================
-⏰ 2026-09-13 00:31:16
+⏰ 2026-09-13 00:36:20
 🌐 TUNNEL_URL: https://cove-homepage-respiratory-bloomberg.trycloudflare.com
-⏱️  آپ‌تایم: 17356 ثانیه
+⏱️  آپ‌تایم: 17660 ثانیه
 ==========================================
 ------ api_server.log ------
-127.0.0.1 - - [12/Sep/2026 21:48:26] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 21:48:56] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 21:48:56] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 21:48:56] "GET /api/build HTTP/1.1" 200 -
-127.0.0.1 - - [12/Sep/2026 21:49:28] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 21:49:58] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 21:50:29] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 21:50:59] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 21:51:29] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 21:51:59] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 21:52:29] "GET /api/status HTTP/1.1" 401 -
-127.0.0.1 - - [12/Sep/2026 21:53:00] "GET /api/status HTTP/1.1" 401 -
 127.0.0.1 - - [12/Sep/2026 21:53:30] "GET /api/status HTTP/1.1" 401 -
 127.0.0.1 - - [12/Sep/2026 21:54:00] "GET /api/status HTTP/1.1" 401 -
 127.0.0.1 - - [12/Sep/2026 21:54:00] "GET /api/status HTTP/1.1" 401 -
@@ -504,6 +492,18 @@
 127.0.0.1 - - [13/Sep/2026 00:30:15] "GET /api/status HTTP/1.1" 401 -
 127.0.0.1 - - [13/Sep/2026 00:30:45] "GET /api/status HTTP/1.1" 401 -
 127.0.0.1 - - [13/Sep/2026 00:31:16] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 00:31:16] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 00:31:16] "GET /api/build HTTP/1.1" 200 -
+127.0.0.1 - - [13/Sep/2026 00:31:48] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 00:32:18] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 00:32:48] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 00:33:18] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 00:33:49] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 00:34:19] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 00:34:49] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 00:35:19] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 00:35:50] "GET /api/status HTTP/1.1" 401 -
+127.0.0.1 - - [13/Sep/2026 00:36:20] "GET /api/status HTTP/1.1" 401 -
 
 ------ cloudflare.log ------
 2026-09-12T19:41:53Z INF Thank you for trying Cloudflare Tunnel. Doing so, without a Cloudflare account, is a quick way to experiment and try it out. However, be aware that these account-less Tunnels have no uptime guarantee, are subject to the Cloudflare Online Services Terms of Use (https://www.cloudflare.com/website-terms/), and Cloudflare reserves the right to investigate your use of Tunnels for violations of such terms. If you intend to use Tunnels in production you should use a pre-created named tunnel by following: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps
@@ -556,7 +556,7 @@ root         961  0.0  0.1  32540 20860 ?        Ss   Sep12   0:00 /usr/bin/pyth
 root         998  0.0  0.1  39484 31148 ?        Ss   Sep12   0:00 /usr/bin/python3 -u /usr/sbin/waagent -daemon
 root        1340  0.0  0.2 454656 37844 ?        Sl   Sep12   0:10 /usr/bin/python3 -u bin/WALinuxAgent-2.16.0.2-py3.12.egg -run-exthandlers
 runner      2944  0.0  0.2 206500 39248 ?        S    Sep12   0:03 python3 api_server.py
-runner      2952  0.0  0.3 1295604 54720 ?       Sl   Sep12   0:15 cloudflared tunnel --url http://localhost:5000 --no-autoupdate
+runner      2952  0.0  0.3 1295604 54768 ?       Sl   Sep12   0:15 cloudflared tunnel --url http://localhost:5000 --no-autoupdate
 
 ------ دیسک ------
 Filesystem      Size  Used Avail Use% Mounted on
