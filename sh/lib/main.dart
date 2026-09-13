@@ -5,7 +5,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:ui' show TextDirection;
+import 'dart:ui' as ui;
 
 import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
@@ -185,7 +185,7 @@ Future<String?> askTextDialog(BuildContext context, String title, String hint,
         controller: ctrl,
         obscureText: obscure,
         style: const TextStyle(fontFamily: kFont),
-        decoration: InputDecoration(hintText: hint, hintTextDirection: TextDirection.rtl),
+        decoration: InputDecoration(hintText: hint, hintTextDirection: ui.TextDirection.rtl),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(c), child: const Text('انصراف')),
@@ -472,7 +472,6 @@ class AppState extends ChangeNotifier {
   List<Map> notifications = [];
   Map achDefs = {};
 
-  // Getter برای دسترسی آسان به baseUrl
   String get baseUrl => api.baseUrl;
 
   WebSocketChannel? _uws;
@@ -724,7 +723,7 @@ class PaskarApp extends StatelessWidget {
         titleTextStyle: TextStyle(
             fontFamily: kFont, fontSize: 17, fontWeight: FontWeight.w800, color: PColors.text),
       ),
-      dialogTheme: const DialogThemeData(
+      dialogTheme: DialogThemeData(
         backgroundColor: PColors.panel,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         titleTextStyle: TextStyle(fontFamily: kFont, fontSize: 16, color: PColors.text),
@@ -763,7 +762,7 @@ class PaskarApp extends StatelessWidget {
       theme: _theme(),
       scaffoldMessengerKey: rootMessenger,
       builder: (context, child) => Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: ui.TextDirection.rtl,
         child: Builder(builder: (ctx) => child ?? const SizedBox.shrink()),
       ),
       home: const SplashPage(),
@@ -1125,13 +1124,13 @@ void showConnectionSheet(BuildContext context, AppState app) {
           if (app.api.baseUrl.isNotEmpty)
             Flexible(child: Text(app.api.baseUrl,
                 style: const TextStyle(fontSize: 10, color: PColors.sub), overflow: TextOverflow.ellipsis,
-                textDirection: TextDirection.ltr)),
+                textDirection: ui.TextDirection.ltr)),
         ]),
         const SizedBox(height: 14),
         Text('آدرس سرور (Base URL) — خودکار از گیت‌هاب دریافت می‌شود:',
             style: TextStyle(color: PColors.sub, fontSize: 12)),
         const SizedBox(height: 6),
-        TextField(controller: baseCtrl, textDirection: TextDirection.ltr,
+        TextField(controller: baseCtrl, textDirection: ui.TextDirection.ltr,
             style: const TextStyle(fontFamily: kFont, fontSize: 12),
             decoration: const InputDecoration(hintText: 'https://xxxx.trycloudflare.com')),
         const SizedBox(height: 10),
@@ -1157,7 +1156,7 @@ void showConnectionSheet(BuildContext context, AppState app) {
         const SizedBox(height: 14),
         Text('API Key سرور:', style: TextStyle(color: PColors.sub, fontSize: 12)),
         const SizedBox(height: 6),
-        TextField(controller: keyCtrl, textDirection: TextDirection.ltr,
+        TextField(controller: keyCtrl, textDirection: ui.TextDirection.ltr,
             style: const TextStyle(fontFamily: kFont, fontSize: 12),
             decoration: const InputDecoration(hintText: 'X-API-Key')),
         const SizedBox(height: 16),
@@ -2678,7 +2677,7 @@ class _ScoreBar extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(color: PColors.panel, borderRadius: BorderRadius.circular(12)),
-            child: const Text('VS', style: const TextStyle(fontWeight: FontWeight.w900, color: PColors.gold)),
+            child: const Text('VS', style: TextStyle(fontWeight: FontWeight.w900, color: PColors.gold)),
           ),
           const SizedBox(width: 8),
           _teamBox('تیم حریف', t2, _i(_gf(scores, 'team2')), turn, PColors.red),
@@ -4003,7 +4002,7 @@ class SettingsPage extends StatelessWidget {
               ]),
               const SizedBox(height: 8),
               Text(app.api.baseUrl.isEmpty ? 'آدرسی تنظیم نشده' : app.api.baseUrl,
-                  textDirection: TextDirection.ltr,
+                  textDirection: ui.TextDirection.ltr,
                   style: const TextStyle(fontSize: 10.5, color: PColors.sub)),
               const SizedBox(height: 8),
               GoldBtn(text: '⚙️ مدیریت آدرس سرور و API Key',
