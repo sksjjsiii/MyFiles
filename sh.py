@@ -1692,26 +1692,42 @@ async def get_history(room_id: str, request: Request, _=Depends(require_api_key)
     return {"history": DB["game_history"].get(room_id, [])}
 
 # ============================================================
-# WEBSOCKET: ROOM
+# WEBSOCKET: ROOM (اصلاح شده)
 # ============================================================
 @app.websocket("/ws/room/{room_id}")
 async def ws_room(websocket: WebSocket, room_id: str,
                   username: str = Query(...), api_key: str = Query(...),
                   token: str = Query(...)):
+    # ۱. اول اتصال را می‌پذیریم تا Handshake وب‌سوکت کامل شود
+    await websocket.accept()
+
+    # ۲. حالا اعتبارسنجی‌ها را انجام می‌دهیم
     if api_key != API_KEY:
-        await websocket.close(code=1008, reason="Invalid API Key"); return
+        await websocket.send_json({"type": "error", "message": "API Key نامعتبر است"})
+        await websocket.close(code=1008, reason="Invalid API Key")
+        return
+
     s = DB["sessions"].get(token)
     if not s or s["user"] != username:
-        await websocket.close(code=1008, reason="Invalid session"); return
+        await websocket.send_json({"type": "error", "message": "نشست شما منقضی شده است. دوباره وارد شوید."})
+        await websocket.close(code=1008, reason="Invalid session")
+        return
+
     if room_id not in DB["rooms"]:
-        await websocket.close(code=1008, reason="Room not found"); return
+        await websocket.send_json({"type": "error", "message": "اتاق پیدا نشد. ممکن است حذف شده باشد."})
+        await websocket.close(code=1008, reason="Room not found")
+        return
+
     r = DB["rooms"][room_id]
     is_player = username in r["players"]
     is_spec = username in MANAGER.spectators.get(room_id, set())
-    if not (is_player or is_spec):
-        await websocket.close(code=1008, reason="Not in room"); return
 
-    await websocket.accept()
+    if not (is_player or is_spec):
+        await websocket.send_json({"type": "error", "message": "شما در این اتاق عضو نیستید."})
+        await websocket.close(code=1008, reason="Not in room")
+        return
+
+    # ادامه کدهای قبلی...
     await MANAGER.connect_room(room_id, username, websocket, spectator=is_spec)
     MANAGER.online.add(username)
 
@@ -1948,17 +1964,27 @@ async def _handle_chat_command(room_id: str, username: str, ws: WebSocket, text:
         await ws.send_json({"type": "error", "message": f"دستور ناشناخته: {cmd}"})
 
 # ============================================================
-# WEBSOCKET: USER (NOTIFICATIONS)
+# WEBSOCKET: USER (NOTIFICATIONS) - اصلاح شده
 # ============================================================
 @app.websocket("/ws/user")
 async def ws_user(websocket: WebSocket, username: str = Query(...),
                   api_key: str = Query(...), token: str = Query(...)):
+    # ۱. اول اتصال را می‌پذیریم
+    await websocket.accept()
+
+    # ۲. سپس اعتبارسنجی
     if api_key != API_KEY:
-        await websocket.close(code=1008, reason="Invalid API Key"); return
+        await websocket.send_json({"type": "error", "message": "API Key نامعتبر است"})
+        await websocket.close(code=1008, reason="Invalid API Key")
+        return
+
     s = DB["sessions"].get(token)
     if not s or s["user"] != username:
-        await websocket.close(code=1008, reason="Invalid session"); return
-    await websocket.accept()
+        await websocket.send_json({"type": "error", "message": "نشست شما منقضی شده است. دوباره وارد شوید."})
+        await websocket.close(code=1008, reason="Invalid session")
+        return
+
+    # ادامه کدهای قبلی...
     await MANAGER.connect_user(username, websocket)
     try:
         await websocket.send_json({"type": "hello", "username": username})
