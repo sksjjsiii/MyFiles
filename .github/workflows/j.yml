@@ -49,16 +49,35 @@ jobs:
       - name: Configure xrdp
         run: |
           sudo sed -i 's/^new_cursors=true/new_cursors=false/' /etc/xrdp/xrdp.ini || true
-          # Allow any authenticated user to start a session
-          sudo bash -c 'cat > /etc/polkit-1/localauthority/50-local.d/45-allow-colord.pkla << EOF
-          [Allow Colord all Users]
-          Identity=unix-user:*
-          Action=org.freedesktop.color-manager.create-device;org.freedesktop.color-manager.create-profile;org.freedesktop.color-manager.delete-device;org.freedesktop.color-manager.delete-profile;org.freedesktop.color-manager.modify-device;org.freedesktop.color-manager.modify-profile
-          ResultAny=no
-          ResultInactive=no
-          ResultActive=yes
-          EOF'
+
+          # polkit rule (new format for Ubuntu 24.04+) to allow colord without auth
+          sudo mkdir -p /etc/polkit-1/rules.d
+          sudo tee /etc/polkit-1/rules.d/45-allow-colord.rules > /dev/null << 'EOF'
+          polkit.addRule(function(action, subject) {
+            if ((action.id == "org.freedesktop.color-manager.create-device" ||
+                 action.id == "org.freedesktop.color-manager.create-profile" ||
+                 action.id == "org.freedesktop.color-manager.delete-device" ||
+                 action.id == "org.freedesktop.color-manager.delete-profile" ||
+                 action.id == "org.freedesktop.color-manager.modify-device" ||
+                 action.id == "org.freedesktop.color-manager.modify-profile") &&
+                subject.isInGroup("sudo")) {
+              return polkit.Result.YES;
+            }
+          });
+          EOF
+
+          # Also allow any user in sudo group to manage polkit actions
+          sudo tee /etc/polkit-1/rules.d/49-nopasswd_global.rules > /dev/null << 'EOF'
+          polkit.addRule(function(action, subject) {
+            if (subject.isInGroup("sudo")) {
+              return polkit.Result.YES;
+            }
+          });
+          EOF
+
+          sudo systemctl restart polkit || true
           sudo systemctl restart xrdp
+
           # Wait for port 3389 to be listening
           for i in $(seq 1 30); do
             if sudo ss -tlnp | grep -q ':3389'; then
@@ -89,7 +108,6 @@ jobs:
             sleep 1
             nohup bore local 3389 --to bore.pub > "$OUT_LOG" 2> "$ERR_LOG" &
             sleep 8
-            # Strip ANSI escape sequences and parse the port
             CLEAN=$(cat "$OUT_LOG" "$ERR_LOG" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')
             PORT=$(echo "$CLEAN" | grep -oP 'listening at \S+:\K[0-9]+' | head -n1)
             if [ -n "$PORT" ]; then
