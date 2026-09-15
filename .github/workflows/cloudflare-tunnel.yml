@@ -4,25 +4,209 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      previous_run:
+        description: 'Run ID of previous run (0 if none)'
+        required: false
+        default: '0'
+  schedule:
+    # safety-net روزانه
+    - cron: '0 3 * * *'
 
 jobs:
   cloudflared:
     runs-on: ubuntu-latest
+    timeout-minutes: 360
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          fetch-depth: 1
+
+      # ── فقط برای push / schedule: اگه زنجیره زنده‌ست، اجرا نشو ──
+      #    (workflow_dispatch همیشه اجرا می‌شه، چون زنجیره از همین راه trigger می‌کنه)
+      - name: Chain health check
+        id: check
+        if: github.event_name != 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          COUNT=$(gh run list \
+            --workflow=cloudflare-tunnel.yml \
+            --repo "${{ github.repository }}" \
+            --limit 20 \
+            --json databaseId,status \
+          | python3 -c "import sys,json; d=json.load(sys.stdin); print(len([r for r in d if r['status']!='completed' and str(r['databaseId'])!='${{ github.run_id }}']))")
+          echo "Active sibling runs: $COUNT"
+          if [ "$COUNT" -gt 0 ]; then
+            echo "skip=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Install cloudflared
+        if: steps.check.outputs.skip != 'true'
         run: |
           curl -sL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
           sudo dpkg -i cloudflared.deb
           cloudflared --version
 
-      - name: Start web server on port 8080
+      - name: Configure git
+        if: steps.check.outputs.skip != 'true'
         run: |
-          nohup python3 -m http.server 8080 --bind 0.0.0.0 > /tmp/webserver.log 2>&1 &
-          sleep 2
-          curl -s http://localhost:8080 | head -n 5
+          git config user.name  "runner-bot"
+          git config user.email "runner-bot@users.noreply.github.com"
 
-      - name: Run tunnel
-        run: cloudflared tunnel run --token "${{ secrets.TUNNEL_TOKEN }}"
+      # ═══════════════════════════════════════════════════════════
+      #  اجرای وب‌سرور + تونل نام‌دار + نگهبانی + زنجیره ۲۴/۷
+      # ═══════════════════════════════════════════════════════════
+      - name: Run server + tunnel + guard + handoff
+        if: steps.check.outputs.skip != 'true'
+        env:
+          GH_TOKEN:     ${{ secrets.PAT_TOKEN }}
+          TUNNEL_TOKEN: ${{ secrets.TUNNEL_TOKEN }}
+          REF_NAME:     ${{ github.ref_name }}
+          PREV:         ${{ inputs.previous_run }}
+          CUR:          ${{ github.run_id }}
+          REPO:         ${{ github.repository }}
+        run: |
+          set +e
+
+          # ── helper: push heartbeat.txt ──
+          push_heartbeat() {
+            echo "$CUR" > heartbeat.txt
+            git add -f heartbeat.txt
+            if git diff --cached --quiet; then return 0; fi
+            git commit -m "heartbeat $CUR [skip ci]" -q
+            for i in 1 2 3 4 5; do
+              if git push -q origin "HEAD:$REF_NAME" 2>/dev/null; then
+                echo "✓ heartbeat pushed: $CUR"
+                return 0
+              fi
+              git pull --rebase -q origin "$REF_NAME" 2>/dev/null || true
+              sleep 3
+            done
+            echo "✗ heartbeat push failed"
+            return 1
+          }
+
+          # ── helper: خواندن heartbeat.txt از ریموت ──
+          remote_heartbeat() {
+            git fetch -q origin "$REF_NAME" 2>/dev/null || return 1
+            git show "FETCH_HEAD:heartbeat.txt" 2>/dev/null | tr -d '\n\r'
+          }
+
+          # ── استارت وب‌سرور روی ۸۰۸۰ ──
+          echo "▶ Starting http.server on :8080 ..."
+          nohup python3 -m http.server 8080 --bind 0.0.0.0 > /tmp/webserver.log 2>&1 &
+          WEB_PID=$!
+          sleep 2
+          curl -s http://localhost:8080 | head -n 3 || true
+
+          # ── استارت تونل نام‌دار ──
+          echo "▶ Starting cloudflared named tunnel ..."
+          cloudflared tunnel run --token "$TUNNEL_TOKEN" > /tmp/cloudflared.log 2>&1 &
+          CF_PID=$!
+          sleep 8
+
+          # ── heartbeat: علامت زنده بودن این اجرا ──
+          push_heartbeat
+
+          # ── کنسل کردن اجرای قبلی (اگه داده شده) ──
+          if [ -n "$PREV" ] && [ "$PREV" != "0" ]; then
+            echo "Cancelling previous run $PREV ..."
+            gh run cancel "$PREV" --repo "$REPO" 2>/dev/null || true
+          fi
+
+          # ═══════════════════════════════════════════════════════════
+          #                   نگهبانی + Handoff
+          # ═══════════════════════════════════════════════════════════
+          START=$(date +%s)
+          HANDOFF_AT=$(( 340 * 60 ))     # دقیقه ۳۴۰
+          NEXT_TRIGGERED=0
+          LAST_ATTEMPT=0
+          TRIGGER_TIME=0
+
+          echo "🛡️  Guard loop started at $(date -u) — handoff at ${HANDOFF_AT}s"
+
+          while true; do
+            NOW=$(date +%s)
+            ELAPSED=$(( NOW - START ))
+
+            # ──────── Handoff ────────
+            if [ "$ELAPSED" -ge "$HANDOFF_AT" ]; then
+
+              # ۱) اجرای بعدی رو trigger کن
+              if [ "$NEXT_TRIGGERED" = "0" ] && [ $(( NOW - LAST_ATTEMPT )) -ge 60 ]; then
+                LAST_ATTEMPT=$NOW
+                echo "[$(date -u)] ⏰ Handoff — triggering next run ..."
+                if gh workflow run cloudflare-tunnel.yml \
+                     --repo "$REPO" --ref "$REF_NAME" \
+                     -f previous_run="$CUR"; then
+                  NEXT_TRIGGERED=1
+                  TRIGGER_TIME=$NOW
+                  echo "✓ Next run triggered"
+                else
+                  echo "✗ trigger failed, retry in 60s"
+                fi
+              fi
+
+              # ۲) منتظر سیگنال تحویل
+              if [ "$NEXT_TRIGGERED" = "1" ]; then
+                REMOTE=$(remote_heartbeat)
+                HANDED_OFF=0
+
+                # سیگنال اصلی: heartbeat عوض شده
+                if [ -n "$REMOTE" ] && [ "$REMOTE" != "$CUR" ]; then
+                  echo "[$(date -u)] ✅ New run is live — heartbeat=$REMOTE"
+                  HANDED_OFF=1
+                fi
+
+                # سیگنال پشتیبان: یه اجرای دیگه ۵+ دقیقه‌ست in_progress
+                if [ "$HANDED_OFF" = "0" ] && [ $(( NOW - TRIGGER_TIME )) -ge 300 ]; then
+                  OTHER=$(gh run list \
+                    --workflow=cloudflare-tunnel.yml --repo "$REPO" --limit 10 \
+                    --json databaseId,status \
+                    --jq "[.[] | select(.status==\"in_progress\" and (.databaseId|tostring) != \"$CUR\")] | length" \
+                    2>/dev/null)
+                  if [ -n "$OTHER" ] && [ "$OTHER" -ge 1 ] 2>/dev/null; then
+                    echo "[$(date -u)] ✅ Backup signal: another run is in_progress"
+                    HANDED_OFF=1
+                  fi
+                fi
+
+                # ۳) اگه تحویل کامل شد، خودت رو کنسل کن
+                if [ "$HANDED_OFF" = "1" ]; then
+                  echo "[$(date -u)] 🛑 Cancelling self ($CUR)"
+                  gh run cancel "$CUR" --repo "$REPO" 2>/dev/null || true
+                  exit 0
+                fi
+
+                # ۴) اگه ۲۵ دقیقه سیگنالی نیامد، trigger رو دوباره امتحان کن
+                if [ $(( NOW - TRIGGER_TIME )) -ge 1500 ]; then
+                  echo "⚠ Handoff timeout — resetting trigger flag"
+                  NEXT_TRIGGERED=0
+                fi
+              fi
+            fi
+
+            # ──────── نگهبانی وب‌سرور ────────
+            if ! kill -0 "$WEB_PID" 2>/dev/null; then
+              echo "[$(date -u)] ⚠ http.server died → restart"
+              nohup python3 -m http.server 8080 --bind 0.0.0.0 > /tmp/webserver.log 2>&1 &
+              WEB_PID=$!
+              sleep 2
+            fi
+
+            # ──────── نگهبانی تونل ────────
+            if ! kill -0 "$CF_PID" 2>/dev/null; then
+              echo "[$(date -u)] ⚠ cloudflared died → restart"
+              cloudflared tunnel run --token "$TUNNEL_TOKEN" > /tmp/cloudflared.log 2>&1 &
+              CF_PID=$!
+              sleep 8
+            fi
+
+            sleep 30
+          done
