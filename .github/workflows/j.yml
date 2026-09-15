@@ -1,0 +1,226 @@
+name: Ubuntu RDP with bore (Auto-Update README)
+
+on:
+  workflow_dispatch:
+    inputs:
+      session_minutes:
+        description: 'Duration in minutes'
+        required: true
+        default: '120'
+
+jobs:
+  rdp-tunnel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install xrdp and XFCE
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xrdp xfce4 xfce4-goodies dbus-x11
+          sudo adduser xrdp ssl-cert || true
+          sudo systemctl enable xrdp
+          sudo systemctl start xrdp
+          sudo systemctl status xrdp --no-pager || true
+
+      - name: Create user
+        env:
+          RDP_USERNAME: ${{ secrets.RDP_USERNAME }}
+          RDP_PASSWORD: ${{ secrets.RDP_PASSWORD }}
+        run: |
+          if id "$RDP_USERNAME" &>/dev/null; then
+            sudo pkill -u "$RDP_USERNAME" || true
+            sudo userdel -r "$RDP_USERNAME" || true
+          fi
+          sudo useradd -m -s /bin/bash "$RDP_USERNAME"
+          echo "$RDP_USERNAME:$RDP_PASSWORD" | sudo chpasswd
+          sudo adduser "$RDP_USERNAME" sudo
+          sudo adduser "$RDP_USERNAME" ssl-cert || true
+          echo "xfce4-session" | sudo tee "/home/$RDP_USERNAME/.xsession" > /dev/null
+          sudo chown "$RDP_USERNAME:$RDP_USERNAME" "/home/$RDP_USERNAME/.xsession"
+          sudo chmod +x "/home/$RDP_USERNAME/.xsession"
+          echo "User $RDP_USERNAME created and RDP enabled."
+
+      - name: Configure xrdp
+        run: |
+          sudo sed -i 's/^new_cursors=true/new_cursors=false/' /etc/xrdp/xrdp.ini || true
+          # Allow any authenticated user to start a session
+          sudo bash -c 'cat > /etc/polkit-1/localauthority/50-local.d/45-allow-colord.pkla << EOF
+          [Allow Colord all Users]
+          Identity=unix-user:*
+          Action=org.freedesktop.color-manager.create-device;org.freedesktop.color-manager.create-profile;org.freedesktop.color-manager.delete-device;org.freedesktop.color-manager.delete-profile;org.freedesktop.color-manager.modify-device;org.freedesktop.color-manager.modify-profile
+          ResultAny=no
+          ResultInactive=no
+          ResultActive=yes
+          EOF'
+          sudo systemctl restart xrdp
+          # Wait for port 3389 to be listening
+          for i in $(seq 1 30); do
+            if sudo ss -tlnp | grep -q ':3389'; then
+              echo "xrdp is listening on 3389"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Install bore
+        run: |
+          wget -q https://github.com/ekzhang/bore/releases/download/v0.5.2/bore-v0.5.2-x86_64-unknown-linux-musl.tar.gz
+          tar -xzf bore-v0.5.2-x86_64-unknown-linux-musl.tar.gz
+          sudo mv bore /usr/local/bin/bore
+          sudo chmod +x /usr/local/bin/bore
+          bore --version
+
+      - name: Create bore runner script
+        run: |
+          cat > bore_runner.sh << 'EOF'
+          #!/bin/bash
+          OUT_LOG="bore_out.log"
+          ERR_LOG="bore_err.log"
+          TUNNEL_HOST="bore.pub"
+
+          start_bore() {
+            pkill -f "bore local 3389" 2>/dev/null || true
+            sleep 1
+            nohup bore local 3389 --to bore.pub > "$OUT_LOG" 2> "$ERR_LOG" &
+            sleep 8
+            # Strip ANSI escape sequences and parse the port
+            CLEAN=$(cat "$OUT_LOG" "$ERR_LOG" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')
+            PORT=$(echo "$CLEAN" | grep -oP 'listening at \S+:\K[0-9]+' | head -n1)
+            if [ -n "$PORT" ]; then
+              printf "host=%s\nport=%s\n" "$TUNNEL_HOST" "$PORT" > connection.txt
+              echo "Tunnel established on port $PORT"
+              echo "$PORT"
+              return 0
+            fi
+            return 1
+          }
+
+          # Keep-alive probe every 30s
+          (
+            while true; do
+              (echo > /dev/tcp/127.0.0.1/3389) 2>/dev/null || true
+              sleep 30
+            done
+          ) &
+
+          # Start bore for the first time
+          PORT=$(start_bore)
+          if [ -z "$PORT" ]; then
+            echo "ERROR: Could not start bore."
+            exit 1
+          fi
+
+          # Monitor loop
+          while true; do
+            sleep 30
+            if ! pgrep -f "bore local 3389" > /dev/null; then
+              echo "Bore stopped. Restarting..."
+              PORT=$(start_bore)
+            fi
+          done
+          EOF
+          chmod +x bore_runner.sh
+          echo "bore_runner.sh created."
+
+      - name: Start bore tunnel (detached)
+        run: |
+          setsid ./bore_runner.sh > bore_runner.log 2>&1 < /dev/null &
+          echo "Bore runner started in background."
+
+          echo "Waiting for tunnel to be ready..."
+          for i in $(seq 1 30); do
+            if [ -f connection.txt ]; then break; fi
+            sleep 1
+          done
+          if [ -f connection.txt ]; then
+            echo "Tunnel is ready."
+          else
+            echo "WARNING: Tunnel may not have started. Will try to continue."
+          fi
+
+      - name: Update README.md
+        env:
+          RDP_USERNAME: ${{ secrets.RDP_USERNAME }}
+        run: |
+          if [ ! -f connection.txt ]; then
+            echo "ERROR: connection.txt not found."
+            exit 1
+          fi
+
+          HOST=$(grep '^host=' connection.txt | cut -d= -f2)
+          PORT=$(grep '^port=' connection.txt | cut -d= -f2)
+          CONNECTION_STRING="${HOST}:${PORT}"
+          EXPIRY=$(date -u -d "+${{ github.event.inputs.session_minutes }} minutes" '+%Y-%m-%d %H:%M:%S UTC')
+
+          NEW_SECTION="## Ubuntu RDP Access\n"
+          NEW_SECTION+="**Connection Address:** \`$CONNECTION_STRING\`  \n"
+          NEW_SECTION+="**Username:** \`$RDP_USERNAME\`  \n"
+          NEW_SECTION+="**Password:** (stored in GitHub Secrets)  \n"
+          NEW_SECTION+="**Expires:** $EXPIRY  \n"
+
+          if [ ! -f README.md ]; then
+            printf "%b" "$NEW_SECTION" > README.md
+          else
+            if grep -q '## Ubuntu RDP Access' README.md; then
+              awk '/## Ubuntu RDP Access/{exit} {print}' README.md > README.tmp
+              printf "%b" "$NEW_SECTION" >> README.tmp
+              mv README.tmp README.md
+            else
+              printf "\n%b" "$NEW_SECTION" >> README.md
+            fi
+          fi
+          echo "README.md updated."
+
+      - name: Commit and push README.md
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "Update RDP access info [skip ci]" --allow-empty
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Display connection info
+        env:
+          RDP_USERNAME: ${{ secrets.RDP_USERNAME }}
+        run: |
+          HOST=$(grep '^host=' connection.txt | cut -d= -f2)
+          PORT=$(grep '^port=' connection.txt | cut -d= -f2)
+          echo ""
+          echo "======================================================"
+          echo "  UBUNTU RDP READY FOR ANDROID"
+          echo "======================================================"
+          echo "  Host: $HOST"
+          echo "  Port: $PORT"
+          echo "  Username: $RDP_USERNAME"
+          echo "  Password: (your secret)"
+          echo "======================================================"
+          echo ""
+          echo "In Microsoft Remote Desktop on Android:"
+          echo "  PC Name: $HOST:$PORT"
+          echo "  User Name: $RDP_USERNAME"
+          echo ""
+          echo "This info is also in README.md at the root of the repo."
+
+      - name: Keep session alive
+        run: |
+          DURATION=${{ github.event.inputs.session_minutes }}
+          END_TIME=$(( $(date +%s) + DURATION * 60 ))
+          echo "Session will stay active for $DURATION minutes."
+          while [ "$(date +%s)" -lt "$END_TIME" ]; do
+            REMAINING=$(( END_TIME - $(date +%s) ))
+            printf "Remaining %02d:%02d:%02d | %s\n" \
+              $((REMAINING/3600)) \
+              $(((REMAINING%3600)/60)) \
+              $((REMAINING%60)) \
+              "$(date -u +%H:%M:%S)"
+            sleep 60
+          done
+          echo "Time is up."
