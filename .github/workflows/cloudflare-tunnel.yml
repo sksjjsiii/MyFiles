@@ -18,5 +18,11 @@ jobs:
           sudo dpkg -i cloudflared.deb
           cloudflared --version
 
+      - name: Start web server on port 8080
+        run: |
+          nohup python3 -m http.server 8080 --bind 0.0.0.0 > /tmp/webserver.log 2>&1 &
+          sleep 2
+          curl -s http://localhost:8080 | head -n 5
+
       - name: Run tunnel
         run: cloudflared tunnel run --token "${{ secrets.TUNNEL_TOKEN }}"
