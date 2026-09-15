@@ -1,0 +1,22 @@
+name: Cloudflare Named Tunnel
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  cloudflared:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install cloudflared
+        run: |
+          curl -sL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
+          sudo dpkg -i cloudflared.deb
+          cloudflared --version
+
+      - name: Run tunnel
+        run: cloudflared tunnel run --token "${{ secrets.TUNNEL_TOKEN }}"
