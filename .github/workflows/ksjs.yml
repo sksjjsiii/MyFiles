@@ -26,11 +26,34 @@ jobs:
           netsh advfirewall firewall set rule group="Remote Desktop" new enable=yes
           reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v UserAuthentication /t REG_DWORD /d 0 /f
 
+          # --- غیرفعال کردن سیاست پیچیدگی پسورد ---
+          $secPolLines = @(
+            '[Unicode]',
+            'Unicode=yes',
+            '[System Access]',
+            'MinimumPasswordLength = 0',
+            'PasswordComplexity = 0',
+            'PasswordHistorySize = 0',
+            'MaximumPasswordAge = -1',
+            'MinimumPasswordAge = 0'
+          )
+          $infPath = "$env:TEMP\secpol.inf"
+          $secPolLines -join "`r`n" | Out-File -FilePath $infPath -Encoding unicode
+          secedit /configure /db "$env:TEMP\secpol.sdb" /cfg $infPath /areas SECURITYPOLICY /quiet
+          Remove-Item $infPath -Force -ErrorAction SilentlyContinue
+          Write-Host "Password complexity policy disabled."
+
+          # --- ساخت کاربر RDP ---
           $username = "rdpuser"
           $password = "${{ secrets.RDP_PASSWORD }}"
 
           if ([string]::IsNullOrWhiteSpace($password)) {
             Write-Host "ERROR: RDP_PASSWORD secret is empty. Please set it in GitHub Secrets."
+            exit 1
+          }
+
+          if ($password.Length -lt 6) {
+            Write-Host "ERROR: Password must be at least 6 characters long."
             exit 1
           }
 
@@ -40,12 +63,13 @@ jobs:
 
           try {
             $securePass = ConvertTo-SecureString $password -AsPlainText -Force
-            New-LocalUser -Name $username -Password $securePass -FullName "Remote Desktop User" -PasswordNeverExpires
+            New-LocalUser -Name $username -Password $securePass -FullName "Remote Desktop User" -PasswordNeverExpires -ErrorAction Stop
             Add-LocalGroupMember -Group "Administrators" -Member $username
             Add-LocalGroupMember -Group "Remote Desktop Users" -Member $username
             Write-Host "User '$username' created and RDP enabled."
           } catch {
-            Write-Host "ERROR: $_"
+            Write-Host "ERROR: $($_.Exception.Message)"
+            Write-Host "Full error: $_"
             exit 1
           }
 
