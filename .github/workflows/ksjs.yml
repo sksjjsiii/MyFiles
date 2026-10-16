@@ -26,7 +26,7 @@ jobs:
           netsh advfirewall firewall set rule group="Remote Desktop" new enable=yes
           reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v UserAuthentication /t REG_DWORD /d 0 /f
 
-          # --- غیرفعال کردن سیاست پیچیدگی پسورد ---
+          # --- غیرفعال کردن سیاست پیچیدگی پسورد (روش ۱: secedit) ---
           $secPolLines = @(
             '[Unicode]',
             'Unicode=yes',
@@ -41,7 +41,21 @@ jobs:
           $secPolLines -join "`r`n" | Out-File -FilePath $infPath -Encoding unicode
           secedit /configure /db "$env:TEMP\secpol.sdb" /cfg $infPath /areas SECURITYPOLICY /quiet
           Remove-Item $infPath -Force -ErrorAction SilentlyContinue
-          Write-Host "Password complexity policy disabled."
+          Write-Host "Password complexity policy disabled via secedit."
+
+          # --- غیرفعال کردن سیاست پیچیدگی پسورد (روش ۲: رجیستری مستقیم) ---
+          $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa"
+          Set-ItemProperty -Path $regPath -Name "PasswordComplexity" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path $regPath -Name "LimitBlankPasswordUse" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+          Write-Host "Registry password complexity overridden."
+
+          # --- بررسی سیاست اعمال‌شده ---
+          secedit /export /cfg "$env:TEMP\verify.cfg" /areas SECURITYPOLICY 2>&1 | Out-Null
+          $cfg = Get-Content "$env:TEMP\verify.cfg" -Raw -ErrorAction SilentlyContinue
+          if ($cfg -match 'PasswordComplexity\s*=\s*(\d)') {
+            Write-Host "Current PasswordComplexity = $($matches[1])"
+          }
+          Remove-Item "$env:TEMP\verify.cfg" -Force -ErrorAction SilentlyContinue
 
           # --- ساخت کاربر RDP ---
           $username = "rdpuser"
@@ -57,19 +71,65 @@ jobs:
             exit 1
           }
 
-          if (Get-LocalUser -Name $username -ErrorAction SilentlyContinue) {
-            Remove-LocalUser -Name $username
+          # حذف کاربر قبلی در صورت وجود
+          $existing = Get-LocalUser -Name $username -ErrorAction SilentlyContinue
+          if ($existing) {
+            Remove-LocalUser -Name $username -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 2
           }
 
+          # --- روش ۱: net user (API متفاوت، احتمال موفقیت بالاتر) ---
+          Write-Host "Attempting to create user with 'net user'..."
+          $netResult = net user $username $password /add /passwordchg:no /expires:never 2>&1
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "User '$username' created via 'net user'."
+          } else {
+            Write-Host "net user failed (exit $LASTEXITCODE): $netResult"
+            Write-Host "Trying New-LocalUser as fallback..."
+
+            # --- روش ۲: New-LocalUser به عنوان fallback ---
+            try {
+              $securePass = ConvertTo-SecureString $password -AsPlainText -Force
+              New-LocalUser -Name $username -Password $securePass -FullName "Remote Desktop User" `
+                -PasswordNeverExpires -AccountNeverExpires -ErrorAction Stop
+              Write-Host "User '$username' created via New-LocalUser."
+            } catch {
+              Write-Host "New-LocalUser also failed: $($_.Exception.Message)"
+
+              # --- روش ۳: WMI/ADSI به عنوان آخرین راه‌حل ---
+              Write-Host "Trying ADSI/WMI Win32_UserAccount..."
+              try {
+                $computer = [ADSI]"WinNT://$env:COMPUTERNAME"
+                $newUser = $computer.Create("User", $username)
+                $newUser.SetPassword($password)
+                $newUser.SetInfo()
+                $newUser.Description = "Remote Desktop User"
+                $newUser.SetInfo()
+                $newUser.UserFlags = 0x10000  # DONT_EXPIRE_PASSWD
+                $newUser.SetInfo()
+                Write-Host "User '$username' created via ADSI/WMI."
+              } catch {
+                Write-Host "All methods failed: $($_.Exception.Message)"
+                exit 1
+              }
+            }
+          }
+
+          # --- اضافه کردن به گروه‌ها ---
           try {
-            $securePass = ConvertTo-SecureString $password -AsPlainText -Force
-            New-LocalUser -Name $username -Password $securePass -FullName "Remote Desktop User" -PasswordNeverExpires -ErrorAction Stop
-            Add-LocalGroupMember -Group "Administrators" -Member $username
-            Add-LocalGroupMember -Group "Remote Desktop Users" -Member $username
-            Write-Host "User '$username' created and RDP enabled."
+            Add-LocalGroupMember -Group "Administrators" -Member $username -ErrorAction SilentlyContinue
+            Add-LocalGroupMember -Group "Remote Desktop Users" -Member $username -ErrorAction SilentlyContinue
+            Write-Host "User '$username' added to Administrators and Remote Desktop Users."
           } catch {
-            Write-Host "ERROR: $($_.Exception.Message)"
-            Write-Host "Full error: $_"
+            Write-Host "Warning: Could not add to some groups: $($_.Exception.Message)"
+          }
+
+          # --- تأیید نهایی ---
+          $finalUser = Get-LocalUser -Name $username -ErrorAction SilentlyContinue
+          if ($finalUser) {
+            Write-Host "SUCCESS: User '$username' exists. Enabled: $($finalUser.Enabled)"
+          } else {
+            Write-Host "ERROR: User '$username' was not created!"
             exit 1
           }
 
