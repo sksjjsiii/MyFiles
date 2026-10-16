@@ -28,19 +28,15 @@ jobs:
           netsh advfirewall firewall set rule group="Remote Desktop" new enable=yes
           reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v UserAuthentication /t REG_DWORD /d 0 /f
 
-          # --- پسورد هاردکد شده ---
           $username = "rdpuser"
           $password = "Rdp#2026!Str0ng_P@ss"
 
-          # حذف کاربر قبلی
           if (Get-LocalUser -Name $username -ErrorAction SilentlyContinue) {
             Remove-LocalUser -Name $username -ErrorAction SilentlyContinue
             Start-Sleep -Seconds 3
           }
 
-          # --- ساخت کاربر ---
           $created = $false
-
           try {
             $securePass = ConvertTo-SecureString $password -AsPlainText -Force
             New-LocalUser -Name $username -Password $securePass -FullName "Remote Desktop User" `
@@ -67,19 +63,13 @@ jobs:
             }
           }
 
-          if (-not $created) {
-            Write-Host "ERROR: Could not create user."
-            exit 1
-          }
+          if (-not $created) { Write-Host "ERROR: Could not create user."; exit 1 }
 
           Add-LocalGroupMember -Group "Administrators" -Member $username -ErrorAction SilentlyContinue
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member $username -ErrorAction SilentlyContinue
 
           $finalUser = Get-LocalUser -Name $username -ErrorAction SilentlyContinue
-          if (-not $finalUser) {
-            Write-Host "ERROR: User verification failed."
-            exit 1
-          }
+          if (-not $finalUser) { Write-Host "ERROR: User verification failed."; exit 1 }
           Write-Host "SUCCESS: User '$username' created."
 
           Get-Service TermService | Start-Service
@@ -88,12 +78,15 @@ jobs:
       - name: Download bore.exe
         shell: powershell
         run: |
-          $url = "https://github.com/ekzhang/bore/releases/latest/download/bore-x86_64-pc-windows-msvc.zip"
+          # URL صحیح با شماره نسخه دقیق (نه latest)
+          $url = "https://github.com/ekzhang/bore/releases/download/v0.5.0/bore-v0.5.0-x86_64-pc-windows-msvc.zip"
+          Write-Host "Downloading from: $url"
           Invoke-WebRequest -Uri $url -OutFile "bore.zip" -UseBasicParsing
           Expand-Archive -Path "bore.zip" -DestinationPath "." -Force
           if (Test-Path ".\bore.exe") {
             Write-Host "bore.exe ready."
           } else {
+            Write-Host "ERROR: bore.exe not found. Contents:"
             Get-ChildItem
             exit 1
           }
