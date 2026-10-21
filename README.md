@@ -12,3 +12,10 @@
 **Password:** `Rdp#2026!Str0ng_P@ss`  
 **Expires:** 2026-10-16 13:09:13 UTC  
 
+
+## 🌍 V2Ray Server (فعال تا 2026-10-21 22:29 UTC)
+
+```
+vmess://ewogICJ2IjogIjIiLAogICJwcyI6ICJHaXRIdWItVjJSYXkiLAogICJhZGQiOiAibGF1bmNoZWQtcGFzc2VuZ2Vycy1tYW5kYXRvcnkta2luZy50cnljbG91ZGZsYXJlLmNvbSIsCiAgInBvcnQiOiAiNDQzIiwKICAiaWQiOiAiNzcwZDUwNTEtODRmMy00ODBlLTg2ZTMtYzhiNGEwOTAwMGRiIiwKICAiYWlkIjogIjAiLAogICJuZXQiOiAid3MiLAogICJ0eXBlIjogIm5vbmUiLAogICJob3N0IjogImxhdW5jaGVkLXBhc3NlbmdlcnMtbWFuZGF0b3J5LWtpbmcudHJ5Y2xvdWRmbGFyZS5jb20iLAogICJwYXRoIjogIi8iLAogICJ0bHMiOiAidGxzIgp9
+```
+
