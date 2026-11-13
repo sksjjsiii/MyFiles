@@ -30,11 +30,16 @@ jobs:
           git clone https://github.com/robertkirkman/termux-generator.git
           cd termux-generator
           chmod +x build-termux.sh
+          
+          # کلون کردن سورس‌های خام ترموکس در کنار اسکریپت تا خطای عدم وجود پوشه رخ ندهد
+          git clone --depth 1 https://github.com/termux/termux-app.git termux-apps-main
+          git clone --depth 1 https://github.com/termux/termux-api.git termux-packages-main
+          git clone --depth 1 https://github.com/termux/termux-boot.git termux-boot-main
 
       - name: Generate Termux Source with Custom Package Name
         run: |
           cd termux-generator
-          # غیرفعال کردن تمام ساب‌پروژه‌های اضافی و ساخت فقط اپ اصلی ترموکس
+          # اجرای اسکریپت با نام پکیج اختصاصی
           ./build-termux.sh \
             --name com.andoco.app \
             --architectures aarch64 \
