@@ -21,6 +21,16 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      # مرحله حیاتی: تأیید خودکار لایسنس‌ها با دستور yes
+      - name: Accept Android SDK Licenses Automatically
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
+      # نصب پکیج‌های ضروری اندروید (نسخه ۳۴)
+      - name: Install Required Android SDK Packages
+        run: |
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+
       - name: Clone and Prepare termux-generator
         run: |
           git clone https://github.com/robertkirkman/termux-generator.git
@@ -30,6 +40,7 @@ jobs:
       - name: Generate Termux Source with Custom Package Name
         run: |
           cd termux-generator
+          # ساختن سورس با پکیج نیم اختصاصی
           ./build-termux.sh --name com.andoco.app --architectures aarch64 --dirty
 
       - name: Locate Termux Source
@@ -37,6 +48,10 @@ jobs:
         run: |
           cd termux-generator
           TERMUX_SRC=$(find . -maxdepth 3 -type d -name "termux-app" | head -1)
+          if [ -z "$TERMUX_SRC" ]; then
+            echo "Termux source directory not found!"
+            exit 1
+          fi
           echo "TERMUX_SRC=$TERMUX_SRC" >> $GITHUB_ENV
           echo "Found source at: $TERMUX_SRC"
 
@@ -45,11 +60,9 @@ jobs:
           cd termux-generator
           SRC="$TERMUX_SRC"
           
-          # ۱. اطمینان از وجود پوشه و مسیر صحیح برای جاوا
+          # ۱. ساخت مسیر پکیج و فایل WebViewActivity.java
           PKG_PATH="$SRC/app/src/main/java/com/andoco/app"
           mkdir -p "$PKG_PATH/webview"
-
-          # ۲. ساخت فایل WebViewActivity.java
           cat > "$PKG_PATH/webview/WebViewActivity.java" << 'EOF'
           package com.andoco.app.webview;
 
@@ -60,63 +73,37 @@ jobs:
           import android.widget.Toast;
 
           public class WebViewActivity extends Activity {
-              private WebView webView;
-
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  
-                  webView = new WebView(this);
+                  WebView webView = new WebView(this);
                   webView.getSettings().setJavaScriptEnabled(true);
                   webView.getSettings().setDomStorageEnabled(true);
                   webView.setWebViewClient(new WebViewClient());
-                  
-                  // رفتن به لوکال هاست
                   webView.loadUrl("http://127.0.0.1:4096");
                   setContentView(webView);
-                  
                   Toast.makeText(this, "Connecting to OpenCode...", Toast.LENGTH_SHORT).show();
               }
           }
           EOF
 
-          # ۳. ثبت اکتیویتی در AndroidManifest.xml و اضافه کردن Cleartext
+          # ۲. ثبت اکتیویتی در Manifest و فعال‌سازی Cleartext Traffic
           MANIFEST="$SRC/app/src/main/AndroidManifest.xml"
-          # فعال کردن Cleartext Traffic برای وب ویو
           sed -i 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST"
-          # ثبت اکتیویتی جدید
-          sed -i 's/<\/application>/<activity android:name=".webview.WebViewActivity" android:exported="true" android:theme="@style\/Theme.AppCompat.Light.NoActionBar" \/>\n<\/application>/' "$MANIFEST"
+          sed -i 's/<\/application>/<activity android:name=".webview.WebViewActivity" android:exported="true" \/>\n<\/application>/' "$MANIFEST"
 
-          # ۴. اضافه کردن دکمه به منوی ترموکس (menus/main.xml)
+          # ۳. اضافه کردن دکمه به منوی ترموکس (menus/main.xml)
           MENU_FILE="$SRC/app/src/main/res/menu/main.xml"
           if [ -f "$MENU_FILE" ]; then
             sed -i 's/<\/menu>/<item android:id="@+id\/action_webview" android:title="OpenCode Web" android:showAsAction="never" \/>\n<\/menu>/' "$MENU_FILE"
           fi
 
-          # ۵. کد جاوا را برای هندل کردن کلیک روی منو ویرایش می‌کنیم
-          ACTIVITY_FILE="$SRC/app/src/main/java/com/termux/app/TermuxActivity.java"
-          # اگر فایل پیدا نشد، در پوشه‌های دیگر جستجو کن
-          if [ ! -f "$ACTIVITY_FILE" ]; then
-            ACTIVITY_FILE=$(find "$SRC" -name "TermuxActivity.java" | head -1)
-          fi
-          
+          # ۴. پیدا کردن TermuxActivity و اضافه کردن منطق کلیک
+          ACTIVITY_FILE=$(find "$SRC" -name "TermuxActivity.java" | head -1)
           if [ -f "$ACTIVITY_FILE" ]; then
-            # اضافه کردن import
             sed -i 's/import android.os.Bundle;/import android.os.Bundle;\nimport com.andoco.app.webview.WebViewActivity;/' "$ACTIVITY_FILE"
-            # اضافه کردن منطق کلیک روی منو
             sed -i 's/public boolean onMenuItemClick(MenuItem item) {/public boolean onMenuItemClick(MenuItem item) {\n        if (item.getItemId() == R.id.action_webview) {\n            startActivity(new Intent(this, WebViewActivity.class));\n            return true;\n        }/' "$ACTIVITY_FILE"
           fi
-
-          # ۶. تزریق اسکریپت تعمیر dpkg به bash.bashrc برای رفع دائمی خطای Permission denied
-          # این دستور کاری می‌کند که هر بار ترمینال باز می‌شود، مسیرهای فایل‌های dpkg تعمیر شوند
-          cat > "$SRC/app/src/main/assets/bash.bashrc.patch.sh" << 'EOF'
-          #!/data/data/com.andoco.app/files/usr/bin/bash
-          # اسکریپت خودکار رفع مشکل مسیر com.termux در dpkg
-          DPKG_INFO="/data/data/com.andoco.app/files/usr/var/lib/dpkg/info"
-          if [ -d "$DPKG_INFO" ]; then
-              find "$DPKG_INFO" -type f -exec sed -i 's/com\.termux/com.andoco.app/g' {} + 2>/dev/null
-          fi
-          EOF
 
       - name: Build Debug APK
         run: |
