@@ -18,7 +18,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # مرحله استاندارد: نصب خودکار Android SDK و تأیید لایسنس‌ها
+      # تنظیم استاندارد و مطمئن Android SDK
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
@@ -35,12 +35,14 @@ jobs:
       - name: Generate Termux Source with Custom Package Name
         run: |
           cd termux-generator
-          ./build-termux.sh --name com.andoco.app --architectures aarch64 --dirty
+          # --only termux-app باعث می‌شود فقط اپ اصلی ساخته شود و از termux-x11 صرف‌نظر شود
+          ./build-termux.sh --name com.andoco.app --architectures aarch64 --dirty --only termux-app
 
       - name: Locate Termux Source
         id: find-src
         run: |
           cd termux-generator
+          # پیدا کردن مسیر سورس تولید شده
           TERMUX_SRC=$(find . -maxdepth 3 -type d -name "termux-app" | head -1)
           if [ -z "$TERMUX_SRC" ]; then
             echo "Termux source directory not found!"
@@ -54,6 +56,7 @@ jobs:
           cd termux-generator
           SRC="$TERMUX_SRC"
           
+          # ۱. ساخت مسیر پکیج و فایل WebViewActivity.java
           PKG_PATH="$SRC/app/src/main/java/com/andoco/app"
           mkdir -p "$PKG_PATH/webview"
           cat > "$PKG_PATH/webview/WebViewActivity.java" << 'EOF'
@@ -80,15 +83,18 @@ jobs:
           }
           EOF
 
+          # ۲. ثبت اکتیویتی در Manifest و فعال‌سازی Cleartext Traffic
           MANIFEST="$SRC/app/src/main/AndroidManifest.xml"
           sed -i 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST"
           sed -i 's/<\/application>/<activity android:name=".webview.WebViewActivity" android:exported="true" \/>\n<\/application>/' "$MANIFEST"
 
+          # ۳. اضافه کردن دکمه به منوی ترموکس (menus/main.xml)
           MENU_FILE="$SRC/app/src/main/res/menu/main.xml"
           if [ -f "$MENU_FILE" ]; then
             sed -i 's/<\/menu>/<item android:id="@+id\/action_webview" android:title="OpenCode Web" android:showAsAction="never" \/>\n<\/menu>/' "$MENU_FILE"
           fi
 
+          # ۴. پیدا کردن TermuxActivity و اضافه کردن منطق کلیک
           ACTIVITY_FILE=$(find "$SRC" -name "TermuxActivity.java" | head -1)
           if [ -f "$ACTIVITY_FILE" ]; then
             sed -i 's/import android.os.Bundle;/import android.os.Bundle;\nimport com.andoco.app.webview.WebViewActivity;/' "$ACTIVITY_FILE"
