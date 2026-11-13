@@ -25,25 +25,21 @@ jobs:
           accept-android-sdk-licenses: true
           log-accepted-android-sdk-licenses: true
 
-      - name: Clone and Prepare termux-generator
+      - name: Clone termux-generator
         run: |
           git clone https://github.com/robertkirkman/termux-generator.git
           cd termux-generator
           chmod +x build-termux.sh
-          
-          # کلون کردن سورس‌های خام ترموکس در کنار اسکریپت تا خطای عدم وجود پوشه رخ ندهد
-          git clone --depth 1 https://github.com/termux/termux-app.git termux-apps-main
-          git clone --depth 1 https://github.com/termux/termux-api.git termux-packages-main
-          git clone --depth 1 https://github.com/termux/termux-boot.git termux-boot-main
 
       - name: Generate Termux Source with Custom Package Name
         run: |
           cd termux-generator
-          # اجرای اسکریپت با نام پکیج اختصاصی
+          # 完全交由脚本自行管理所有依赖仓库的克隆
           ./build-termux.sh \
             --name com.andoco.app \
             --architectures aarch64 \
             --dirty \
+            --disable-bootstrap \
             --disable-x11 \
             --disable-gui \
             --disable-api \
@@ -53,23 +49,29 @@ jobs:
             --disable-tasker \
             --disable-styling
 
-      - name: Locate Termux Source
+      - name: Locate Generated Termux Source
         id: find-src
         run: |
           cd termux-generator
-          TERMUX_SRC=$(find . -maxdepth 3 -type d -name "termux-app" | head -1)
+          # 脚本运行完毕后，生成的项目通常位于当前目录下的 termux-app 文件夹
+          TERMUX_SRC="termux-app"
+          if [ ! -d "$TERMUX_SRC" ]; then
+            echo "Termux source directory not found at expected path: $TERMUX_SRC"
+            # 如果默认路径没有，则搜索一下，以防脚本更改了输出位置
+            TERMUX_SRC=$(find . -maxdepth 2 -type d -name "termux-app" | head -1)
+          fi
           if [ -z "$TERMUX_SRC" ]; then
-            echo "Termux source directory not found!"
+            echo "Could not locate generated Termux source."
             exit 1
           fi
           echo "TERMUX_SRC=$TERMUX_SRC" >> $GITHUB_ENV
-          echo "Found source at: $TERMUX_SRC"
+          echo "Found Termux source at: $TERMUX_SRC"
 
       - name: Inject WebView Capability
         run: |
-          cd termux-generator
           SRC="$TERMUX_SRC"
           
+          # 1. 创建 WebViewActivity.java
           PKG_PATH="$SRC/app/src/main/java/com/andoco/app"
           mkdir -p "$PKG_PATH/webview"
           cat > "$PKG_PATH/webview/WebViewActivity.java" << 'EOF'
@@ -96,16 +98,19 @@ jobs:
           }
           EOF
 
+          # 2. 在 Manifest 中注册 Activity 并允许 Cleartext
           MANIFEST="$SRC/app/src/main/AndroidManifest.xml"
           sed -i 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST"
           sed -i 's/<\/application>/<activity android:name=".webview.WebViewActivity" android:exported="true" \/>\n<\/application>/' "$MANIFEST"
 
+          # 3. 在菜单中添加 "OpenCode Web" 选项
           MENU_FILE="$SRC/app/src/main/res/menu/main.xml"
           if [ -f "$MENU_FILE" ]; then
             sed -i 's/<\/menu>/<item android:id="@+id\/action_webview" android:title="OpenCode Web" android:showAsAction="never" \/>\n<\/menu>/' "$MENU_FILE"
           fi
 
-          ACTIVITY_FILE=$(find "$SRC" -name "TermuxActivity.java" | head -1)
+          # 4. 在 TermuxActivity 中处理菜单点击事件
+          ACTIVITY_FILE="$SRC/app/src/main/java/com/termux/app/TermuxActivity.java"
           if [ -f "$ACTIVITY_FILE" ]; then
             sed -i 's/import android.os.Bundle;/import android.os.Bundle;\nimport com.andoco.app.webview.WebViewActivity;/' "$ACTIVITY_FILE"
             sed -i 's/public boolean onMenuItemClick(MenuItem item) {/public boolean onMenuItemClick(MenuItem item) {\n        if (item.getItemId() == R.id.action_webview) {\n            startActivity(new Intent(this, WebViewActivity.class));\n            return true;\n        }/' "$ACTIVITY_FILE"
@@ -113,7 +118,6 @@ jobs:
 
       - name: Build Debug APK
         run: |
-          cd termux-generator
           cd "$TERMUX_SRC"
           chmod +x ./gradlew
           ./gradlew assembleDebug --stacktrace
